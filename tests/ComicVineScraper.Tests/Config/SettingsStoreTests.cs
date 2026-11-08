@@ -149,16 +149,40 @@ public sealed class SettingsStoreTests : IDisposable
 	}
 
 	[Test]
-	[Arguments("1")]
+	[Arguments("1x")]
 	[Arguments("a,b")]
 	[Arguments("1,")]
 	[Arguments("99999999999,1")]
-	public async Task Geometry_ignores_a_value_that_is_not_two_integers(string value)
+	public async Task Geometry_ignores_a_text_value_that_is_not_two_comma_separated_integers(string value)
 	{
 		Directory.CreateDirectory(Profile);
 		File.WriteAllText(Path.Combine(Profile, "geometry.dat"), "xLocation : " + value + "\n");
 
 		await Assert.That(Store().LoadGeometry().Get("x").Location).IsNull();
+	}
+
+	[Test]
+	public async Task Geometry_ignores_a_value_that_dat_parsing_turns_into_a_whole_number()
+	{
+		Directory.CreateDirectory(Profile);
+		File.WriteAllText(Path.Combine(Profile, "geometry.dat"), "xLocation : 1\n");
+
+		await Assert.That(Store().LoadGeometry().Get("x").Location).IsNull();
+	}
+
+	[Test]
+	[Arguments("1")]
+	[Arguments(" 7 ")]
+	[Arguments("")]
+	public async Task A_pair_needs_a_comma_before_either_part_is_parsed(string text)
+	{
+		await Assert.That(GeometryMap.ParsePair(text)).IsNull();
+	}
+
+	[Test]
+	public async Task A_pair_is_two_integers_split_at_the_comma()
+	{
+		await Assert.That(GeometryMap.ParsePair(" 10 , -20 ")).IsEqualTo((10, -20));
 	}
 
 	private static FileStream Lock(string path, FileShare share) => new(path, FileMode.Open, FileAccess.Read, share);

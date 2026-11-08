@@ -84,12 +84,15 @@ public sealed class ConfigurationOracleTests
 	public async Task Python_loads_what_CSharp_saves()
 	{
 		using var folder = new TempFolder();
+		File.WriteAllBytes(folder.Settings, DatFile.ToBytes(new Dictionary<string, DatValue> { ["futureKey"] = new DatValue.Text("kept"), ["updateSeries"] = new DatValue.Bool(false) }, Now));
+		File.WriteAllText(folder.Advanced, "SCRAPE_DELAY=99");
+		var store = new SettingsStore(folder.Path, new FixedClock());
 		var random = new Random(20261109);
 		var mismatches = new List<string>();
 		foreach (Configuration config in SettingsCorpus(random, 300))
 		{
-			File.WriteAllBytes(folder.Settings, DatFile.ToBytes(config.ToSettingsMap(), Now));
-			File.WriteAllBytes(folder.Advanced, [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(config.Advanced.RawText)]);
+			SaveResult saved = store.Save(config);
+			await Assert.That(saved.Succeeded).IsTrue();
 			object python = PythonConfig.New(folder);
 			PythonConfig.LoadDefaults(python);
 
@@ -101,6 +104,7 @@ public sealed class ConfigurationOracleTests
 			}
 		}
 
+		await Assert.That(DatFile.FromBytes(File.ReadAllBytes(folder.Settings))["futureKey"]).IsEqualTo(new DatValue.Text("kept"));
 		await Assert.That(mismatches.Take(5)).IsEmpty();
 	}
 
@@ -143,15 +147,44 @@ public sealed class ConfigurationOracleTests
 	{
 		using var folder = new TempFolder();
 		object python = PythonConfig.New(folder);
-		foreach (string value in new[] { "inf", "-inf", "nan", "1e400" })
+		foreach ((string value, string expectedError) in NonFinite)
 		{
 			string text = "SCRAPE_DELAY=" + value + "\nIGNORE_BEFORE_YEAR=1950";
 
-			await Assert.That(() => PythonConfig.Set(python, "advanced_settings_s", text)).ThrowsException();
+			Exception? thrown = Catch(() => PythonConfig.Set(python, "advanced_settings_s", text));
+			await Assert.That(thrown?.GetType().FullName + ": " + thrown?.Message).IsEqualTo(expectedError);
 			AdvancedSettings parsed = AdvancedSettings.Parse(text);
 			await Assert.That(parsed.ScrapeDelaySeconds).IsEqualTo(1);
 			await Assert.That(parsed.IgnoreBeforeYear).IsEqualTo(1950);
 		}
+	}
+
+	private static readonly (string Value, string Error)[] NonFinite =
+	[
+		("inf", "System.OverflowException: cannot convert float infinity to integer"),
+		("-inf", "System.OverflowException: cannot convert float infinity to integer"),
+		("1e400", "System.OverflowException: cannot convert float infinity to integer"),
+		("nan", "IronPython.Runtime.Exceptions.ValueErrorException: cannot convert float NaN to integer"),
+	];
+
+	private static Exception? Catch(Action action)
+	{
+		try
+		{
+			action();
+			return null;
+		}
+		catch (Exception error)
+		{
+			return error;
+		}
+	}
+
+	private sealed class FixedClock : ComicVineScraper.Engine.IClock
+	{
+		public DateTime Now => ConfigurationOracleTests.Now;
+
+		public Task Delay(TimeSpan delay, System.Threading.CancellationToken ct) => Task.CompletedTask;
 	}
 
 	private static string StripBom(byte[] bytes) =>

@@ -40,7 +40,13 @@ public sealed class GeometryMap
 		{
 			return null;
 		}
-		string[] parts = text.Value.Split(',');
+		return ParsePair(text.Value);
+	}
+
+	/// <summary>Two integers separated by a comma, as PersistentForm reads them. Null where Python's split, int(), or index would raise.</summary>
+	internal static (int, int)? ParsePair(string text)
+	{
+		string[] parts = text.Split(',');
 		return parts.Length >= 2 && PyStr.TryParseInt(parts[0], out long a) && PyStr.TryParseInt(parts[1], out long b)
 			&& a is >= int.MinValue and <= int.MaxValue && b is >= int.MinValue and <= int.MaxValue
 			? ((int)a, (int)b)
