@@ -25,8 +25,9 @@ public sealed class ConfigurationOracleTests
 		foreach (string text in AdvancedCorpus.Texts())
 		{
 			PythonConfig.Set(python, "advanced_settings_s", text);
-			string expected = Canonical(PythonConfig.Advanced(python));
-			string actual = Canonical(AdvancedSettings.Parse(text));
+			string expected = Canonical(PythonConfig.Advanced(python)) + " regex=" + PythonConfig.RegexOutcome(python);
+			AdvancedSettings parsed = AdvancedSettings.Parse(text);
+			string actual = Canonical(parsed) + " regex=" + PythonConfig.RegexOutcome(parsed.AltSearchRegex);
 			if (expected != actual)
 			{
 				mismatches.Add($"{text.Replace("\n", "\n")}\n  python {expected}\n  C#     {actual}");
@@ -68,8 +69,7 @@ public sealed class ConfigurationOracleTests
 			foreach (string sample in AdvancedCorpus.RegexSamples)
 			{
 				string expected = PythonConfig.GroupsOf(pattern, sample);
-				Match? match = csharp is null ? null : csharp.Match(sample) is { Success: true, Index: 0 } m ? m : null;
-				string actual = match is null ? "none" : string.Join("|", csharp!.GetGroupNames().Where(n => !int.TryParse(n, out _)).OrderBy(n => n, StringComparer.Ordinal).Select(n => n + "=" + (match.Groups[n].Success ? match.Groups[n].Value : "None")));
+				string actual = csharp is null ? "none" : PythonConfig.CSharpGroups(csharp, sample);
 				if (csharp is not null && expected != actual)
 				{
 					mismatches.Add($"match {pattern} on {sample}: python {expected}, C# {actual}");
@@ -93,8 +93,8 @@ public sealed class ConfigurationOracleTests
 			object python = PythonConfig.New(folder);
 			PythonConfig.LoadDefaults(python);
 
-			string expected = Canonical(config);
-			string actual = Canonical(PythonConfig.Read(python));
+			string expected = Canonical(config) + " regex=" + PythonConfig.RegexOutcome(config.Advanced.AltSearchRegex);
+			string actual = Canonical(PythonConfig.Read(python)) + " regex=" + PythonConfig.RegexOutcome(python);
 			if (expected != actual)
 			{
 				mismatches.Add($"python {actual}\n  C#     {expected}");
@@ -207,7 +207,7 @@ public sealed class ConfigurationOracleTests
 		"terms=" + string.Join("|", a.IgnoredSearchTerms.OrderBy(x => x, StringComparer.Ordinal)),
 		"before=" + a.IgnoreBeforeYear, "after=" + a.IgnoreAfterYear, "thr=" + a.NeverIgnoreThreshold,
 		"rating=" + a.ScrapeRating, "covers=" + a.ShowCovers, "welcome=" + a.WelcomeDialog,
-		"regex=" + (a.AltSearchRegex?.ToString() ?? ""), "folders=" + a.IgnoreFolders, "art=" + a.ForceSeriesArt, "date=" + a.NoteScrapeDate,
+		"folders=" + a.IgnoreFolders, "art=" + a.ForceSeriesArt, "date=" + a.NoteScrapeDate,
 		"alias=" + string.Join("|", a.PublisherAliases.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + ">" + x.Value)),
 		"imprint=" + string.Join("|", a.UserImprints.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + ">" + x.Value)),
 		"delay=" + a.ScrapeDelaySeconds, "max=" + a.MaxSearchResults,

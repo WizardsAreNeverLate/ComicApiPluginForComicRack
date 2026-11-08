@@ -55,6 +55,27 @@ public static class PythonConfig
 		"(lambda m: 'none' if m is None else '|'.join('%s=%s' % (k, v) for k, v in sorted(m.groupdict().items())))(__import__('re').match(p, s))",
 		("p", pattern), ("s", sample))!;
 
+	/// <summary>"none" where the pattern is unset or Python's re.compile rejects it; otherwise Python's groups on every sample. Read from Python alone.</summary>
+	public static string RegexOutcome(object python)
+	{
+		string pattern = (string)Get(python, "alt_search_regex_s")!;
+		return pattern.Length == 0 || !Compiles(pattern) ? "none" : string.Join(";", AdvancedCorpus.RegexSamples.Select(s => GroupsOf(pattern, s)));
+	}
+
+	/// <summary>The same outcome for the port's compiled regex, in the format of <see cref="RegexOutcome(object)"/>.</summary>
+	public static string RegexOutcome(Regex? csharp) => csharp is null ? "none" : string.Join(";", AdvancedCorpus.RegexSamples.Select(s => CSharpGroups(csharp, s)));
+
+	/// <summary>The groups of re.match(pattern, sample), in GroupsOf's format. Python's match is anchored at the start; Regex.Match is not.</summary>
+	public static string CSharpGroups(Regex csharp, string sample)
+	{
+		if (csharp.Match(sample) is not { Success: true, Index: 0 } match)
+		{
+			return "none";
+		}
+		return string.Join("|", csharp.GetGroupNames().Where(n => !int.TryParse(n, out _)).OrderBy(n => n, StringComparer.Ordinal)
+			.Select(n => n + "=" + (match.Groups[n].Success ? match.Groups[n].Value : "None")));
+	}
+
 	public static string SettingKey(string settingsKey) =>
 		"update_" + Regex.Replace(settingsKey.Substring("update".Length), "(?<!^)[A-Z]", m => "_" + m.Value).ToLowerInvariant() + "_b";
 
@@ -108,12 +129,11 @@ public static class PythonConfig
 
 	public static AdvancedSettings Advanced(object python)
 	{
-		string regex = (string)Get(python, "alt_search_regex_s")!;
 		return new AdvancedSettings(
 			(string)Get(python, "advanced_settings_s")!, Strings(python, "ignored_publishers_sl"), Strings(python, "ignored_searchterms_sl"),
 			Int(python, "ignored_before_year_n"), Int(python, "ignored_after_year_n"), Int(python, "never_ignore_threshold_n"),
 			(bool)Get(python, "update_rating_b")!, (bool)Get(python, "show_covers_b")!, (bool)Get(python, "welcome_dialog_b")!,
-			regex.Length == 0 ? null : PythonRegex.TryCompile(regex),
+			null,
 			(bool)Get(python, "ignore_folders_b")!, (bool)Get(python, "force_series_art_b")!, (bool)Get(python, "note_scrape_date_b")!,
 			Map(python, "publisher_aliases_sm"), Map(python, "user_imprints_sm"), Int(python, "scrape_delay_n"), Int(python, "max_search_results_n"));
 	}
