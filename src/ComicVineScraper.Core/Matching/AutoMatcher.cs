@@ -65,7 +65,8 @@ public sealed class AutoMatcher(IComicVine comicVine, Func<SeriesId, bool> chose
 	/// </summary>
 	private async Task<SeriesRef?> FindBestSeriesAsync(BookValues book, CancellationToken ct)
 	{
-		List<SeriesRef> candidates = [.. await comicVine.SearchSeriesAsync(book.Series, null, ct)];
+		// Python held the results in a set, which merged a series that Comic Vine returned twice.
+		List<SeriesRef> candidates = [.. (await comicVine.SearchSeriesAsync(book.Series, null, ct)).GroupBy(s => s.Id).Select(g => g.First())];
 		SeriesRef? primary = TakeBest(book, candidates);
 		SeriesRef? secondary = TakeBest(book, candidates);
 		SeriesRef? tertiary = TakeBest(book, candidates);

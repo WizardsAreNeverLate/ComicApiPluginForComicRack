@@ -28,6 +28,15 @@ public sealed class AutoMatcherTests
 	}
 
 	[Test]
+	public async Task A_series_returned_twice_is_one_candidate()
+	{
+		SeriesRef first = Series(10, LeftCover), second = Series(20, TopCover);
+		var comicVine = new FakeComicVine(first, first, second);
+
+		await Assert.That((await Find(Book("1"), comicVine, LeftHalfBlack))?.Id).IsEqualTo(new SeriesId(10));
+	}
+
+	[Test]
 	public async Task Matches_on_the_issue_cover_when_the_number_is_found()
 	{
 		var comicVine = new FakeComicVine(Series(10, TopCover)) { Issue = new IssueRef(new IssueId(7), "5", "", LeftCover) };
