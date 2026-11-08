@@ -158,9 +158,13 @@ public static class AdvancedCorpus
 		@"(?P<series>.+?)\s+(?P<num>\d+)", @"(?P<series>.*) (?P<year>\d{4})", @"^(?P<series>[^#]+)#(?P<num>\d+)", @"(?P<series>a)(?P=series)",
 		@"(?P<series>", @"[", @"(", @"*abc", @"(?P<series>.+)(?P<series>.+)", @"\d+(?P<num>\d)", @"(?P<series>\w+)", @"abc{2,1}", @"(?i)(?P<series>x)",
 		@"(?P<year>\d+)(?:x)?", @"a++", @"(?<series>b)", @"(?P<series>q)\1", @"(?=x)y", @"\Aab", @"[a-", @"(?P<1a>x)", @"(?P<series>.+?) v(?P<num>\d+)",
+		@"(?u)(?P<series>\w+) (?P<num>\d+)", @"(?L)(?P<series>.+?)\s+(?P<num>\d+)", @"(?ui)(?P<series>[a-z]+)", @"(?iu)(?P<series>x)", @"(?uL)x", @"(?P<series>\w+)(?u)",
+		@"a{,2}", @"(?P<series>a{,2})b", @"(?P<series>\w{,3}) (?P<num>\d+)", @"a{,}", @"{,2}", @"a{,2}+", @"a{ ,2}",
+		@"(?P<series>\N+)", @"\Nabc", @"(?P<series>[\y]+)", @"(?P<series>\w+)\_(?P<num>\d)", @"(?u)(?P<series>\w+)\q", @"\c", @"\p",
 	];
 
-	public static readonly string[] RegexSamples = ["Batman 12", "Batman 12 2004", "Batman #12", "aa", "x", "abc", "yy 2004", "Spider-Man v2 (2004)", "", "qq", "bb"];
+	public static readonly string[] RegexSamples = ["Batman 12", "Batman 12 2004", "Batman #12", "aa", "x", "abc", "yy 2004", "Spider-Man v2 (2004)", "", "qq", "bb",
+		"Café 12", "Ünïcode 7", "漫画 3", "Naa", "aab", "Ünï_7", "a{,2}b", "NabcN", "yyq", "É 5"];
 
 	private static readonly string[] Arrows =
 	[
