@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,9 @@ public sealed class ComicVineHttp : IDisposable
 	private readonly string apiKey;
 	private readonly IClock clock;
 	private readonly Throttle throttle;
+
+	/// <summary>Turns image bytes into a bitmap. A seam so tests can raise the GDI+ failures a real image rarely does.</summary>
+	internal Func<byte[], Bitmap> DecodeImage { get; init; } = bytes => new Bitmap(new MemoryStream(bytes));
 
 	/// <param name="handler">HttpClientHandler in the plugin; a recorded-response handler in tests. Disposed with this object.</param>
 	/// <param name="apiKey">Never logged: every URL in an exception passes through the redaction.</param>
@@ -71,18 +75,29 @@ public sealed class ComicVineHttp : IDisposable
 		for (int attempt = 0; attempt < 2; attempt++)
 		{
 			await throttle.WaitTurnAsync(ct).ConfigureAwait(false);
+			byte[] bytes;
 			try
 			{
 				using HttpResponseMessage response = await client.GetAsync(url, ct).ConfigureAwait(false);
-				if (response.StatusCode == HttpStatusCode.OK)
+				if (response.StatusCode != HttpStatusCode.OK)
 				{
-					byte[] bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-					// Bitmap reads its stream lazily, so the stream stays with the bitmap; a MemoryStream needs no disposal.
-					return new Bitmap(new MemoryStream(bytes));
+					continue;
 				}
+				bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
 			}
-			catch (Exception e) when (IsTransportFailure(e, ct) || e is ArgumentException)
+			catch (Exception e) when (IsTransportFailure(e, ct))
 			{
+				continue;
+			}
+
+			try
+			{
+				// Bitmap reads its stream lazily, so the stream stays with the bitmap; a MemoryStream needs no disposal.
+				return DecodeImage(bytes);
+			}
+			catch (Exception e) when (e is ArgumentException or OutOfMemoryException or ExternalException)
+			{
+				// GDI+ reports a body it cannot decode (an HTML error page, a WebP) as any of these; cvdb.py:458 returned None for all.
 			}
 		}
 		return null;

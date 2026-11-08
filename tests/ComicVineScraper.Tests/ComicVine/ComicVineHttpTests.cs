@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -219,6 +221,58 @@ public sealed class ComicVineHttpTests
 		await Assert.That(clock.Delays.All(d => d == TimeSpan.FromMilliseconds(1100))).IsTrue();
 		await Assert.That(handler.Sent[0].Request.RequestUri).IsEqualTo(url);
 	}
+
+	[Test]
+	[Arguments("jpeg header only")]
+	[Arguments("webp")]
+	[Arguments("html body")]
+	public async Task An_undecodable_image_body_is_null_not_an_exception(string kind)
+	{
+		byte[] body = kind switch
+		{
+			"html body" => Encoding.UTF8.GetBytes("<html><body>Gateway timeout</body></html>"),
+			"jpeg header only" => new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0, 16, (byte)74, (byte)70, (byte)73, (byte)70, 0, 1, 1 },
+			"webp" => Encoding.ASCII.GetBytes("RIFF\u001a\0\0\0WEBPVP8 \u000e\0\0\0").Concat(new byte[14]).ToArray(),
+			_ => throw new ArgumentOutOfRangeException(nameof(kind)),
+		};
+		var clock = new ManualClock();
+		Func<HttpRequestMessage, HttpResponseMessage> reply = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) };
+		var handler = new ScriptedHandler(clock, reply, reply);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+
+		Bitmap? image = await http.GetImageAsync(new Uri("https://comicvine.gamespot.com/a/uploads/scale_small/1.jpg"), CancellationToken.None);
+
+		await Assert.That(image).IsNull();
+		await Assert.That(handler.Sent.Count).IsEqualTo(2);
+	}
+
+	[Test]
+	[Arguments(typeof(OutOfMemoryException))]
+	[Arguments(typeof(ExternalException))]
+	[Arguments(typeof(ArgumentException))]
+	public async Task Every_exception_GDI_plus_uses_for_a_bad_image_gives_null(Type thrown)
+	{
+		var clock = new ManualClock();
+		Func<HttpRequestMessage, HttpResponseMessage> reply = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Png(5, 5)) };
+		var handler = new ScriptedHandler(clock, reply, reply);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock) { DecodeImage = _ => throw (Exception)Activator.CreateInstance(thrown)! };
+
+		Bitmap? image = await http.GetImageAsync(new Uri("https://comicvine.gamespot.com/a/uploads/scale_small/1.jpg"), CancellationToken.None);
+
+		await Assert.That(image).IsNull();
+		await Assert.That(handler.Sent.Count).IsEqualTo(2);
+	}
+
+	[Test]
+	public async Task A_failure_in_the_decoder_that_is_not_a_bad_image_is_not_swallowed()
+	{
+		var clock = new ManualClock();
+		var handler = new ScriptedHandler(clock, ScriptedHandler.Reply(HttpStatusCode.OK, "x"));
+		using var http = new ComicVineHttp(handler, Key, "ua", clock) { DecodeImage = _ => throw new InvalidOperationException("bug") };
+
+		await Assert.ThrowsAsync<InvalidOperationException>(() => http.GetImageAsync(new Uri("https://comicvine.gamespot.com/a/1.jpg"), CancellationToken.None));
+	}
+
 
 	public static IEnumerable<Func<Failure>> Failures() => Enum.GetValues(typeof(Failure)).Cast<Failure>().Select(f => (Func<Failure>)(() => f));
 
