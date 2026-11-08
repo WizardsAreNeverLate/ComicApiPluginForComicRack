@@ -20,10 +20,22 @@ public sealed class TextOracleTests
 		"Annual 1", "special", "Special", "é", "e", "z", "Z", "a_b", "a`", "[x", "^1", "a~", "ζ", "ǅ", "İ", "\U0001F600", "1 2", "1  2", "12 b", "ts", "TPB", "3d", "3D", "3.d", "#3", "3#",
 	];
 
+	private static readonly System.Text.RegularExpressions.Regex FractionTail = new(@"^\s*(-?)\s*(\d*)\s*[⅛⅙⅕¼⅓⅜⅖½⅗⅝⅔¾⅘⅚⅞]\s*", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+	[Test]
+	public async Task NaturalOrder_orders_text_after_a_fraction_where_Python_ignores_it()
+	{
+		await Assert.That((bool)OracleAdapters.Call("natural_keys_equal", "5½a", "5½b")!).IsTrue();
+		await Assert.That(NaturalOrder.KeysEqual("5½a", "5½b")).IsFalse();
+		await Assert.That((bool)OracleAdapters.Call("natural_keys_equal", "0.5000", "½")!).IsTrue();
+		await Assert.That(NaturalOrder.KeysEqual("0.5000", "½")).IsTrue();
+	}
+
 	[Test]
 	public async Task NaturalOrder_compares_like_natural_compare_on_every_pair()
 	{
 		var hasNaN = IssueNumbers.ToDictionary(s => s, s => (bool)OracleAdapters.Call("natural_key_has_nan", s)!, StringComparer.Ordinal);
+		var hasFractionTail = IssueNumbers.ToDictionary(s => s, s => FractionTail.Match(s) is { Success: true } m && m.Index == 0 && s.Trim().Length > m.Length, StringComparer.Ordinal);
 		int compared = 0;
 		foreach (string a in IssueNumbers)
 		{
@@ -32,6 +44,10 @@ public sealed class TextOracleTests
 				if (hasNaN[a] && hasNaN[b])
 				{
 					continue; // deviations.md #16
+				}
+				if (hasFractionTail[a] || hasFractionTail[b])
+				{
+					continue; // deviations.md #19
 				}
 				int python = (int)Oracle.Call("utils", "natural_compare", a, b)!;
 				await Assert.That(NaturalOrder.Instance.Compare(a, b)).IsEqualTo(python).Because($"'{a}' vs '{b}'");

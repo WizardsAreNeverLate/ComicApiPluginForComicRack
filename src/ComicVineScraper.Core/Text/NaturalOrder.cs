@@ -62,9 +62,9 @@ public sealed class NaturalOrder : IComparer<string>
 	private static List<Part> Key(string s)
 	{
 		s = s.Trim();
-		if (FractionValue(s) is { } fraction and not 0.0)
+		if (FractionValue(s, out string tail) is { } fraction and not 0.0)
 		{
-			return [Part.Of(""), Part.Of(fraction), Part.Of("")];
+			return [Part.Of(""), Part.Of(fraction), Convert(tail)];
 		}
 
 		var parts = new List<Part>();
@@ -82,14 +82,16 @@ public sealed class NaturalOrder : IComparer<string>
 	private static Part Convert(string text) =>
 		PyStr.TryParseFloat(text, out double number) ? Part.Of(number) : Part.Of(PyStr.Lower(text).Trim());
 
-	/// <summary>A leading "5½" or "-¾" as a number. Text after the fraction is ignored, as in Python.</summary>
-	private static double? FractionValue(string s)
+	/// <summary>A leading "5½" or "-¾" as a number. The text after it is returned in <paramref name="tail"/>; Python ignored it (deviations.md #19).</summary>
+	private static double? FractionValue(string s, out string tail)
 	{
+		tail = "";
 		Match match = UnicodeFraction.Match(s);
 		if (!match.Success || match.Index != 0)
 		{
 			return null;
 		}
+		tail = s.Substring(match.Length);
 		double whole = PyStr.TryParseFloat(match.Groups[2].Value, out double parsed) ? parsed : 0;
 		double value = whole + Fractions[match.Groups[3].Value[0]];
 		return match.Groups[1].Value.Length > 0 ? -value : value;
