@@ -205,8 +205,8 @@ internal sealed class EngineWorld : IDisposable
 
 	public string Folder => folder;
 
-	/// <summary>Images by URL. Any other image URL gets a 404.</summary>
-	public Dictionary<string, Bitmap> Images { get; } = new(StringComparer.Ordinal);
+	/// <summary>The image served for a URL, or null for a 404.</summary>
+	public Func<string, Bitmap?> ImageFor { get; set; } = _ => null;
 
 	/// <summary>Requests (fixture keys, key redacted) in the order they were sent.</summary>
 	public ConcurrentQueue<string> Requests { get; } = new();
@@ -284,7 +284,7 @@ internal sealed class EngineWorld : IDisposable
 			world.Requests.Enqueue(key);
 			world.BeforeResponse?.Invoke(key);
 			cancellationToken.ThrowIfCancellationRequested();
-			if (world.Images.TryGetValue(url, out Bitmap? image))
+			if (world.ImageFor(url) is { } image)
 			{
 				using var png = new MemoryStream();
 				image.Save(png, ImageFormat.Png);
@@ -322,10 +322,10 @@ internal static class Synthetic
 
 	public static string IssueList(params (int Id, string Number)[] issues) =>
 		Response(issues.Length, string.Concat(issues.Select(i =>
-			$"<issue><id>{i.Id}</id><image><small_url><![CDATA[https://comicvine.gamespot.com/a/uploads/scale_small/i{i.Id}.jpg]]></small_url></image><issue_number>{i.Number}</issue_number><name><![CDATA[Issue {i.Number}]]></name></issue>")));
+			$"<issue><id>{i.Id}</id><image><small_url><![CDATA[https://comicvine.gamespot.com/a/uploads/scale_small/i{i.Id}.jpg]]></small_url><thumb_url><![CDATA[https://comicvine.gamespot.com/a/uploads/scale_avatar/i{i.Id}.jpg]]></thumb_url></image><issue_number>{i.Number}</issue_number><name><![CDATA[Issue {i.Number}]]></name></issue>")));
 
 	public static string Issue(int id, int series, string number) =>
-		Response(1, $"<associated_images/><cover_date><![CDATA[1993-07]]></cover_date><description/><id>{id}</id><image><medium_url><![CDATA[https://comicvine.gamespot.com/a/uploads/scale_medium/i{id}.jpg]]></medium_url></image><issue_number>{number}</issue_number><name><![CDATA[Title {id}]]></name><volume><id>{series}</id><name><![CDATA[Series {series}]]></name></volume>");
+		Response(1, $"<associated_images/><cover_date><![CDATA[1993-07]]></cover_date><description/><id>{id}</id><image><medium_url><![CDATA[https://comicvine.gamespot.com/a/uploads/scale_medium/i{id}.jpg]]></medium_url><thumb_url><![CDATA[https://comicvine.gamespot.com/a/uploads/scale_avatar/i{id}.jpg]]></thumb_url></image><issue_number>{number}</issue_number><name><![CDATA[Title {id}]]></name><volume><id>{series}</id><name><![CDATA[Series {series}]]></name></volume>");
 
 	private static string Response(int total, string results) =>
 		"<?xml version=\"1.0\" encoding=\"utf-8\"?><response><error><![CDATA[OK]]></error><limit>100</limit><offset>0</offset>"
