@@ -9,6 +9,7 @@ namespace ComicVineScraper.Config;
 /// <summary>advanced.dat parsing, line for line as Configuration.__set_advanced_settings_s does it.</summary>
 internal static class AdvancedParser
 {
+	private static readonly TimeSpan AltSearchTimeout = TimeSpan.FromSeconds(1);
 	private const RegexOptions Options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
 	private static readonly Regex Arrow = new(@"^\s*(\S.*?)\s*[-=]+>\s*(\S.*?)$", RegexOptions.CultureInvariant);
 	private static readonly char[] QuoteTrim = [' ', '\'', '"'];
@@ -59,7 +60,7 @@ internal static class AdvancedParser
 			rating = Flag(ScrapeRating, line) ?? rating;
 			covers = Flag(ShowCovers, line) ?? covers;
 			welcome = Flag(WelcomeDialog, line) ?? welcome;
-			if (Value(AltSearchRegex, line) is { } pattern && PythonRegex.TryCompile(pattern) is { } compiled)
+			if (Value(AltSearchRegex, line) is { } pattern && PyRegex.TryCompile(pattern, AltSearchTimeout) is { } compiled)
 			{
 				alt = compiled;
 			}

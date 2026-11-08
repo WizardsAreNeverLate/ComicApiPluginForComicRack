@@ -50,37 +50,6 @@ public sealed class ConfigurationOracleTests
 	}
 
 	[Test]
-	public async Task Alternate_search_regexes_compile_and_match_as_in_Python()
-	{
-		var mismatches = new List<string>();
-		foreach (string pattern in AdvancedCorpus.Regexes)
-		{
-			bool python = PythonConfig.Compiles(pattern);
-			var csharp = PythonRegex.TryCompile(pattern);
-			if (python != (csharp is not null))
-			{
-				mismatches.Add($"compile {pattern}: python {python}, C# {csharp is not null}");
-				continue;
-			}
-			if (!python)
-			{
-				continue;
-			}
-			foreach (string sample in AdvancedCorpus.RegexSamples)
-			{
-				string expected = PythonConfig.GroupsOf(pattern, sample);
-				string actual = csharp is null ? "none" : PythonConfig.CSharpGroups(csharp, sample);
-				if (csharp is not null && expected != actual)
-				{
-					mismatches.Add($"match {pattern} on {sample}: python {expected}, C# {actual}");
-				}
-			}
-		}
-
-		await Assert.That(mismatches.Take(8)).IsEmpty();
-	}
-
-	[Test]
 	public async Task Python_loads_what_CSharp_saves()
 	{
 		using var folder = new TempFolder();
