@@ -1,0 +1,5 @@
+GET https://comicvine.gamespot.com/api/issue/4000-9000002/?api_key=REDACTED&client=cvscraper&format=xml
+HTTP 200
+
+<?xml version="1.0" encoding="utf-8"?>
+<response><error><![CDATA[OK]]></error><limit>1</limit><offset>0</offset><number_of_page_results>1</number_of_page_results><number_of_total_results>1</number_of_total_results><status_code>1</status_code><results><associated_images/><cover_date><![CDATA[1993-07]]></cover_date><description/><id>9000002</id><image><medium_url><![CDATA[https://comicvine.gamespot.com/a/uploads/scale_medium/i9000002.jpg]]></medium_url></image><issue_number>2</issue_number><name/><site_detail_url><![CDATA[https://comicvine.gamespot.com/x/4000-9000002/]]></site_detail_url><store_date><![CDATA[1993-x-01]]></store_date><volume><id>9998</id><name><![CDATA[Imprint Series]]></name></volume></results><version>1.0</version></response>

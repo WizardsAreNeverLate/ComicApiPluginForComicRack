@@ -1,0 +1,5 @@
+GET https://comicvine.gamespot.com/api/search/?api_key=REDACTED&client=cvscraper&format=xml&limit=100&resources=volume&field_list=name,start_year,publisher,id,image,count_of_issues&query=rate%20limited
+HTTP 420
+
+<?xml version="1.0" encoding="utf-8"?>
+<response><error><![CDATA[Rate limit exceeded.  Slow down cowboy.]]></error><limit>0</limit><offset>0</offset><number_of_page_results>0</number_of_page_results><number_of_total_results>0</number_of_total_results><status_code>107</status_code><results/></response>

@@ -9,10 +9,18 @@
 		<PackageReference Include="TUnit" Version="1.81.10" />
 	</ItemGroup>
 	<ItemGroup>
+		<Reference Include="System.Net.Http" />
+		<Reference Include="System.Drawing" />
+		<Reference Include="System.Xml.Linq" />
 		<Reference Include="IronPython" HintPath="$(ComicRackPath)IronPython.dll" />
 		<Reference Include="IronPython.Modules" HintPath="$(ComicRackPath)IronPython.Modules.dll" />
 		<Reference Include="Microsoft.Scripting" HintPath="$(ComicRackPath)Microsoft.Scripting.dll" />
 		<Reference Include="Microsoft.Dynamic" HintPath="$(ComicRackPath)Microsoft.Dynamic.dll" />
+	</ItemGroup>
+	<ItemGroup>
+		<Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+		<None Include="..\fixtures\comicvine\*.txt" Link="fixtures\comicvine\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="py\*.py" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\ComicVineScraper.Core\ComicVineScraper.Core.csproj" />

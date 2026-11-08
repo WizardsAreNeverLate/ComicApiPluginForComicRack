@@ -1,0 +1,5 @@
+GET https://comicvine.gamespot.com/api/issue/4000-999999999/?api_key=REDACTED&client=cvscraper&format=xml
+HTTP 200
+
+<?xml version="1.0" encoding="utf-8"?>
+<response><error><![CDATA[Object Not Found]]></error><limit>0</limit><offset>0</offset><number_of_page_results>0</number_of_page_results><number_of_total_results>0</number_of_total_results><status_code>101</status_code><results/></response>

@@ -10,5 +10,6 @@
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="ComicVineScraper.Tests" />
+		<InternalsVisibleTo Include="ComicVineScraper.Oracle.Tests" />
 	</ItemGroup>
 </Project>

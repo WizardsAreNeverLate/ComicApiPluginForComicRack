@@ -1,0 +1,5 @@
+GET https://comicvine.gamespot.com/api/volume/4050-9998/?api_key=REDACTED&client=cvscraper&format=xml&field_list=name,start_year,publisher,image,count_of_issues,id
+HTTP 200
+
+<?xml version="1.0" encoding="utf-8"?>
+<response><error><![CDATA[OK]]></error><limit>1</limit><offset>0</offset><number_of_page_results>1</number_of_page_results><number_of_total_results>1</number_of_total_results><status_code>1</status_code><results><count_of_issues>75</count_of_issues><id>9998</id><image/><name><![CDATA[Imprint Series]]></name><publisher><api_detail_url><![CDATA[https://comicvine.gamespot.com/api/publisher/4010-521/]]></api_detail_url><id>521</id><name><![CDATA[Vertigo]]></name></publisher><start_year><![CDATA[1993-]]></start_year></results><version>1.0</version></response>
