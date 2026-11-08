@@ -99,6 +99,30 @@ public sealed class DebugLogTests
 	}
 
 	[Test]
+	public async Task A_40_hex_token_is_redacted_from_logged_text_and_from_exception_text()
+	{
+		const string key = "0123456789abcdef0123456789ABCDEF01234567";
+		var log = new DebugLog();
+		log.Debug("GET https://comicvine.gamespot.com/api/search/?api_key=" + key + "&format=xml");
+		log.Error(new InvalidOperationException("bad " + key));
+
+		string text = string.Join("\n", log.Snapshot());
+		await Assert.That(text).DoesNotContain(key);
+		await Assert.That(text).DoesNotContain("0123456789abcdef");
+		await Assert.That(text).Contains("api_key=<redacted>&format=xml");
+		await Assert.That(text).Contains("Caught InvalidOperationException: bad <redacted>");
+	}
+
+	[Test]
+	public async Task Shorter_hex_text_is_left_alone()
+	{
+		var log = new DebugLog();
+		log.Debug("id 0123456789abcdef0123456789abcdef0123456");
+
+		await Assert.That(log.Snapshot()[0]).IsEqualTo("id 0123456789abcdef0123456789abcdef0123456");
+	}
+
+	[Test]
 	public async Task The_log_file_name_uses_the_invariant_date()
 	{
 		await Assert.That(ErrorPrompt.LogFileName(new DateTime(2024, 3, 9))).IsEqualTo("cvs-debug-log-2024-03-09.txt");
