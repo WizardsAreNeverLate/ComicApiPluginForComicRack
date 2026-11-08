@@ -3,6 +3,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using ComicVineScraper.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace ComicVineScraper.Text;
@@ -41,27 +43,36 @@ public static class FileNameParser
 	private static readonly char[] BracketChars = "()[]{}".ToCharArray();
 	private static readonly char[] SeriesTrimChars = " ,-_".ToCharArray();
 
+	/// <summary>Patterns that timed out. Python remembered its last failed pattern in __failed_regex so a bad one cost nothing after the first book.</summary>
+	private static readonly ConditionalWeakTable<Regex, object> TimedOut = new();
+
 	/// <summary>
 	/// The user's ALT_SEARCH_REGEX first, then <see cref="Extract"/>, as comicbook.py fills in a book's missing
 	/// details. The regex comes from <see cref="PyRegex.TryCompile"/>.
 	/// </summary>
-	public static ParsedName Parse(string fileName, Regex? altSearchRegex) =>
-		(altSearchRegex is null ? null : MatchAltSearchRegex(fileName, altSearchRegex)) ?? Extract(fileName);
+	public static ParsedName Parse(string fileName, Regex? altSearchRegex, DebugLog? log = null) =>
+		(altSearchRegex is null ? null : MatchAltSearchRegex(fileName, altSearchRegex, log)) ?? Extract(fileName);
 
 	/// <summary>
 	/// fnameparser.regex: the named groups series, num, and year, from a match at the start of the name.
 	/// Null unless the series group is not blank. A match that times out counts as no match, as Python's
-	/// "except" did for any failure.
+	/// "except" did for any failure. It is then remembered, and logged to <paramref name="log"/> once, so later books skip it.
 	/// </summary>
-	public static ParsedName? MatchAltSearchRegex(string fileName, Regex regex)
+	public static ParsedName? MatchAltSearchRegex(string fileName, Regex regex, DebugLog? log = null)
 	{
+		if (TimedOut.TryGetValue(regex, out _))
+		{
+			return null;
+		}
 		Match match;
 		try
 		{
 			match = regex.Match(fileName);
 		}
-		catch (RegexMatchTimeoutException)
+		catch (RegexMatchTimeoutException timeout)
 		{
+			TimedOut.Add(regex, regex);
+			log?.Debug("ALT_SEARCH_REGEX timed out on \"" + fileName + "\"; it is skipped for the rest of the session: " + timeout.Message);
 			return null;
 		}
 		if (!match.Success || match.Index != 0 || Found(match, "series") is not { } series)

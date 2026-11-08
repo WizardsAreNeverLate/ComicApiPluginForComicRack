@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using ComicVineScraper.Diagnostics;
 using ComicVineScraper.Text;
 
 namespace ComicVineScraper.Tests.Text;
@@ -35,6 +36,25 @@ public sealed class FileNameParserTests
 		await Assert.That(FileNameParser.MatchAltSearchRegex(new string('a', 40) + "c", regex)).IsNull();
 	}
 
+	[Test]
+	public async Task A_regex_that_timed_out_is_not_run_again_and_is_logged_once()
+	{
+		Regex regex = PyRegex.TryCompile(@"(?P<series>(a+)+)b", TimeSpan.FromMilliseconds(300))!;
+		string slow = new string('a', 40) + "c";
+		var log = new DebugLog();
+
+		var first = System.Diagnostics.Stopwatch.StartNew();
+		FileNameParser.MatchAltSearchRegex(slow, regex, log);
+		first.Stop();
+		var second = System.Diagnostics.Stopwatch.StartNew();
+		ParsedName? again = FileNameParser.MatchAltSearchRegex(slow, regex, log);
+		second.Stop();
+
+		await Assert.That(first.ElapsedMilliseconds).IsGreaterThanOrEqualTo(250);
+		await Assert.That(second.ElapsedMilliseconds).IsLessThan(100);
+		await Assert.That(again).IsNull();
+		await Assert.That(log.Snapshot().Count).IsEqualTo(1);
+	}
 	[Test]
 	[Arguments("Batman 3 DI 5.cbr", "Batman", "3")]
 	[Arguments("BATMAN VOLUME 2 3.cbr", "BATMAN", "3")]
