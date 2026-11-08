@@ -13,6 +13,10 @@
 		<Reference Include="IronPython.Modules" HintPath="$(ComicRackPath)IronPython.Modules.dll" />
 		<Reference Include="Microsoft.Scripting" HintPath="$(ComicRackPath)Microsoft.Scripting.dll" />
 		<Reference Include="Microsoft.Dynamic" HintPath="$(ComicRackPath)Microsoft.Dynamic.dll" />
+		<Reference Include="System.Drawing" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="Python\*.py" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\ComicVineScraper.Core\ComicVineScraper.Core.csproj" />
