@@ -38,7 +38,7 @@ public sealed class ComicVineHttpTests
 	{
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Ok("<results><id>796</id></results>"));
-		using var http = new ComicVineHttp(handler, Key, "ComicVineScraper.NET/9.9", clock);
+		using var http = new ComicVineHttp(handler, Key, "ComicVineScraper.NET/9.9", clock, () => clock.Elapsed);
 
 		XDocument doc = await http.GetAsync(Request, CancellationToken.None);
 
@@ -56,7 +56,7 @@ public sealed class ComicVineHttpTests
 		RecordedResponse invalidKey = FixtureFiles.Read(Path.Combine(FixtureFiles.OutputFolder, "invalid-key.txt"));
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Reply(invalidKey.Status, invalidKey.Body));
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 
 		ComicVineException error = (await Assert.ThrowsAsync<ComicVineException>(() => http.GetAsync(Request, CancellationToken.None)))!;
 
@@ -74,7 +74,7 @@ public sealed class ComicVineHttpTests
 		RecordedResponse rateLimit = FixtureFiles.Read(Path.Combine(FixtureFiles.OutputFolder, "synthetic-rate-limit.txt"));
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Reply(rateLimit.Status, rateLimit.Body));
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 
 		ComicVineException error = (await Assert.ThrowsAsync<ComicVineException>(() => http.GetAsync(Request, CancellationToken.None)))!;
 
@@ -89,7 +89,7 @@ public sealed class ComicVineHttpTests
 	{
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, Reply(failure), ScriptedHandler.Ok());
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 
 		await http.GetAsync(Request, CancellationToken.None);
 
@@ -104,7 +104,7 @@ public sealed class ComicVineHttpTests
 	{
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, Reply(failure), Reply(failure));
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 
 		ComicVineException error = (await Assert.ThrowsAsync<ComicVineException>(() => http.GetAsync(Request, CancellationToken.None)))!;
 
@@ -123,7 +123,7 @@ public sealed class ComicVineHttpTests
 		var clock = new ManualClock();
 		Func<HttpRequestMessage, HttpResponseMessage> quoting = request => throw new HttpRequestException("failed: " + request.RequestUri);
 		var handler = new ScriptedHandler(clock, quoting, quoting);
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 
 		ComicVineException error = (await Assert.ThrowsAsync<ComicVineException>(() => http.GetAsync(Request, CancellationToken.None)))!;
 
@@ -136,7 +136,7 @@ public sealed class ComicVineHttpTests
 	{
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Ok());
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 		using var cancelled = new CancellationTokenSource();
 		cancelled.Cancel();
 
@@ -150,7 +150,7 @@ public sealed class ComicVineHttpTests
 	{
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Ok(), ScriptedHandler.Ok(), ScriptedHandler.Ok());
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 		DateTime start = clock.Now;
 
 		for (int i = 0; i < 3; i++)
@@ -165,12 +165,28 @@ public sealed class ComicVineHttpTests
 	}
 
 	[Test]
+	public async Task A_wall_clock_that_jumps_back_an_hour_does_not_delay_the_next_request()
+	{
+		var clock = new ManualClock();
+		var handler = new ScriptedHandler(clock, ScriptedHandler.Ok(), ScriptedHandler.Ok(), ScriptedHandler.Ok());
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
+
+		await http.GetAsync(Request, CancellationToken.None);
+		clock.JumpWallClock(TimeSpan.FromHours(-1));
+		await http.GetAsync(Request, CancellationToken.None);
+		await http.GetAsync(Request, CancellationToken.None);
+
+		await Assert.That(clock.Delays.Max()).IsLessThanOrEqualTo(TimeSpan.FromMilliseconds(1100));
+		await Assert.That(clock.Delays.Count).IsEqualTo(2);
+	}
+
+	[Test]
 	public async Task The_gap_holds_for_requests_from_many_threads_at_once()
 	{
 		const int Count = 12;
 		var clock = new ManualClock { RealPause = TimeSpan.FromMilliseconds(15) };
 		var handler = new ScriptedHandler(clock, Enumerable.Range(0, Count).Select(_ => ScriptedHandler.Ok()).ToArray());
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 		using var start = new ManualResetEventSlim();
 
 		Task[] requests = Enumerable.Range(0, Count)
@@ -194,7 +210,7 @@ public sealed class ComicVineHttpTests
 		var clock = new ManualClock();
 		// UTF-8 cannot carry a lone surrogate, and the HTML decode leaves a surrogate entity as text.
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Ok("<results><name><![CDATA[a\u0001b￾ c \U0001F600 &#xD800;d &#x1F600;]]></name></results>"));
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 
 		XDocument doc = await http.GetAsync(Request, CancellationToken.None);
 
@@ -210,7 +226,7 @@ public sealed class ComicVineHttpTests
 			ScriptedHandler.Reply(HttpStatusCode.OK, "not an image"),
 			ScriptedHandler.Throw(new HttpRequestException("down")),
 			_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Png(30, 20)) });
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 		var url = new Uri("https://comicvine.gamespot.com/a/uploads/scale_small/1.jpg");
 
 		Bitmap? failed = await http.GetImageAsync(url, CancellationToken.None);
@@ -238,7 +254,7 @@ public sealed class ComicVineHttpTests
 		var clock = new ManualClock();
 		Func<HttpRequestMessage, HttpResponseMessage> reply = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) };
 		var handler = new ScriptedHandler(clock, reply, reply);
-		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
 
 		Bitmap? image = await http.GetImageAsync(new Uri("https://comicvine.gamespot.com/a/uploads/scale_small/1.jpg"), CancellationToken.None);
 
@@ -255,7 +271,7 @@ public sealed class ComicVineHttpTests
 		var clock = new ManualClock();
 		Func<HttpRequestMessage, HttpResponseMessage> reply = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Png(5, 5)) };
 		var handler = new ScriptedHandler(clock, reply, reply);
-		using var http = new ComicVineHttp(handler, Key, "ua", clock) { DecodeImage = _ => throw (Exception)Activator.CreateInstance(thrown)! };
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed) { DecodeImage = _ => throw (Exception)Activator.CreateInstance(thrown)! };
 
 		Bitmap? image = await http.GetImageAsync(new Uri("https://comicvine.gamespot.com/a/uploads/scale_small/1.jpg"), CancellationToken.None);
 
@@ -268,7 +284,7 @@ public sealed class ComicVineHttpTests
 	{
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Reply(HttpStatusCode.OK, "x"));
-		using var http = new ComicVineHttp(handler, Key, "ua", clock) { DecodeImage = _ => throw new InvalidOperationException("bug") };
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed) { DecodeImage = _ => throw new InvalidOperationException("bug") };
 
 		await Assert.ThrowsAsync<InvalidOperationException>(() => http.GetImageAsync(new Uri("https://comicvine.gamespot.com/a/1.jpg"), CancellationToken.None));
 	}

@@ -7,7 +7,7 @@ using ComicVineScraper.Engine;
 namespace ComicVineScraper.Fixtures;
 
 /// <summary>
-/// A clock whose Delay advances Now instead of waiting, so a test asserts the 1100 ms gap without spending it.
+/// A clock whose Delay advances Now (and Elapsed) instead of waiting, so a test asserts the 1100 ms gap without spending it.
 /// RealPause makes each Delay also yield for a moment of real time, which widens races between threads.
 /// </summary>
 public sealed class ManualClock(DateTime start) : IClock
@@ -15,6 +15,7 @@ public sealed class ManualClock(DateTime start) : IClock
 	private readonly object gate = new();
 	private readonly List<TimeSpan> delays = [];
 	private DateTime now = start;
+	private TimeSpan elapsed;
 
 	public ManualClock() : this(new DateTime(2026, 11, 9, 12, 0, 0))
 	{
@@ -33,6 +34,18 @@ public sealed class ManualClock(DateTime start) : IClock
 		}
 	}
 
+	/// <summary>A monotonic reading: it advances with Delay and ignores JumpWallClock, like a Stopwatch.</summary>
+	public TimeSpan Elapsed
+	{
+		get
+		{
+			lock (gate)
+			{
+				return elapsed;
+			}
+		}
+	}
+
 	public IReadOnlyList<TimeSpan> Delays
 	{
 		get
@@ -41,6 +54,15 @@ public sealed class ManualClock(DateTime start) : IClock
 			{
 				return delays.ToArray();
 			}
+		}
+	}
+
+	/// <summary>Moves the wall clock without any time passing, as a daylight-saving change or an NTP step does.</summary>
+	public void JumpWallClock(TimeSpan by)
+	{
+		lock (gate)
+		{
+			now += by;
 		}
 	}
 
@@ -55,6 +77,7 @@ public sealed class ManualClock(DateTime start) : IClock
 		{
 			delays.Add(delay);
 			now += delay;
+			elapsed += delay;
 		}
 	}
 }

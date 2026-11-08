@@ -32,7 +32,8 @@ internal sealed class Replay
 	public static (ComicVineCatalog Catalog, FixtureHandler Handler) Catalog(SearchSettings settings)
 	{
 		var handler = new FixtureHandler(Recorded.Value, Fallback);
-		return (new ComicVineCatalog(new ComicVineHttp(handler, "oracle", "ua", new ManualClock()), settings), handler);
+		var clock = new ManualClock();
+		return (new ComicVineCatalog(new ComicVineHttp(handler, "oracle", "ua", clock, () => clock.Elapsed), settings), handler);
 	}
 
 	/// <summary>The Python side's result: [value, error or null, requested URLs as fixture keys].</summary>

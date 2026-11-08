@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
@@ -35,6 +36,15 @@ public sealed class ComicVineHttp : IDisposable
 	/// <param name="handler">HttpClientHandler in the plugin; a recorded-response handler in tests. Disposed with this object.</param>
 	/// <param name="apiKey">Never logged: every URL in an exception passes through the redaction.</param>
 	public ComicVineHttp(HttpMessageHandler handler, string apiKey, string userAgent, IClock clock)
+		: this(handler, apiKey, userAgent, clock, StartMonotonic())
+	{
+	}
+
+	/// <param name="elapsed">
+	/// A monotonic reading for the throttle. The wall clock (IClock.Now) steps back at a daylight-saving change, which would
+	/// stall every request for an hour.
+	/// </param>
+	internal ComicVineHttp(HttpMessageHandler handler, string apiKey, string userAgent, IClock clock, Func<TimeSpan> elapsed)
 	{
 		if (string.IsNullOrWhiteSpace(apiKey))
 		{
@@ -42,7 +52,7 @@ public sealed class ComicVineHttp : IDisposable
 		}
 		this.apiKey = apiKey;
 		this.clock = clock;
-		throttle = new Throttle(clock, RequestGap);
+		throttle = new Throttle(clock, elapsed, RequestGap);
 		client = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout };
 		client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", userAgent);
 	}
@@ -101,6 +111,12 @@ public sealed class ComicVineHttp : IDisposable
 			}
 		}
 		return null;
+	}
+
+	private static Func<TimeSpan> StartMonotonic()
+	{
+		var stopwatch = Stopwatch.StartNew();
+		return () => stopwatch.Elapsed;
 	}
 
 	internal string Redact(string text) => ApiKeyRedaction.Redact(text, apiKey);
@@ -176,22 +192,21 @@ public sealed class ComicVineHttp : IDisposable
 }
 
 /// <summary>Keeps at least the gap between the starts of any two requests, across threads (deviations #6).</summary>
-internal sealed class Throttle(IClock clock, TimeSpan gap)
+internal sealed class Throttle(IClock clock, Func<TimeSpan> elapsed, TimeSpan gap)
 {
 	private readonly SemaphoreSlim turn = new(1, 1);
-	private DateTime next = DateTime.MinValue;
+	private TimeSpan? next;
 
 	public async Task WaitTurnAsync(CancellationToken ct)
 	{
 		await turn.WaitAsync(ct).ConfigureAwait(false);
 		try
 		{
-			TimeSpan wait = next - clock.Now;
-			if (wait > TimeSpan.Zero)
+			if (next - elapsed() is { } wait && wait > TimeSpan.Zero)
 			{
 				await clock.Delay(wait, ct).ConfigureAwait(false);
 			}
-			next = clock.Now + gap;
+			next = elapsed() + gap;
 		}
 		finally
 		{

@@ -23,7 +23,8 @@ public sealed class ComicVineCatalogTests
 	private static (ComicVineCatalog Catalog, FixtureHandler Handler) Catalog(SearchSettings? settings = null)
 	{
 		var handler = FixtureHandler.FromOutputFolder();
-		var http = new ComicVineHttp(handler, "test-key", "ua", new ManualClock());
+		var clock = new ManualClock();
+		var http = new ComicVineHttp(handler, "test-key", "ua", clock, () => clock.Elapsed);
 		return (new ComicVineCatalog(http, settings ?? NoFilters), handler);
 	}
 
@@ -346,7 +347,7 @@ public sealed class ComicVineCatalogTests
 		RecordedResponse invalidKey = FixtureFiles.Read(Path.Combine(FixtureFiles.OutputFolder, "invalid-key.txt"));
 		var clock = new ManualClock();
 		var handler = new ScriptedHandler(clock, ScriptedHandler.Reply(invalidKey.Status, invalidKey.Body));
-		var catalog = new ComicVineCatalog(new ComicVineHttp(handler, "test-key", "ua", clock), NoFilters);
+		var catalog = new ComicVineCatalog(new ComicVineHttp(handler, "test-key", "ua", clock, () => clock.Elapsed), NoFilters);
 
 		ComicVineException error = (await Assert.ThrowsAsync<ComicVineException>(
 			() => catalog.ResolveSeriesAsync(new ComicVineTarget.OfSeries(new SeriesId(796)), CancellationToken.None)))!;
@@ -366,7 +367,7 @@ public sealed class ComicVineCatalogTests
 		var clock = new ManualClock();
 		byte[] png = ComicVineHttpTests.Png(width, height);
 		var handler = new ScriptedHandler(clock, _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(png) });
-		var catalog = new ComicVineCatalog(new ComicVineHttp(handler, "test-key", "ua", clock), NoFilters);
+		var catalog = new ComicVineCatalog(new ComicVineHttp(handler, "test-key", "ua", clock, () => clock.Elapsed), NoFilters);
 
 		using Bitmap? image = await catalog.GetImageAsync(new Uri("https://comicvine.gamespot.com/a/1.png"), CancellationToken.None);
 
