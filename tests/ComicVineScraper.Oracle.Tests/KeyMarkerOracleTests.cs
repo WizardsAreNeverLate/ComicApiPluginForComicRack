@@ -50,7 +50,7 @@ public sealed class KeyMarkerOracleTests
 	];
 
 	private static readonly string[] IssueKeyCorpus =
-		["", "123", " 456 ", "12.0", "abc", "0", "-5", "1e3", "+7", "nan", "99999999999", "2147483647", "007", "1 2"];
+		["", "123", " 456 ", "12.0", "abc", "0", "-5", "1e3", "+7", "nan", "99999999999", "2147483647", "007", "1 2", "12."];
 
 	private static readonly int?[] IssueCorpus = [null, 1, 12, 123, 999999];
 
@@ -73,7 +73,7 @@ public sealed class KeyMarkerOracleTests
 				{
 					var python = (object[])Oracle.Call("cvs_book_oracle", "find_marker", tags, notes, issueKey)!;
 					string expected = string.Join(" ", python);
-					if (IsDeviation(expected))
+					if (IsDeviation(expected, tags, notes, issueKey))
 					{
 						continue;
 					}
@@ -89,6 +89,24 @@ public sealed class KeyMarkerOracleTests
 
 		await Assert.That(differences).IsEmpty();
 		await Assert.That(compared).IsGreaterThan(5000);
+	}
+
+	[Test]
+	public async Task Custom_values_that_are_numbers_but_not_whole_make_Python_raise_and_the_port_reads_what_it_can()
+	{
+		foreach ((string key, string port) in new[] { ("12.0", "issue 12"), ("12.", "issue 12"), ("1e3", "none"), ("nan", "none") })
+		{
+			var python = (object[])Oracle.Call("cvs_book_oracle", "find_marker", Array.Empty<string>(), "", key)!;
+
+			await Assert.That(string.Join(" ", python)).StartsWith("error");
+			await Assert.That(Describe(KeyMarkers.Find([], "", key))).IsEqualTo(port);
+		}
+		foreach (string key in new[] { "abc", "1 2" })
+		{
+			var python = (object[])Oracle.Call("cvs_book_oracle", "find_marker", Array.Empty<string>(), "", key)!;
+
+			await Assert.That(string.Join(" ", python)).IsEqualTo("none");
+		}
 	}
 
 	[Test]
@@ -216,11 +234,18 @@ public sealed class KeyMarkerOracleTests
 		await Assert.That(compared).IsGreaterThanOrEqualTo(minimumCompared);
 	}
 
-	// deviations.md #14: a stored key of 0 makes IssueRef raise, and a key beyond int.MaxValue is no Comic Vine id.
-	// deviations.md #9: int() raises on a custom value such as "12.0".
-	private static bool IsDeviation(string python) =>
+	// deviations.md #14: a key tag, note or custom value of 0 makes IssueRef raise, and a key beyond int.MaxValue is no Comic Vine id.
+	// deviations.md #9: int() raises on a custom value that is no whole number, such as "12.0", "12.", "1e3" or "nan" (is_number accepts them as floats).
+	// Every other error is a real difference and stays in the comparison.
+	private static bool IsDeviation(string python, string[] tags, string notes, string issueKey) =>
 		python.StartsWith("error", StringComparison.Ordinal)
-		|| python.StartsWith("issue ", StringComparison.Ordinal) && !int.TryParse(python.Substring(6), NumberStyles.None, CultureInfo.InvariantCulture, out _);
+			? tags.Append(notes).Any(text => ZeroKey.IsMatch(text)) || !WholeNumber.IsMatch(issueKey) && FloatNotInt.IsMatch(issueKey) || ZeroNumber.IsMatch(issueKey)
+			: python.StartsWith("issue ", StringComparison.Ordinal) && !int.TryParse(python.Substring(6), NumberStyles.None, CultureInfo.InvariantCulture, out _);
+
+	private static readonly Regex ZeroKey = new(@"CVDB0+(?![0-9])", RegexOptions.IgnoreCase);
+	private static readonly Regex WholeNumber = new(@"^\s*[+-]?[0-9]+\s*$");
+	private static readonly Regex ZeroNumber = new(@"^[\s]*[+-]?0+[\s]*$");
+	private static readonly Regex FloatNotInt = new(@"^\s*[+-]?([0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?|\.[0-9]+([eE][+-]?[0-9]+)?|nan|inf|infinity)\s*$", RegexOptions.IgnoreCase);
 
 	private static string Describe(StoredMarker marker) => marker switch
 	{
