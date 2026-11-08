@@ -132,6 +132,19 @@ public sealed class ComicVineHttpTests
 	}
 
 	[Test]
+	public async Task An_unscripted_request_does_not_put_the_api_key_in_the_exception_message()
+	{
+		var clock = new ManualClock();
+		var handler = new ScriptedHandler(clock);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock, () => clock.Elapsed);
+
+		InvalidOperationException error = (await Assert.ThrowsAsync<InvalidOperationException>(() => http.GetAsync(Request, CancellationToken.None)))!;
+
+		await Assert.That(error.Message).DoesNotContain(Key);
+		await Assert.That(error.Message).Contains("api_key=...");
+	}
+
+	[Test]
 	public async Task Cancellation_throws_OperationCanceledException_and_sends_nothing()
 	{
 		var clock = new ManualClock();

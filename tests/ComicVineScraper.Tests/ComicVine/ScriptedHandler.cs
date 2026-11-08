@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ComicVineScraper.ComicVine;
 using ComicVineScraper.Engine;
 
 namespace ComicVineScraper.Tests.ComicVine;
@@ -49,7 +50,7 @@ internal sealed class ScriptedHandler(IClock clock, params Func<HttpRequestMessa
 		}
 		if (index >= replies.Length)
 		{
-			throw new InvalidOperationException($"Request {index + 1} was not scripted: {request.RequestUri}");
+			throw new InvalidOperationException($"Request {index + 1} was not scripted: {ApiKeyRedaction.Redact(request.RequestUri!.ToString(), "")}");
 		}
 		return Task.FromResult(replies[index](request));
 	}
