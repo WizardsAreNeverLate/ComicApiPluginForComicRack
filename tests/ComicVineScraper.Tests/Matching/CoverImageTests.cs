@@ -22,6 +22,15 @@ public sealed class CoverImageTests
 	}
 
 	[Test]
+	public async Task Leaves_the_argument_open_for_its_owner()
+	{
+		using var image = new Bitmap(130, 100);
+		using Bitmap front = CoverImage.StripBackCover(image);
+
+		await Assert.That(image.Width).IsEqualTo(130);
+	}
+
+	[Test]
 	public async Task Keeps_the_right_half_whatever_the_image_resolution()
 	{
 		using var source = new Bitmap(131, 100);

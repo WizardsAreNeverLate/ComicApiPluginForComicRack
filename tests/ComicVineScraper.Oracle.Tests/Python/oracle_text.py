@@ -12,10 +12,6 @@ class _Obj(object):
    pass
 
 
-def lower(s):
-   return s.lower()
-
-
 def natural_keys_equal(a, b):
    return utils.natural_key(a) == utils.natural_key(b)
 

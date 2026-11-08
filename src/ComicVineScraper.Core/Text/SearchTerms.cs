@@ -40,7 +40,10 @@ public static class SearchTerms
 		return string.Join(" ", Word.Matches(s).Cast<Match>().Select(m => m.Value));
 	}
 
-	/// <summary>Python str.isalnum: every UTF-16 unit is a letter or digit, so a surrogate pair never is.</summary>
+	/// <summary>
+	/// IronPython's str.isalnum: every UTF-16 unit is a letter or digit. A surrogate unit is neither, so a character
+	/// outside the BMP never counts, even a letter.
+	/// </summary>
 	private static bool IsAlphanumeric(string text)
 	{
 		for (int i = 0; i < text.Length; i++)

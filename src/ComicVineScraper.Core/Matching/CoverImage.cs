@@ -6,8 +6,8 @@ namespace ComicVineScraper.Matching;
 public static class CoverImage
 {
 	/// <summary>
-	/// When 1.2 &lt; width/height &lt; 1.5, returns a new bitmap of the right half (Width/2 pixels wide) and disposes
-	/// the original. Otherwise returns the original unchanged.
+	/// When 1.2 &lt; width/height &lt; 1.5, returns a new bitmap of the right half (Width/2 pixels wide). Otherwise returns
+	/// the original unchanged. The argument is never disposed: the caller owns it, and owns the result when it is a new bitmap.
 	/// </summary>
 	/// <remarks>
 	/// Python drew the whole image at (-Width/2, 0) with DrawImage(image, x, y), which scales by the image's DPI, so a
@@ -22,11 +22,16 @@ public static class CoverImage
 		}
 		int half = image.Width / 2;
 		var front = new Bitmap(half, image.Height);
-		using (Graphics g = Graphics.FromImage(front))
+		try
 		{
+			using Graphics g = Graphics.FromImage(front);
 			g.DrawImage(image, new Rectangle(0, 0, half, image.Height), new Rectangle(image.Width - half, 0, half, image.Height), GraphicsUnit.Pixel);
+			return front;
 		}
-		image.Dispose();
-		return front;
+		catch
+		{
+			front.Dispose();
+			throw;
+		}
 	}
 }
