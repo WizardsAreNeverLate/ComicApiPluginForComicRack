@@ -22,8 +22,7 @@ class _Scraper(object):
 _now = [None]
 
 def _strftime(fmt):
-	# deviations.md #10: the port writes the note time as invariant HH:mm:ss, not %X
-	return time.strftime(fmt.replace('%X', '%H:%M:%S'), _now[0])
+	return time.strftime(fmt, _now[0])  # the clock is the only thing replaced; %X stays Python's own
 
 def _detached(settings, now=None, fields=None):
 	''' A ComicBook over a plain BookData, for the methods that never touch ComicRack. '''
