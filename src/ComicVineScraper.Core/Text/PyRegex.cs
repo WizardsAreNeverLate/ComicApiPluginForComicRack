@@ -151,7 +151,11 @@ public static class PyRegex
 		}
 	}
 
-	/// <summary>Python ignores a backslash before a letter, digit-like character, or underscore that is not an escape; .NET rejects it.</summary>
+	/// <summary>
+	/// Python ignores a backslash before a letter, digit-like character, or underscore that is not an escape; .NET rejects it.
+	/// IronPython's list of known escapes omits B, G, and z, so it turns them into literal letters. The port keeps G and z
+	/// that way (Python's re has neither) and treats \B as the non-word boundary that Python's re documents (deviations.md #18).
+	/// </summary>
 	private static string RemoveUnknownEscapes(string pattern)
 	{
 		int start = 0;
@@ -164,7 +168,7 @@ public static class PyRegex
 			}
 			start = ++i;
 			char c = pattern[start];
-			if ("ADPSWZ\\abcdefknprstuvwx".IndexOf(c) >= 0)
+			if ("ADPSWZB\\abcdefknprstuvwx".IndexOf(c) >= 0)
 			{
 				continue;
 			}

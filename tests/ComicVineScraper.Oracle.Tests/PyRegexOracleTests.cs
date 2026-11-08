@@ -55,6 +55,50 @@ public sealed class PyRegexOracleTests
 	}
 
 	[Test]
+	public async Task Backslash_B_is_a_non_word_boundary_where_IronPython_makes_it_a_literal_B()
+	{
+		const string pattern = @"(?P<series>a\Bb)";
+		var regex = PyRegex.TryCompile(pattern, Timeout)!;
+
+		await Assert.That(PythonConfig.GroupsOf(pattern, "aBb")).IsEqualTo("series=aBb");
+		await Assert.That(PythonConfig.GroupsOf(pattern, "ab")).IsEqualTo("none");
+		await Assert.That(PythonConfig.CSharpGroups(regex, "ab")).IsEqualTo("series=ab");
+		await Assert.That(PythonConfig.CSharpGroups(regex, "aBb")).IsEqualTo("none");
+	}
+
+	[Test]
+	[Arguments(@"(?P<series>a\Gb)", "aGb")]
+	[Arguments(@"(?P<series>a\zb)", "azb")]
+	public async Task Backslash_G_and_z_stay_literal_as_in_IronPython(string pattern, string sample)
+	{
+		var regex = PyRegex.TryCompile(pattern, Timeout)!;
+
+		await Assert.That(PythonConfig.GroupsOf(pattern, sample)).IsEqualTo("series=" + sample);
+		await Assert.That(PythonConfig.CSharpGroups(regex, sample)).IsEqualTo("series=" + sample);
+	}
+
+	[Test]
+	public async Task A_backslash_pair_before_a_letter_matches_as_in_Python()
+	{
+		var mismatches = new List<string>();
+		foreach (char letter in "ABCDGPQSWZabdfnqrstwxyz_")
+		{
+			string pattern = @"(?P<series>a\\" + letter + ".*)";
+			var regex = PyRegex.TryCompile(pattern, Timeout)!;
+			foreach (string sample in new[] { @"a\" + letter + "x", "a" + letter, @"a\\" + letter })
+			{
+				string expected = PythonConfig.GroupsOf(pattern, sample), actual = PythonConfig.CSharpGroups(regex, sample);
+				if (expected != actual)
+				{
+					mismatches.Add($"{pattern} on {sample}: python {expected}, C# {actual}");
+				}
+			}
+		}
+
+		await Assert.That(mismatches).IsEmpty();
+	}
+
+	[Test]
 	public async Task AdvancedParser_compiles_the_alt_search_regex_with_a_match_timeout()
 	{
 		var parsed = AdvancedSettings.Parse("ALT_SEARCH_REGEX=(?P<series>.+)");
