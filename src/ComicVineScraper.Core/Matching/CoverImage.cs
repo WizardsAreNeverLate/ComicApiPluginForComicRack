@@ -11,7 +11,7 @@ public static class CoverImage
 	/// </summary>
 	/// <remarks>
 	/// Python drew the whole image at (-Width/2, 0) with DrawImage(image, x, y), which scales by the image's DPI, so a
-	/// scan that is not 96 DPI gave a wrongly scaled half (deviations.md #14). This copies the right half pixel for pixel.
+	/// scan that is not 96 DPI gave a wrongly scaled half (deviations.md #17). This copies the right half pixel for pixel.
 	/// </remarks>
 	public static Bitmap StripBackCover(Bitmap image)
 	{

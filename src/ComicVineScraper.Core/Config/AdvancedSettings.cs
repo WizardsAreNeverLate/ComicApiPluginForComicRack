@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 namespace ComicVineScraper.Config;
 
 /// <summary>
-/// advanced.dat: the raw text is the source of truth (the Advanced tab edits it). Phase 3c adds
-/// AdvancedSettings.Parse(text), which fills the other members and applies the clamps.
+/// advanced.dat: the raw text is the source of truth (the Advanced tab edits it). Parse fills the other members and
+/// applies the clamps.
 /// </summary>
 public sealed record AdvancedSettings(
 	string RawText,
@@ -24,4 +24,7 @@ public sealed record AdvancedSettings(
 	IReadOnlyDictionary<string, string> PublisherAliases,
 	IReadOnlyDictionary<string, string> UserImprints,
 	int ScrapeDelaySeconds,               // default 1, parsed values clamped 2..3600
-	int MaxSearchResults);                // default 100, clamped 10..5000
+	int MaxSearchResults)                 // default 100, clamped 10..5000
+{
+	public static AdvancedSettings Parse(string? text) => AdvancedParser.Parse(text);
+}

@@ -31,7 +31,7 @@ public sealed class TextOracleTests
 			{
 				if (hasNaN[a] && hasNaN[b])
 				{
-					continue; // deviations.md #13
+					continue; // deviations.md #16
 				}
 				int python = (int)Oracle.Call("utils", "natural_compare", a, b)!;
 				await Assert.That(NaturalOrder.Instance.Compare(a, b)).IsEqualTo(python).Because($"'{a}' vs '{b}'");

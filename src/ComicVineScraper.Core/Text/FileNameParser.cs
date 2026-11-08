@@ -12,7 +12,7 @@ public sealed record ParsedName(string Series, string Number, string Year);
 
 /// <summary>
 /// fnameparser.py. The patterns are the Python ones verbatim, less one "(?u)" that IronPython also drops. IronPython hands
-/// the rest to .NET's Regex unchanged, so they match the same text. The port adds CultureInvariant (deviations.md #12).
+/// the rest to .NET's Regex unchanged, so they match the same text. The port adds CultureInvariant (deviations.md #15).
 /// </summary>
 public static class FileNameParser
 {

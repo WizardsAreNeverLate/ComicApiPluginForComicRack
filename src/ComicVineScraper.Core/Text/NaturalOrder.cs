@@ -38,7 +38,7 @@ public sealed class NaturalOrder : IComparer<string>
 
 	/// <summary>
 	/// NaN parts compare equal to each other and below every other number, as .NET orders doubles. Python said
-	/// NaN is below NaN, which no sort can honour (deviations.md #13).
+	/// NaN is below NaN, which no sort can honour (deviations.md #16).
 	/// </summary>
 	private static int CompareKeys(List<Part> x, List<Part> y)
 	{
