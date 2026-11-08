@@ -1,0 +1,20 @@
+command key=comic-vine-scraper-net hook=Books,Editor name=Comic Vine Scraper image=comicvinescraper.png configure=ConfigScript
+scrapeIsEditorHook=True
+configureLinked=True
+uiCulture=de-DE
+run1.formOpenAt1500ms=True
+run1.formTitle=Comic Vine Scraper - v0.1.0
+run1.formModal=True mainEnabled=True
+run1.Button=Abbrechen (2 übrig)
+run1.Label=Scraping:   unbekannt
+shot=D:\Data\_Code\ComicRackCE\.claude\worktrees\agent-a18c6afc996e2ed53\ComicRack\bin\Release\net48\Scripts\CvsNetProbe\comicform.png {Width=438, Height=143}
+run1.secondInvokeReturnedMs=0 comicFormsOpen=1
+run1.returnedAfterMs=5395 comicFormsOpen=0
+run1.notes[Probe A]=cvs-net prototype stamps=1
+run1.notes[Probe B]=existing note\ncvs-net prototype stamps=1
+run1.notes[Probe C]=cvs-net prototype stamps=1
+run2.cancelButton=Abbrechen (4 übrig)
+run2.afterClick cancelEnabled=False formStillOpen=True atMs=1506
+run2.returnedAfterMs=1520 stamped=1/5
+configure.activeWindow=Comic Vine Scraper Einstellungen
+configure.returnedAfterMs=1095
