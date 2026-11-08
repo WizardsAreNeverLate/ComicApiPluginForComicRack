@@ -37,7 +37,7 @@ public static class PyStr
 			int digits = StrPrecision + (magnitude < 0.001 ? 3 : magnitude < 0.01 ? 2 : magnitude < 0.1 ? 1 : 0);
 			string fixedText = magnitude.ToString("F" + digits, CultureInfo.InvariantCulture).TrimEnd('0');
 			int fractionLength = fixedText.Length - fixedText.IndexOf('.') - 1;
-			int precision = magnitude < 1.0 ? fractionLength : Math.Min(StrPrecision - (1 + (int)Math.Log10(magnitude)), fractionLength);
+			int precision = magnitude < 1.0 ? fractionLength : Math.Max(0, Math.Min(StrPrecision - (1 + (int)Math.Log10(magnitude)), fractionLength));
 			text = value.ToString("f" + precision, PythonNumbers);
 			if (precision == 0)
 			{

@@ -150,6 +150,43 @@ public sealed class DatFileOracleTests
 		await Assert.That(mismatches).IsEmpty();
 	}
 
+	/// <summary>
+	/// IronPython's str() throws ArgumentOutOfRangeException for doubles in [1e12 - 2e-3, 1e12): Math.Log10 rounds up to
+	/// 12.0, so its precision is -1. The port prints what str() prints for the values either side of that band.
+	/// </summary>
+	[Test]
+	public async Task Format_matches_str_of_float_just_below_1e12_where_IronPython_does_not_throw()
+	{
+		long bits = BitConverter.DoubleToInt64Bits(1e12);
+		var values = new List<double> { 1e12, 999999999999.99, 999999999999.5, 999999999999.38965, 999999999999.9988, 999999999999.9995 };
+		for (int steps = 1; steps <= 4; steps++)
+		{
+			values.Add(BitConverter.Int64BitsToDouble(bits - steps));
+			values.Add(-BitConverter.Int64BitsToDouble(bits - steps));
+		}
+		values.Add(BitConverter.Int64BitsToDouble(bits - 100));
+		values.Add(BitConverter.Int64BitsToDouble(bits - 1000));
+
+		string[] mismatches = values.Select(v => (v, python: PythonStr(v), csharp: PyStr.Format(v)))
+			.Where(r => r.python != r.csharp)
+			.Select(r => $"{r.v:R}: python {r.python}, C# {r.csharp}")
+			.ToArray();
+
+		await Assert.That(mismatches).IsEmpty();
+	}
+
+	private static string PythonStr(double value)
+	{
+		try
+		{
+			return (string)((object[])Oracle.Call("__builtin__", "eval", "[str(x) for x in xs]", new Dictionary<string, object> { ["xs"] = new List<double> { value } })!)[0];
+		}
+		catch (ArgumentOutOfRangeException)
+		{
+			return Math.Round(value).ToString("F1", CultureInfo.InvariantCulture);
+		}
+	}
+
 	[Test]
 	public async Task Whole_numbers_beyond_long_stay_text_where_Python_returns_a_long()
 	{
