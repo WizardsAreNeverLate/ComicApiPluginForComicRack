@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using ComicVineScraper.ComicVine;
 using ComicVineScraper.Config;
 using ComicVineScraper.Engine;
+using ComicVineScraper.Fixtures;
 using ComicVineScraper.Model;
 
 namespace ComicVineScraper.Oracle.Tests.ComicVine;
@@ -128,7 +129,7 @@ public sealed class CatalogOracleTests
 		{
 			foreach (string number in numbers.Distinct())
 			{
-				if (number.Trim().Length == 0 || PythonFractionBug(number))
+				if (IsBlankIssueNumber(number) || PythonFractionBug(number))
 				{
 					skipped++;
 					continue;
@@ -292,6 +293,29 @@ public sealed class CatalogOracleTests
 		await Assert.That(series.Count).IsEqualTo(200);
 		await Assert.That(issues.Count).IsEqualTo(163);
 	}
+
+	/// <summary>deviations.md, "Blank issue number": the one input class Find_issue_matches_query_issue_ref_outside_the_fraction_bugs skips.</summary>
+	[Test]
+	[Arguments("")]
+	[Arguments(" ")]
+	[Arguments("\t")]
+	[Arguments("\r\n ")]
+	public async Task A_blank_issue_number_raises_in_Python_and_finds_nothing_without_a_request_in_CSharp(string number)
+	{
+		(_, string? pythonError, string[] pythonRequests) = Replay.Unpack(Oracle.Call("cvoracle", "find_issue", Replay.Serve, 796, number));
+		(ComicVineCatalog catalog, FixtureHandler handler) = Replay.Catalog(SettingsCorpus[0]);
+
+		IssueRef? found = await catalog.FindIssueAsync(new SeriesId(796), number, CancellationToken.None);
+
+		await Assert.That(pythonError).StartsWith("ValueError");
+		await Assert.That(pythonRequests).IsEmpty();
+		await Assert.That(found).IsNull();
+		await Assert.That(handler.Requested).IsEmpty();
+		await Assert.That(IsBlankIssueNumber(number)).IsTrue();
+	}
+
+	/// <summary>deviations.md, "Blank issue number": Python's _query_issue_id_dom raises ValueError('bad parameters') once the number is stripped.</summary>
+	internal static bool IsBlankIssueNumber(string number) => number.Trim().Length == 0;
 
 	/// <summary>deviations.md #1 and #2: Python's first test is re.match("0*.50*"), and its replace calls never match.</summary>
 	internal static bool PythonFractionBug(string number) =>
