@@ -230,6 +230,24 @@ public sealed class ScrapeRunLoopTests
 	}
 
 	[Test]
+	public async Task A_cancel_that_arrives_with_a_skip_forever_answer_writes_no_marker()
+	{
+		using var world = new EngineWorld();
+		using var cts = new CancellationTokenSource();
+		world.Ui.Series((_, _) =>
+		{
+			cts.Cancel();
+			return new SeriesChoice.SkipForever();
+		});
+		var book = FakeBook.File(Batman497);
+
+		RunSummary summary = await world.RunAsync(cts.Token, book);
+
+		await Assert.That(summary).IsEqualTo(new RunSummary(0, 1, true));
+		await Assert.That(book.Applied).IsEmpty();
+	}
+
+	[Test]
 	public async Task A_cancel_during_the_issue_request_leaves_the_book_unwritten()
 	{
 		using var world = new EngineWorld();
