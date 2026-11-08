@@ -68,7 +68,7 @@ foreach ($name in "ComicVineScraper.Tests", "ComicVineScraper.Oracle.Tests") {
 		exit 1
 	}
 	Write-Output "Running $name..."
-	& $exe --progress off
+	& $exe --progress off --minimum-expected-tests 1
 	if ($LASTEXITCODE -ne 0) {
 		$failed += $name
 	}
