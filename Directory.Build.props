@@ -7,6 +7,7 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<Version>0.1.0</Version>
 		<GenerateDocumentationFile>false</GenerateDocumentationFile>
 		<ComicRackDir Condition="'$(ComicRackDir)' == ''">$(COMICRACK_DIR)</ComicRackDir>
 		<ComicRackPath Condition="'$(ComicRackDir)' != ''">$([MSBuild]::EnsureTrailingSlash('$(ComicRackDir)'))</ComicRackPath>
