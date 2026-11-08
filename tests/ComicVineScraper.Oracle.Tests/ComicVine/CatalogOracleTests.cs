@@ -247,6 +247,31 @@ public sealed class CatalogOracleTests
 		await Assert.That(Report(mismatches)).IsEqualTo("");
 	}
 
+	/// <summary>deviations.md, "cvinfo with two ids": FindCvInfo returns one target, so the series id is not tried as a fallback.</summary>
+	[Test]
+	public async Task A_cvinfo_naming_an_unknown_issue_and_a_series_falls_back_to_the_series_in_Python_only()
+	{
+		string folder = Path.Combine(Path.GetTempPath(), "cvs-oracle-cvinfo-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(folder);
+		try
+		{
+			File.WriteAllText(Path.Combine(folder, "cvinfo"), "4000-999999999 4050-796");
+			(object? value, _, _) = Replay.Unpack(Oracle.Call("cvoracle", "check_magic_file", Replay.Serve, folder));
+			(ComicVineCatalog catalog, _) = Replay.Catalog(SettingsCorpus[0]);
+
+			ComicVineTarget? target = ComicVineUrl.FindCvInfo(folder);
+			SeriesRef? series = await catalog.ResolveSeriesAsync(target!, CancellationToken.None);
+
+			await Assert.That(FormatSeries(value!)).StartsWith("796|Batman|");
+			await Assert.That(target).IsEqualTo(new ComicVineTarget.OfIssue(new IssueId(999999999)));
+			await Assert.That(series).IsNull();
+		}
+		finally
+		{
+			Directory.Delete(folder, recursive: true);
+		}
+	}
+
 	[Test]
 	public async Task A_cancelled_query_is_cached_as_empty_by_Python_and_not_cached_by_CSharp()
 	{

@@ -153,3 +153,7 @@ def cancel_then_repeat(serve, terms, series_id):
    repeated = [len(db.query_series_refs(terms, [], lambda done, total: False)),
       len(db.query_issue_refs(ref, lambda fraction: False))]
    return [cancelled, repeated, list(_requested)]
+
+
+def url_path_encode(text):
+   return HttpUtility.UrlPathEncode(text)

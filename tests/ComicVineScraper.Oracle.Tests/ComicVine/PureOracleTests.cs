@@ -181,6 +181,22 @@ public sealed class PureOracleTests
 		await Assert.That(sizes.Count).IsGreaterThan(80);
 	}
 
+	[Test]
+	[Arguments("#1")]
+	[Arguments("1+2")]
+	[Arguments("1&2")]
+	[Arguments("50%")]
+	public async Task Issue_numbers_are_escaped_where_UrlPathEncode_sent_them_as_they_are(string number)
+	{
+		string python = (string)Oracle.Call("cvoracle", "url_path_encode", number)!;
+		string url = ApiRequest.IssueByNumber(new Model.SeriesId(796), number).ToUrl("key");
+
+		await Assert.That(python).IsEqualTo(number);
+		await Assert.That(url).EndsWith("&filter=volume:796,issue_number:" + Uri.EscapeDataString(number));
+		await Assert.That(Uri.EscapeDataString(number)).IsNotEqualTo(number);
+		await Assert.That(((string)Oracle.Call("cvoracle", "url_path_encode", "1 ½")!).ToUpperInvariant()).IsEqualTo(Uri.EscapeDataString("1 ½"));
+	}
+
 	private static Bitmap Pattern(int width, int height, float dpi)
 	{
 		var image = new Bitmap(width, height, PixelFormat.Format32bppArgb);

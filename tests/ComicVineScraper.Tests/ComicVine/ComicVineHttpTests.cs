@@ -116,6 +116,20 @@ public sealed class ComicVineHttpTests
 	}
 
 	[Test]
+	public async Task A_transport_error_that_quotes_the_url_is_redacted_too()
+	{
+		var clock = new ManualClock();
+		Func<HttpRequestMessage, HttpResponseMessage> quoting = request => throw new HttpRequestException("failed: " + request.RequestUri);
+		var handler = new ScriptedHandler(clock, quoting, quoting);
+		using var http = new ComicVineHttp(handler, Key, "ua", clock);
+
+		ComicVineException error = (await Assert.ThrowsAsync<ComicVineException>(() => http.GetAsync(Request, CancellationToken.None)))!;
+
+		await Assert.That(error.ToString()).DoesNotContain(Key);
+		await Assert.That(error.InnerException!.Message).Contains("api_key=...");
+	}
+
+	[Test]
 	public async Task Cancellation_throws_OperationCanceledException_and_sends_nothing()
 	{
 		var clock = new ManualClock();

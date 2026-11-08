@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ComicVineScraper.ComicVine;
 using ComicVineScraper.Fixtures;
@@ -46,7 +45,7 @@ public sealed class FixtureCapture
 	[Explicit]
 	public async Task Capture_missing_fixtures()
 	{
-		string apiKey = ReadApiKey();
+		string apiKey = LiveApiKey.Read();
 		string folder = SourceFixtureFolder();
 		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(100) };
 		client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ComicVineScraper.NET/fixture-capture");
@@ -73,17 +72,6 @@ public sealed class FixtureCapture
 		}
 		Console.WriteLine($"{sent} requests sent.");
 		await Assert.That(sent).IsLessThanOrEqualTo(MaxRequestsPerRun);
-	}
-
-	private static string ReadApiKey()
-	{
-		string? file = Environment.GetEnvironmentVariable("CVS_API_KEY_FILE");
-		if (string.IsNullOrEmpty(file) || !File.Exists(file))
-		{
-			throw new InvalidOperationException("Set CVS_API_KEY_FILE to the file that holds the Comic Vine API key.");
-		}
-		Match key = Regex.Match(File.ReadAllText(file), @"\b[0-9a-fA-F]{40}\b");
-		return key.Success ? key.Value : throw new InvalidOperationException("CVS_API_KEY_FILE holds no 40-character hex key.");
 	}
 
 	private static string SourceFixtureFolder()

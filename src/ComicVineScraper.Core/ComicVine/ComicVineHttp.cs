@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -152,8 +151,11 @@ public sealed class ComicVineHttp : IDisposable
 	private static bool IsTransportFailure(Exception e, CancellationToken ct) =>
 		e is HttpRequestException or IOException || (e is OperationCanceledException && !ct.IsCancellationRequested);
 
-	private Outcome Fail(ComicVineError error, string url, int? apiStatus, Exception? inner) =>
-		new(null, new ComicVineException(error, Redact(url), apiStatus, inner));
+	private Outcome Fail(ComicVineError error, string url, int? apiStatus, Exception? inner)
+	{
+		Exception? safeInner = inner is not null && inner.ToString().Contains(apiKey) ? new HttpRequestException(Redact(inner.Message)) : inner;
+		return new(null, new ComicVineException(error, Redact(url), apiStatus, safeInner));
+	}
 
 	private sealed record Outcome(XDocument? Document, ComicVineException? Error);
 }
