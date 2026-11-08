@@ -60,9 +60,9 @@ By default the port keeps the Python behaviour exactly, quirks included. A chang
 - behaviour that depends on the IronPython runtime, for example stripping emoji from responses
 - errors that mislead the user, for example a bad API key that shows the generic error
 
-## Open decisions for the maintainer
+## Decisions from the maintainer
 
-- **Licence.** The original is Apache 2.0, and ComicRackCE is GPL v2. A C# plugin compiles against ComicRack's assemblies, while the Python plugin only called them at run time. Until the maintainer decides, this repository keeps the Apache 2.0 licence and credits Cory Banack in `NOTICE`.
+- **Licence (decided 2026-11-09).** The maintainer chose to keep the Apache 2.0 licence. `NOTICE` credits Cory Banack. ComicRackCE is GPL v2, and the C# plugin compiles against its assemblies. The maintainer is aware of this.
 - **Settings compatibility.** The port reads and writes the Python `.dat` files in `%APPDATA%\Comic Vine Scraper\`, so a user can switch back to the Python version.
 
 ## Secrets
