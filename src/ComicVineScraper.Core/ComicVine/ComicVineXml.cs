@@ -129,13 +129,13 @@ internal static class ComicVineXml
 			Characters: CleanList(Names(results, "character_credits", "character")),
 			Teams: CleanList(Names(results, "team_credits", "team")),
 			Locations: CleanList(Names(results, "location_credits", "location")),
-			Writers: CleanList(roles[Role.Writer]),
-			Pencillers: CleanList(roles[Role.Penciller]),
-			Inkers: CleanList(roles[Role.Inker]),
-			Colorists: CleanList(roles[Role.Colorist]),
-			Letterers: CleanList(roles[Role.Letterer]),
-			CoverArtists: CleanList(roles[Role.CoverArtist]),
-			Editors: CleanList(roles[Role.Editor]),
+			Writers: CleanPeople(roles[Role.Writer]),
+			Pencillers: CleanPeople(roles[Role.Penciller]),
+			Inkers: CleanPeople(roles[Role.Inker]),
+			Colorists: CleanPeople(roles[Role.Colorist]),
+			Letterers: CleanPeople(roles[Role.Letterer]),
+			CoverArtists: CleanPeople(roles[Role.CoverArtist]),
+			Editors: CleanPeople(roles[Role.Editor]),
 			Webpage: webpage,
 			Rating: null,
 			CoverUrls: covers.Select(ToUri).OfType<Uri>().ToList());
@@ -234,6 +234,10 @@ internal static class ComicVineXml
 	/// <summary>Issue's list setters: drop blank entries, then remove ',' and ';' (an entry of only "," becomes "").</summary>
 	private static List<string> CleanList(IEnumerable<string> names) =>
 		names.Where(NotBlank).Select(name => ListSeparators.Replace(name, "")).ToList();
+
+	/// <summary>A creator credited with two roles that map to one list ("penciler, artist") is listed once, at the first place.</summary>
+	private static List<string> CleanPeople(IEnumerable<string> names) =>
+		CleanList(names).Distinct(StringComparer.Ordinal).ToList();
 
 	private static bool NotBlank(string text) => text.Trim().Length > 0;
 

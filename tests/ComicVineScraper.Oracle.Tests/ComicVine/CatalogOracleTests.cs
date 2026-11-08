@@ -162,6 +162,7 @@ public sealed class CatalogOracleTests
 		var mismatches = new List<string>();
 		int surrogateFields = 0;
 		int objectNameFields = 0;
+		int repeatedPeople = 0;
 		foreach (int[] ids in runs)
 		{
 			(object? value, string? pythonError, string[] pythonRequests) =
@@ -195,6 +196,7 @@ public sealed class CatalogOracleTests
 				bool[] compared = csharpFields.Select((_, at) => !hasPair[at] && !(at < hasObjectName.Length && hasObjectName[at])).ToArray();
 				surrogateFields += hasPair.Count(c => c);
 				objectNameFields += hasObjectName.Count(c => c);
+				repeatedPeople += pythonIssues.Sum(issue => PersonLists.Count(at => HasRepeat(((object[])issue)[at])));
 				Compare(mismatches, label, pythonFields.Where((_, at) => at >= compared.Length || compared[at]), csharpFields.Where((_, at) => compared[at]));
 			}
 		}
@@ -202,6 +204,7 @@ public sealed class CatalogOracleTests
 		await Assert.That(Report(mismatches)).IsEqualTo("");
 		await Assert.That(surrogateFields).IsEqualTo(2);
 		await Assert.That(objectNameFields).IsEqualTo(2);
+		await Assert.That(repeatedPeople).IsGreaterThan(0);
 	}
 
 	[Test]
@@ -416,6 +419,11 @@ public sealed class CatalogOracleTests
 		}
 	}
 
+	private static readonly int[] PersonLists = [19, 20, 21, 22, 23, 24, 25];
+
+	private static bool HasRepeat(object? items) =>
+		((object[])items!).Select(item => item?.ToString()).GroupBy(name => name, StringComparer.Ordinal).Any(group => group.Count() > 1);
+
 	private static readonly Regex ObjectName = new(@"<\w+ object at 0x[0-9A-F]+>");
 
 	private static bool HasSurrogatePair(string text) =>
@@ -453,6 +461,8 @@ public sealed class CatalogOracleTests
 	private static IEnumerable<string> FormatIssue(object[] i)
 	{
 		static string List(object? items) => string.Join(" ; ", ((object[])items!).Select(item => item?.ToString()));
+		// deviations.md 3b-6: a person listed twice in one credit list is listed once, at the first place.
+		static string People(object? items) => string.Join(" ; ", ((object[])items!).Select(item => item?.ToString()).Distinct(StringComparer.Ordinal));
 		PartialDate published = PartialDate.Of(Year(i[9]), Part(i[10]), Part(i[11]));
 		PartialDate released = PartialDate.Of(Year(i[12]), Part(i[13]), Part(i[14]));
 		return
@@ -460,8 +470,8 @@ public sealed class CatalogOracleTests
 			$"key {i[0]}", $"series {i[1]}", $"series name {i[2]}", $"volume year {i[3]}", $"number {i[4]}", $"title {i[5]}",
 			$"summary {i[6]}", $"publisher {i[7]}", $"imprint {i[8]}", $"published {Format(published)}", $"released {Format(released)}",
 			$"crossovers {List(i[15])}", $"characters {List(i[16])}", $"teams {List(i[17])}", $"locations {List(i[18])}",
-			$"writers {List(i[19])}", $"pencillers {List(i[20])}", $"inkers {List(i[21])}", $"colorists {List(i[22])}",
-			$"letterers {List(i[23])}", $"cover artists {List(i[24])}", $"editors {List(i[25])}", $"webpage {i[26]}",
+			$"writers {People(i[19])}", $"pencillers {People(i[20])}", $"inkers {People(i[21])}", $"colorists {People(i[22])}",
+			$"letterers {People(i[23])}", $"cover artists {People(i[24])}", $"editors {People(i[25])}", $"webpage {i[26]}",
 			$"rating {((double)i[27] == 0.0 ? "none" : i[27])}", $"covers {List(i[28])}",
 		];
 	}

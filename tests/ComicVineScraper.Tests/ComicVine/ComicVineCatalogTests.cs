@@ -312,7 +312,7 @@ public sealed class ComicVineCatalogTests
 		await Assert.That(issue.Characters).IsEquivalentTo(new[] { "Solo Character" }, CollectionOrdering.Matching);
 		await Assert.That(issue.Teams).IsEquivalentTo(new[] { "TeamA" }, CollectionOrdering.Matching);
 		await Assert.That(issue.Writers).IsEquivalentTo(new[] { "Pun Ctuated", "" }, CollectionOrdering.Matching);
-		await Assert.That(issue.Pencillers).IsEquivalentTo(new[] { "Art Ist", "Pen Inker", "Pen Inker" }, CollectionOrdering.Matching);
+		await Assert.That(issue.Pencillers).IsEquivalentTo(new[] { "Art Ist", "Pen Inker" }, CollectionOrdering.Matching);
 		await Assert.That(issue.Inkers).IsEquivalentTo(new[] { "Art Ist", "Pen Inker" }, CollectionOrdering.Matching);
 		await Assert.That(issue.Colorists).IsEquivalentTo(new[] { "Col Orer" }, CollectionOrdering.Matching);
 		await Assert.That(issue.Letterers).IsEquivalentTo(new[] { "Col Orer" }, CollectionOrdering.Matching);
