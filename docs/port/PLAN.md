@@ -13,10 +13,10 @@ The port is done when every item below is true:
    - the 286 filename cases in `test_fnameparser.data`
    - the `natural_compare` and `natural_key` cases
    - the BookData normalisation rules
-3. The pure algorithms give the same output as the original Python run under IronPython (the "oracle") on a shared corpus of inputs. This covers filename parsing, match score, search-term cleanup, summary cleanup, key tag and note parsing and rewriting, the unique series key, natural sort, and the `.dat` file format. The only allowed differences are the ones listed in `deviations.md`.
+3. The pure algorithms give the same output as the original Python run under IronPython (the "oracle") on a shared corpus of inputs. This covers filename parsing, match score, search-term cleanup, summary cleanup, key tag and note parsing and rewriting, the unique series key, natural sort, and the `.dat` file format. The only differences are the bug fixes listed in `deviations.md`.
 4. The Comic Vine client passes tests against recorded responses for every endpoint and every documented edge case. One live smoke test passes with a real API key.
 5. The plugin reads `settings.dat`, `advanced.dat`, `series.dat`, and `geometry.dat` as the Python version writes them. The Python version can read the files the plugin writes.
-6. In ComicRack, scraping the same books with the C# plugin and with the Python plugin, in auto-choose mode, writes the same metadata. The only allowed differences are the ones listed in `deviations.md`.
+6. In ComicRack, scraping the same books with the C# plugin and with the Python plugin, in auto-choose mode, writes the same metadata. The only differences are the bug fixes listed in `deviations.md`.
 
 ## Rigor
 
@@ -53,12 +53,7 @@ So every unit must pass its gates before the next unit starts. Each phase is rev
 
 ## Behaviour that changes on purpose
 
-By default the port keeps the Python behaviour exactly, quirks included. A change needs an entry in `deviations.md` and a test that pins the new behaviour. Changes are allowed only for:
-
-- clear bugs, for example the issue-number regex that turns "15" into "0½", or the imprint keys with trailing spaces
-- non-deterministic behaviour, for example ties broken by the order of a Python `set`
-- behaviour that depends on the IronPython runtime, for example stripping emoji from responses
-- errors that mislead the user, for example a bad API key that shows the generic error
+The port fixes bugs in the original instead of reproducing them (maintainer decision, 2026-11-09). Unusual behaviour that is intended stays as it is. Each fix has an entry in `deviations.md` with the Python behaviour, the C# behaviour, and the test that pins it. The oracle tests skip exactly the inputs listed in that file.
 
 ## Decisions from the maintainer
 
