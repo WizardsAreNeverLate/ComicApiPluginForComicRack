@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ComicVineScraper.Books;
 using ComicVineScraper.Config;
+using ComicVineScraper.Diagnostics;
 using ComicVineScraper.Engine;
 using ComicVineScraper.Model;
 
@@ -201,6 +202,138 @@ public sealed class SettingsStoreTests : IDisposable
 		File.WriteAllText(Path.Combine(Profile, "geometry.dat"), "xLocation : " + value + "\n");
 
 		await Assert.That(Store().LoadGeometry().Get("x").Location).IsNull();
+	}
+
+	private static FileStream Lock(string path, FileShare share) => new(path, FileMode.Open, FileAccess.Read, share);
+
+	private SettingsStore Store(DebugLog log) => new(Profile, Plugin, new FixedClock(), log);
+
+	[Test]
+	public async Task Recording_a_series_while_series_dat_is_locked_logs_and_carries_on()
+	{
+		var log = new DebugLog();
+		ChosenSeries chosen = Store(log).LoadChosenSeries();
+		chosen.Record(new SeriesId(1));
+		string path = Path.Combine(Profile, "series.dat");
+
+		using (Lock(path, FileShare.Read))
+		{
+			chosen.Record(new SeriesId(2));
+		}
+		chosen.Record(new SeriesId(3));
+
+		await Assert.That(string.Join("\n", log.Snapshot())).Contains("series.dat");
+		await Assert.That(chosen.Contains(new SeriesId(2))).IsTrue();
+		await Assert.That(Store().LoadChosenSeries().Contains(new SeriesId(2))).IsTrue();
+		await Assert.That(Directory.GetFiles(Profile).Select(Path.GetFileName)).IsEquivalentTo(["series.dat"]);
+	}
+
+	[Test]
+	public async Task Setting_geometry_while_geometry_dat_is_read_only_logs_and_carries_on()
+	{
+		var log = new DebugLog();
+		GeometryMap geometry = Store(log).LoadGeometry();
+		geometry.Set("a", new Point(1, 2), null);
+		string path = Path.Combine(Profile, "geometry.dat");
+		File.SetAttributes(path, FileAttributes.ReadOnly);
+		try
+		{
+			geometry.Set("b", new Point(3, 4), new Size(5, 6));
+		}
+		finally
+		{
+			File.SetAttributes(path, FileAttributes.Normal);
+		}
+
+		await Assert.That(string.Join("\n", log.Snapshot())).Contains("geometry.dat");
+		await Assert.That(geometry.Get("b").Location).IsNull();
+		await Assert.That(geometry.Get("a").Location).IsEqualTo(new Point(1, 2));
+	}
+
+	[Test]
+	public async Task Save_reports_a_locked_file_instead_of_throwing()
+	{
+		var log = new DebugLog();
+		SettingsStore store = Store(log);
+		var config = new Configuration { Advanced = AdvancedSettings.Parse("") };
+		await Assert.That(store.Save(config).Succeeded).IsTrue();
+
+		SaveResult result;
+		using (Lock(Path.Combine(Profile, "settings.dat"), FileShare.Read))
+		{
+			result = store.Save(config with { ApiKey = "changed" });
+		}
+
+		await Assert.That(result.Succeeded).IsFalse();
+		await Assert.That(result.Error).IsNotNull();
+		await Assert.That(string.Join("\n", log.Snapshot())).Contains("settings.dat");
+	}
+
+	[Test]
+	public async Task An_unreadable_series_dat_is_never_overwritten_in_the_session()
+	{
+		Directory.CreateDirectory(Profile);
+		string path = Path.Combine(Profile, "series.dat");
+		File.WriteAllText(path, ":: header\n\n18436 : 18436\n");
+		byte[] before = File.ReadAllBytes(path);
+		var log = new DebugLog();
+		ChosenSeries chosen;
+		using (Lock(path, FileShare.None))
+		{
+			chosen = Store(log).LoadChosenSeries();
+		}
+
+		chosen.Record(new SeriesId(7));
+
+		await Assert.That(File.ReadAllBytes(path)).IsEquivalentTo(before);
+		await Assert.That(string.Join("\n", log.Snapshot())).Contains("series.dat");
+	}
+
+	[Test]
+	public async Task An_unreadable_settings_dat_keeps_its_unknown_keys_because_Save_does_not_write_it()
+	{
+		Directory.CreateDirectory(Profile);
+		string path = Path.Combine(Profile, "settings.dat");
+		File.WriteAllBytes(path, DatFile.ToBytes(new Dictionary<string, DatValue> { ["futureKey"] = new DatValue.Text("keep me") }, DateTime.Now));
+		byte[] before = File.ReadAllBytes(path);
+		SettingsStore store = Store(new DebugLog());
+		using (Lock(path, FileShare.None))
+		{
+			store.Load();
+		}
+
+		SaveResult result = store.Save(new Configuration { Advanced = AdvancedSettings.Parse("") });
+
+		await Assert.That(result.Succeeded).IsFalse();
+		await Assert.That(File.ReadAllBytes(path)).IsEquivalentTo(before);
+	}
+
+	[Test]
+	public async Task An_unreadable_geometry_dat_is_not_rewritten_by_Set()
+	{
+		Directory.CreateDirectory(Profile);
+		string path = Path.Combine(Profile, "geometry.dat");
+		File.WriteAllText(path, ":: header\n\naLocation : 1,2\n");
+		byte[] before = File.ReadAllBytes(path);
+		GeometryMap geometry = Store(new DebugLog()).LoadGeometry();
+		using (Lock(path, FileShare.None))
+		{
+			geometry.Get("a");
+		}
+
+		geometry.Set("b", new Point(3, 4), null);
+
+		await Assert.That(File.ReadAllBytes(path)).IsEquivalentTo(before);
+	}
+
+	[Test]
+	public async Task A_missing_file_is_empty_and_is_written_normally()
+	{
+		SettingsStore store = Store(new DebugLog());
+
+		store.LoadChosenSeries().Record(new SeriesId(5));
+
+		await Assert.That(Store().LoadChosenSeries().Contains(new SeriesId(5))).IsTrue();
 	}
 
 	private sealed class FixedClock : IClock

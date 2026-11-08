@@ -23,6 +23,7 @@ The status of each entry is `open` until its test lands. The entry then names th
 | 9 | Stored issue key | A key stored as `12.0` in a custom value throws in `int("12.0")`. | Parse whole-number values such as `12.0`. | `book/comicbook.py:139` | open |
 | 10 | Scrape note time | `%X` formats the time in the user's locale. The regex that finds the old note then fails to match on some locales, and duplicate notes pile up. | Write the time as invariant `HH:mm:ss`. Still recognise notes written in the old locale formats. | `book/comicbook.py` | open |
 | 11 | Release date | An unset `ReleasedTime` reads as (1, 1, 1), which is not blank. So a missing release date is filled in only when "overwrite existing" is on. | An unset `ReleasedTime` counts as blank. | `book/pluginbookdata.py:43-75` | open |
+| 12 | Unreadable settings files | `load_map` treats any read error as an empty map, so the next `persist_map` overwrites a `series.dat`, `geometry.dat`, or `settings.dat` that was only locked at read time, and the user's series history or unknown keys are lost. | A missing file is empty. A file that cannot be read is logged and is not written for the rest of the session. `Save` reports the failure in its `SaveResult`. | `utils/utils.py:262-300`, `utils/utils.py:232-258` | `An_unreadable_series_dat_is_never_overwritten_in_the_session`, `An_unreadable_settings_dat_keeps_its_unknown_keys_because_Save_does_not_write_it`, `An_unreadable_geometry_dat_is_not_rewritten_by_Set` |
 
 ## Classified as intended
 

@@ -27,6 +27,7 @@ public sealed class SettingsStore
 	private readonly IClock clock;
 	private readonly DebugLog? log;
 	private readonly object gate = new();
+	private readonly HashSet<string> unreadable = new(StringComparer.OrdinalIgnoreCase);
 
 	public SettingsStore(string folder, string pluginFolder, IClock clock, DebugLog? log = null)
 	{
@@ -70,8 +71,11 @@ public sealed class SettingsStore
 		}
 	}
 
-	/// <summary>Writes settings.dat and advanced.dat.</summary>
-	public void Save(Configuration config)
+	/// <summary>
+	/// Writes settings.dat and advanced.dat. Never throws for a file problem: the result carries the first error, and the debug log has
+	/// the details. A file that could not be read earlier in this session is not written, so the user's other keys are not lost.
+	/// </summary>
+	public SaveResult Save(Configuration config)
 	{
 		lock (gate)
 		{
@@ -80,8 +84,9 @@ public sealed class SettingsStore
 			{
 				merged[entry.Key] = entry.Value;
 			}
-			WriteMap(SettingsFileName, merged);
-			WriteText(AdvancedFileName, config.Advanced.RawText);
+			Exception? settings = WriteMap(SettingsFileName, merged);
+			Exception? advanced = TryWrite(AdvancedFileName, [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(config.Advanced.RawText)]);
+			return new SaveResult(settings ?? advanced);
 		}
 	}
 
@@ -91,22 +96,53 @@ public sealed class SettingsStore
 
 	internal IReadOnlyDictionary<string, DatValue> ReadMap(string fileName)
 	{
+		byte[]? bytes = ReadBytes(fileName);
+		return bytes is null ? new Dictionary<string, DatValue>() : DatFile.FromBytes(bytes);
+	}
+
+	/// <summary>Null is returned for a missing file and for an unreadable one. Only the unreadable one is remembered, so it is never written.</summary>
+	private byte[]? ReadBytes(string fileName)
+	{
 		try
 		{
-			string path = PathOf(fileName);
-			return File.Exists(path) ? DatFile.FromBytes(File.ReadAllBytes(path)) : new Dictionary<string, DatValue>();
+			return File.ReadAllBytes(PathOf(fileName));
+		}
+		catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+		{
+			return null;
 		}
 		catch (Exception error) when (error is IOException or UnauthorizedAccessException)
 		{
+			unreadable.Add(fileName);
+			log?.Debug("Could not read " + fileName + ", so it will not be written this session.");
 			log?.Error(error);
-			return new Dictionary<string, DatValue>();
+			return null;
 		}
 	}
 
-	internal void WriteMap(string fileName, IReadOnlyDictionary<string, DatValue> map)
+	/// <summary>Null on success. Returns the error instead of throwing, as persist_map returned False.</summary>
+	internal Exception? WriteMap(string fileName, IReadOnlyDictionary<string, DatValue> map) => TryWrite(fileName, DatFile.ToBytes(map, clock.Now));
+
+	private Exception? TryWrite(string fileName, byte[] bytes)
 	{
-		Directory.CreateDirectory(folder);
-		WriteAtomically(PathOf(fileName), DatFile.ToBytes(map, clock.Now));
+		if (unreadable.Contains(fileName))
+		{
+			var skipped = new IOException(fileName + " could not be read earlier in this session, so it is not overwritten.");
+			log?.Debug("Did not write " + fileName + ": " + skipped.Message);
+			return skipped;
+		}
+		try
+		{
+			Directory.CreateDirectory(folder);
+			WriteAtomically(PathOf(fileName), bytes);
+			return null;
+		}
+		catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+		{
+			log?.Debug("Could not write " + fileName + ".");
+			log?.Error(error);
+			return error;
+		}
 	}
 
 	internal void Locked(Action action)
@@ -119,31 +155,15 @@ public sealed class SettingsStore
 
 	private string ReadText(string fileName)
 	{
-		try
+		byte[]? bytes = ReadBytes(fileName);
+		if (bytes is null)
 		{
-			string path = PathOf(fileName);
-			if (!File.Exists(path))
-			{
-				return "";
-			}
-			byte[] bytes = File.ReadAllBytes(path);
-			byte[] bom = Encoding.UTF8.GetPreamble();
-			int start = bytes.Length >= bom.Length && bytes.Take(bom.Length).SequenceEqual(bom) ? bom.Length : 0;
-			return Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
-		}
-		catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-		{
-			log?.Error(error);
 			return "";
 		}
+		byte[] bom = Encoding.UTF8.GetPreamble();
+		int start = bytes.Length >= bom.Length && bytes.Take(bom.Length).SequenceEqual(bom) ? bom.Length : 0;
+		return Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
 	}
-
-	private void WriteText(string fileName, string text)
-	{
-		Directory.CreateDirectory(folder);
-		WriteAtomically(PathOf(fileName), [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)]);
-	}
-
 	private static void WriteAtomically(string path, byte[] bytes)
 	{
 		string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
