@@ -77,7 +77,7 @@ internal static class ComicVineXml
 		XElement results = doc.Root.Get("results") ?? new XElement("results");
 		string parent = Imprints.FindParentPublisher(details.Publisher);
 		string webpage = Text(results.Get("site_detail_url")) is { } url && url.StartsWith("http", StringComparison.Ordinal) ? url : "";
-		string description = Text(results.Get("description")) is { } html ? Pending3a.CleanSummary(html) : "";
+		string description = Text(results.Get("description")) is { } html ? SummaryText.Clean(html) : "";
 
 		var roles = new Dictionary<Role, List<string>>();
 		foreach (Role role in Enum.GetValues(typeof(Role)))

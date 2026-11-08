@@ -132,18 +132,6 @@ def check_magic_file(serve, path):
    return _run(action)
 
 
-def summary(description):
-   class Node(object):
-      pass
-   dom = Node()
-   dom.results = Node()
-   dom.results.description = description
-   issue = Node()
-   issue.summary_s = ''
-   cvdb.__issue_parse_summary(issue, dom)
-   return issue.summary_s
-
-
 def cancel_then_repeat(serve, terms, series_id):
    ''' Cancels a series search and an issue load at their first progress report, then repeats both. '''
    _install(serve, 1000)

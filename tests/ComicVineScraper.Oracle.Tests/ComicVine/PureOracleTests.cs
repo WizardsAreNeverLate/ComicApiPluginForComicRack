@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Linq;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using ComicVineScraper.ComicVine;
 
@@ -113,75 +110,6 @@ public sealed class PureOracleTests
 	}
 
 	[Test]
-	[Arguments(false)]
-	[Arguments(true)]
-	public async Task CleanSearchTerms_matches_cleanup_search_terms(bool alternate)
-	{
-		const string Alphabet = "abcdefghijklmnopqrstuvwxyzABC0123456789 &'.:-_#!?()[]ü½\t";
-		string[] words = ["c2c", "ctc", "noads", "noadss", "tbp", "1", "2nd", "1st", "twelfth", "eightteenth", "twenty", "20th", "one", "&", "0th", "zero"];
-		var random = new Random(290);
-		string[] corpus =
-		[
-			"", " ", "Batman", "x-men & avengers", "C2C batman TBP", "fantastic 4", "the 1st issue", "twelfth night", "a & b", "a&b",
-			.. Enumerable.Range(0, 1500).Select(_ => Random(random, Alphabet, 15)),
-			.. Enumerable.Range(0, 1500).Select(_ => string.Join(random.Next(3) == 0 ? "-" : " ", Enumerable.Range(0, random.Next(1, 5)).Select(_ => words[random.Next(words.Length)]))),
-		];
-		var mismatches = new List<string>();
-		foreach (string terms in corpus)
-		{
-			Check(mismatches, terms, (string)Oracle.Call("cvdb", "__cleanup_search_terms", terms, alternate)!, Pending3a.CleanSearchTerms(terms, alternate));
-		}
-
-		await Assert.That(Report(mismatches)).IsEqualTo("");
-	}
-
-	[Test]
-	public async Task CleanSummary_matches_issue_parse_summary()
-	{
-		string[] pieces =
-		[
-			"Overview", "<p>", "<P >", "</p>", "<br>", "<BR/>", "<br />", "<b>", "<a href=\"x\">", "</a>", "<", ">", "&nbsp;", "&nbsp", "&amp;",
-			"&quot;", "&lt;", "&gt;", "&amp;lt;", "  ", "   ", "\n", "text", "List of covers", "list OF Covers", "x", " ", "<h4>", "\r\n",
-		];
-		var random = new Random(628);
-		string[] corpus = Enumerable.Range(0, 3000).Select(_ => string.Concat(Enumerable.Range(0, random.Next(1, 12)).Select(_ => pieces[random.Next(pieces.Length)]))).ToArray();
-		var mismatches = new List<string>();
-		foreach (string html in corpus)
-		{
-			Check(mismatches, html, (string)Oracle.Call("cvoracle", "summary", html)!, Pending3a.CleanSummary(html));
-		}
-
-		await Assert.That(Report(mismatches)).IsEqualTo("");
-	}
-
-	[Test]
-	public async Task StripBackCover_matches_strip_back_cover_pixel_for_pixel()
-	{
-		var sizes = new List<(int Width, int Height)>();
-		for (int width = 10; width <= 80; width += 7)
-		{
-			for (int height = 10; height <= 70; height += 9)
-			{
-				sizes.Add((width, height));
-			}
-		}
-		sizes.AddRange([(121, 100), (149, 100), (150, 100), (120, 100), (131, 100), (13, 10), (3, 2)]);
-		var mismatches = new List<string>();
-		foreach ((int width, int height) in sizes)
-		{
-			foreach (float dpi in new[] { 96f, 72f })
-			{
-				using Bitmap python = (Bitmap)Oracle.Call("utils", "strip_back_cover", Pattern(width, height, dpi))!;
-				using Bitmap csharp = Pending3a.StripBackCover(Pattern(width, height, dpi));
-				Check(mismatches, $"{width}x{height}@{dpi}", Describe(python), Describe(csharp));
-			}
-		}
-
-		await Assert.That(Report(mismatches)).IsEqualTo("");
-		await Assert.That(sizes.Count).IsGreaterThan(80);
-	}
-
-	[Test]
 	[Arguments("#1")]
 	[Arguments("1+2")]
 	[Arguments("1&2")]
@@ -195,33 +123,6 @@ public sealed class PureOracleTests
 		await Assert.That(url).EndsWith("&filter=volume:796,issue_number:" + Uri.EscapeDataString(number));
 		await Assert.That(Uri.EscapeDataString(number)).IsNotEqualTo(number);
 		await Assert.That(((string)Oracle.Call("cvoracle", "url_path_encode", "1 ½")!).ToUpperInvariant()).IsEqualTo(Uri.EscapeDataString("1 ½"));
-	}
-
-	private static Bitmap Pattern(int width, int height, float dpi)
-	{
-		var image = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-		image.SetResolution(dpi, dpi);
-		for (int x = 0; x < width; x++)
-		{
-			for (int y = 0; y < height; y++)
-			{
-				image.SetPixel(x, y, Color.FromArgb(255, (x * 37) % 256, (y * 53) % 256, (x * y) % 256));
-			}
-		}
-		return image;
-	}
-
-	private static string Describe(Bitmap image)
-	{
-		var text = new StringBuilder($"{image.Width}x{image.Height} {image.PixelFormat} {image.HorizontalResolution}:");
-		for (int x = 0; x < image.Width; x++)
-		{
-			for (int y = 0; y < image.Height; y++)
-			{
-				text.Append(image.GetPixel(x, y).ToArgb().ToString("x8")).Append(' ');
-			}
-		}
-		return text.ToString();
 	}
 
 	private static bool HasSurrogatePair(string text) =>

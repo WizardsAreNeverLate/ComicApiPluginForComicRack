@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using ComicVineScraper.Config;
 using ComicVineScraper.Engine;
+using ComicVineScraper.Matching;
 using ComicVineScraper.Model;
+using ComicVineScraper.Text;
 
 namespace ComicVineScraper.ComicVine;
 
@@ -28,7 +29,7 @@ public sealed class ComicVineCatalog(ComicVineHttp http, SearchSettings settings
 
 	public async Task<IReadOnlyList<SeriesRef>> SearchSeriesAsync(string terms, IProgress<QueryProgress>? progress, CancellationToken ct)
 	{
-		string stripped = StripIgnoredTerms(terms, settings.IgnoredSearchTerms);
+		string stripped = SearchTerms.StripIgnored(terms, settings.IgnoredSearchTerms);
 		IReadOnlyList<SeriesRef>? found;
 		lock (gate)
 		{
@@ -46,7 +47,7 @@ public sealed class ComicVineCatalog(ComicVineHttp http, SearchSettings settings
 				searches[stripped] = found;
 			}
 		}
-		return Pending3a.FilterSeries(found, settings);
+		return SeriesFilter.Apply(found, settings);
 	}
 
 	public async Task<IReadOnlyList<IssueRef>> GetIssuesAsync(SeriesId series, IProgress<QueryProgress>? progress, CancellationToken ct)
@@ -113,20 +114,24 @@ public sealed class ComicVineCatalog(ComicVineHttp http, SearchSettings settings
 		return series is { } id ? await SeriesByIdAsync(id, ct).ConfigureAwait(false) : null;
 	}
 
-	public async Task<Bitmap?> GetImageAsync(Uri url, CancellationToken ct) =>
-		await http.GetImageAsync(url, ct).ConfigureAwait(false) is { } image ? Pending3a.StripBackCover(image) : null;
-
-	/// <summary>db.query_series_refs: remove whole-word ignored terms. Only terms made of letters and digits count.</summary>
-	internal static string StripIgnoredTerms(string terms, IReadOnlyList<string> ignored)
+	public async Task<Bitmap?> GetImageAsync(Uri url, CancellationToken ct)
 	{
-		string[] usable = ignored.Where(term => term.Length > 0 && term.All(char.IsLetterOrDigit)).ToArray();
-		return usable.Length == 0 ? terms : Regex.Replace(terms, @"(?i)\b(" + string.Join("|", usable) + @")\b", "");
+		if (await http.GetImageAsync(url, ct).ConfigureAwait(false) is not { } image)
+		{
+			return null;
+		}
+		Bitmap front = CoverImage.StripBackCover(image);
+		if (!ReferenceEquals(front, image))
+		{
+			image.Dispose();
+		}
+		return front;
 	}
 
 	/// <summary>cvdb._query_series_refs: a Comic Vine URL first, then the cleaned terms, then the number-word variant.</summary>
 	private async Task<IReadOnlyList<SeriesRef>> QuerySeriesAsync(string terms, IProgress<QueryProgress>? progress, CancellationToken ct)
 	{
-		string cleaned = Pending3a.CleanSearchTerms(terms, alternate: false);
+		string cleaned = SearchTerms.Clean(terms, alternate: false);
 		if (cleaned.Length == 0)
 		{
 			return [];
@@ -138,7 +143,7 @@ public sealed class ComicVineCatalog(ComicVineHttp http, SearchSettings settings
 		IReadOnlyList<SeriesRef> found = await SearchPagesAsync(cleaned, progress, ct).ConfigureAwait(false);
 		if (found.Count == 0)
 		{
-			string alternate = Pending3a.CleanSearchTerms(cleaned, alternate: true);
+			string alternate = SearchTerms.Clean(cleaned, alternate: true);
 			if (alternate != cleaned)
 			{
 				found = await SearchPagesAsync(alternate, progress, ct).ConfigureAwait(false);
