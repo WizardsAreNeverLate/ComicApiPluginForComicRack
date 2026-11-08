@@ -56,11 +56,11 @@ public sealed class ConfigurationTests
 	}
 
 	[Test]
-	public async Task Merge_settings_force_IgnoreBlanks_off_without_overwrite()
+	public async Task Merge_settings_keep_the_saved_IgnoreBlanks_whatever_OverwriteExisting_is()
 	{
 		var config = new Configuration { Advanced = Advanced(), IgnoreBlanks = true, OverwriteExisting = false };
 
-		await Assert.That(config.ToMergeSettings().IgnoreBlanks).IsFalse();
+		await Assert.That(config.ToMergeSettings().IgnoreBlanks).IsTrue();
 		await Assert.That((config with { OverwriteExisting = true }).ToMergeSettings().IgnoreBlanks).IsTrue();
 	}
 
