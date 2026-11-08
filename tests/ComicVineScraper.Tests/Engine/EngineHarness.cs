@@ -284,7 +284,7 @@ internal sealed class EngineWorld : IDisposable
 			world.Requests.Enqueue(key);
 			world.BeforeResponse?.Invoke(key);
 			cancellationToken.ThrowIfCancellationRequested();
-			if (world.ImageFor(url) is { } image)
+			if (!key.Contains("/api/") && world.ImageFor(url) is { } image)
 			{
 				using var png = new MemoryStream();
 				image.Save(png, ImageFormat.Png);
