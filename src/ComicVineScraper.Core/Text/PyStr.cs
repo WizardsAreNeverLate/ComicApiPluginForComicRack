@@ -14,6 +14,9 @@ public static class PyStr
 	private static readonly CultureInfo PythonCasing = CultureInfo.GetCultureInfo("en");
 	private static readonly NumberFormatInfo PythonNumbers = CreatePythonNumbers();
 
+	/// <summary>Python str.lower(): IronPython lowercases with the "en" culture (StringOps.CasingCultureInfo).</summary>
+	internal static string Lower(string text) => text.ToLower(PythonCasing);
+
 	/// <summary>
 	/// Python str(float): IronPython's "%.12g" with a ".0" after whole numbers (DoubleOps.__str__, StringFormatter.AdjustForG).
 	/// It builds on .NET Framework's own "E", "F", and "f" formatting, so it must run on .NET Framework to match.

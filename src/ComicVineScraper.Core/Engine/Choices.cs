@@ -50,8 +50,8 @@ public abstract record IssueChoice
 	public sealed record Cancel : IssueChoice;
 }
 
-/// <summary>A candidate series with its match score.</summary>
-public sealed record RankedSeries(SeriesRef Series, int Score);
+/// <summary>A candidate series with its match score. The score is fractional: its recency term breaks ties.</summary>
+public sealed record RankedSeries(SeriesRef Series, double Score);
 
 /// <summary>Candidates are best first.</summary>
 public sealed record SeriesQuestion(BookFacts Book, string SearchTerms, IReadOnlyList<RankedSeries> Candidates);

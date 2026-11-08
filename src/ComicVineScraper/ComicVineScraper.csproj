@@ -18,6 +18,10 @@
 		<ProjectReference Include="..\ComicVineScraper.Core\ComicVineScraper.Core.csproj" />
 	</ItemGroup>
 	<ItemGroup>
+		<InternalsVisibleTo Include="ComicVineScraper.Tests" />
+		<InternalsVisibleTo Include="ComicVineScraper.Oracle.Tests" />
+	</ItemGroup>
+	<ItemGroup>
 		<None Include="Package\**\*" />
 	</ItemGroup>
 	<Target Name="PackCrPlugin" AfterTargets="Build">

@@ -54,7 +54,14 @@ public static class Oracle
 			throw new InvalidOperationException($"{SourceVariable} is '{root}', which is not the src folder of comic-vine-scraper.");
 		}
 		ScriptEngine python = Python.CreateEngine();
-		List<string> paths = [.. python.GetSearchPaths(), .. SourceFolders.Select(folder => Path.Combine(root, folder)), HelperFolder];
+		// The python folder beside the tests holds helper modules that call the originals the way the plugin does.
+		List<string> paths =
+		[
+			.. python.GetSearchPaths(),
+			.. SourceFolders.Select(folder => Path.Combine(root, folder)),
+			Path.Combine(AppContext.BaseDirectory, "python"),
+			HelperFolder,
+		];
 		python.SetSearchPaths(paths);
 		return python;
 	}

@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using ComicVineScraper.Books;
 
 namespace ComicVineScraper.Config;
@@ -6,9 +7,9 @@ namespace ComicVineScraper.Config;
 /// <summary>
 /// Immutable settings for one run: settings.dat plus advanced.dat. Edit with `with`.
 /// MergeSettings and SearchSettings are computed on demand and never stored, so they cannot drift.
-/// Phase 3c adds the conversions from and to the .dat maps.
+/// FromMaps and ToSettingsMap convert from and to the settings.dat map.
 /// </summary>
-public sealed record Configuration
+public sealed partial record Configuration
 {
 	public string ApiKey { get; init; } = "";
 
@@ -17,7 +18,7 @@ public sealed record Configuration
 
 	public bool OverwriteExisting { get; init; } = true;
 
-	/// <summary>Meaningful only with OverwriteExisting. ToMergeSettings reports false otherwise.</summary>
+	/// <summary>Saved as the checkbox was; Python reads it without looking at OverwriteExisting.</summary>
 	public bool IgnoreBlanks { get; init; }
 
 	public bool ConvertImprints { get; init; } = true;
@@ -31,6 +32,23 @@ public sealed record Configuration
 	public bool SummaryDialog { get; init; } = true;
 	public required AdvancedSettings Advanced { get; init; }
 
+	/// <summary>The generated ToString would print ApiKey, and so into the debug log.</summary>
+	private bool PrintMembers(StringBuilder builder)
+	{
+		builder.Append("ApiKey = ").Append(ApiKey.Length == 0 ? "<none>" : "<redacted>");
+		builder.Append(", Update = ").Append(Update);
+		builder.Append(", OverwriteExisting = ").Append(OverwriteExisting);
+		builder.Append(", IgnoreBlanks = ").Append(IgnoreBlanks);
+		builder.Append(", ConvertImprints = ").Append(ConvertImprints);
+		builder.Append(", Choose = ").Append(Choose);
+		builder.Append(", DownloadThumbs = ").Append(DownloadThumbs);
+		builder.Append(", PreserveThumbs = ").Append(PreserveThumbs);
+		builder.Append(", FastRescrape = ").Append(FastRescrape);
+		builder.Append(", SummaryDialog = ").Append(SummaryDialog);
+		builder.Append(", Advanced = ").Append(Advanced);
+		return true;
+	}
+
 	public TimeSpan ScrapeDelay => TimeSpan.FromSeconds(Advanced.ScrapeDelaySeconds);
 	public bool ConfirmIssue => Choose == ChooseMode.ConfirmIssue;
 	public bool ScrapeRating => Advanced.ScrapeRating;
@@ -39,7 +57,7 @@ public sealed record Configuration
 	public MergeSettings ToMergeSettings() => new(
 		Update: ScrapeRating ? Update | BookFields.Rating : Update & ~BookFields.Rating,
 		OverwriteExisting,
-		IgnoreBlanks: IgnoreBlanks && OverwriteExisting,
+		IgnoreBlanks,
 		ConvertImprints,
 		DownloadThumbs,
 		PreserveThumbs: PreserveThumbs && DownloadThumbs,

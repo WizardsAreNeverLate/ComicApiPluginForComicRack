@@ -24,6 +24,7 @@
 	<ItemGroup>
 		<Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
 		<None Include="..\fixtures\comicvine\*.txt" Link="fixtures\comicvine\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="Golden\*" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\ComicVineScraper.Core\ComicVineScraper.Core.csproj" />
