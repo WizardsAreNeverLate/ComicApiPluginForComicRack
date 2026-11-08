@@ -36,6 +36,7 @@ public sealed class CatalogOracleTests
 		"4050-796", "cv 4000-37566", "https://comicvine.gamespot.com/batman/4050-796/", "4000-999999999 or 4050-796",
 		"4000-12 4050-34", "49-796", "4050-7", "x4050-796", "4050-796x", "4050-00796", "4000-37566\nline two",
 		"x 4050-١٢٣", "4000-١٢٣ 4050-796",
+		"dupvolume",
 		"ünïcödé", "a.b:c'd-e", "#1 (of 4)", "", "   ", "c2c", "tbp", "&", " & ", "a&b",
 		"edgecases", "emptypage", "bugthreetwonine", "bprd vampire", "preacher", "zzqxv qqzzx", "Ⅻ", "١٢",
 		"the of vol 2", "ünï batman", "batman of the bat",
@@ -75,6 +76,23 @@ public sealed class CatalogOracleTests
 
 		await Assert.That(Report(mismatches)).IsEqualTo("");
 		await Assert.That(compared).IsEqualTo(3 * (FixedTerms.Length + 120));
+	}
+
+	[Test]
+	public async Task A_volume_listed_twice_gives_Python_and_CSharp_the_same_set_of_series_ids()
+	{
+		SearchSettings settings = SettingsCorpus[0];
+		(object? value, string? pythonError, _) = Replay.Unpack(Oracle.Call("cvoracle", "search", Replay.Serve, "dupvolume",
+			settings.IgnoredSearchTerms.ToArray(), settings.MaxSearchResults, settings.IgnoredPublishers.ToArray(),
+			settings.IgnoreBeforeYear, settings.IgnoreAfterYear, settings.NeverIgnoreThreshold));
+		(ComicVineCatalog catalog, _) = Replay.Catalog(settings);
+
+		IReadOnlyList<SeriesRef> found = await catalog.SearchSeriesAsync("dupvolume", null, CancellationToken.None);
+
+		string[] pythonIds = ((object[])((object[])value!)[0]).Select(FormatSeries).Select(IdOf).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+		await Assert.That(pythonError).IsNull();
+		await Assert.That(pythonIds.Length).IsEqualTo(3);
+		await Assert.That(found.Select(FormatSeries).Select(IdOf).OrderBy(id => id, StringComparer.Ordinal)).IsEquivalentTo(pythonIds, CollectionOrdering.Matching);
 	}
 
 	[Test]
@@ -449,6 +467,8 @@ public sealed class CatalogOracleTests
 
 	private static string FormatSeries(SeriesRef s) =>
 		$"{s.Id}|{s.Name}|{s.StartYear ?? -1}|{s.Publisher}|{s.IssueCount}|{s.ThumbUrl?.OriginalString ?? ""}";
+
+	private static string IdOf(string formatted) => formatted.Split('|')[0];
 
 	private static string FormatIssueRef(object python)
 	{

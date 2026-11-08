@@ -99,6 +99,17 @@ public sealed class ComicVineCatalogTests
 	}
 
 	[Test]
+	public async Task A_volume_that_Comic_Vine_lists_twice_is_one_series_and_the_first_listing_wins()
+	{
+		(ComicVineCatalog catalog, _) = Catalog();
+
+		IReadOnlyList<SeriesRef> found = await catalog.SearchSeriesAsync("dupvolume", null, CancellationToken.None);
+
+		await Assert.That(found.Select(s => s.Id.Value)).IsEquivalentTo(new[] { 910021, 910022, 910023 }, CollectionOrdering.Matching);
+		await Assert.That(found[0].Name).IsEqualTo("Dup One");
+	}
+
+	[Test]
 	public async Task Ignored_publishers_and_years_filter_results_unless_the_series_is_long()
 	{
 		(ComicVineCatalog catalog, _) = Catalog(NoFilters with { IgnoredPublishers = ["vertigo", "image"], IgnoreBeforeYear = 1960, NeverIgnoreThreshold = 40 });
