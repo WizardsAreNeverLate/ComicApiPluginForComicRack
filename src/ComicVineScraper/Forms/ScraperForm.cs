@@ -81,6 +81,16 @@ internal abstract class ScraperForm : Form
 		button.Text = skipText;
 	}
 
+	/// <summary>Cut, Copy, and Paste in ComicRack's language, where Windows would show its own.</summary>
+	protected ContextMenuStrip EditMenu(TextBoxBase box)
+	{
+		var menu = new ContextMenuStrip();
+		menu.Items.Add(Strings[TextKeys.TextCut], null, (_, _) => box.Cut());
+		menu.Items.Add(Strings[TextKeys.TextCopy], null, (_, _) => box.Copy());
+		menu.Items.Add(Strings[TextKeys.TextPaste], null, (_, _) => box.Paste());
+		return menu;
+	}
+
 	/// <summary>Where the form goes when geometry.dat has no location for it.</summary>
 	protected virtual void PlaceByDefault() => CenterToParent();
 

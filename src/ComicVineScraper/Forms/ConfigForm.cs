@@ -252,13 +252,4 @@ internal sealed class ConfigForm : ScraperForm
 		box.CheckedChanged += (_, _) => UpdateEnabled();
 		return box;
 	}
-
-	private ContextMenuStrip EditMenu(TextBoxBase box)
-	{
-		var menu = new ContextMenuStrip();
-		menu.Items.Add(Strings[TextKeys.TextCut], null, (_, _) => box.Cut());
-		menu.Items.Add(Strings[TextKeys.TextCopy], null, (_, _) => box.Copy());
-		menu.Items.Add(Strings[TextKeys.TextPaste], null, (_, _) => box.Paste());
-		return menu;
-	}
 }
