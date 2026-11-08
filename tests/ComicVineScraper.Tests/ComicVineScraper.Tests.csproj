@@ -3,11 +3,20 @@
 		<OutputType>Exe</OutputType>
 		<IsPackable>false</IsPackable>
 		<Prefer32Bit>false</Prefer32Bit>
+		<UsesComicRack>true</UsesComicRack>
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="TUnit" Version="1.81.10" />
 	</ItemGroup>
 	<ItemGroup>
+		<Reference Include="System.Windows.Forms" />
+		<Reference Include="ComicRack.Plugins" HintPath="$(ComicRackPath)ComicRack.Plugins.dll" />
+		<Reference Include="ComicRack.Engine" HintPath="$(ComicRackPath)ComicRack.Engine.dll" />
+		<Reference Include="cYo.Common" HintPath="$(ComicRackPath)cYo.Common.dll" />
+		<Reference Include="cYo.Common.Windows" HintPath="$(ComicRackPath)cYo.Common.Windows.dll" />
+	</ItemGroup>
+	<ItemGroup>
 		<ProjectReference Include="..\..\src\ComicVineScraper.Core\ComicVineScraper.Core.csproj" />
+		<ProjectReference Include="..\..\src\ComicVineScraper\ComicVineScraper.csproj" />
 	</ItemGroup>
 </Project>

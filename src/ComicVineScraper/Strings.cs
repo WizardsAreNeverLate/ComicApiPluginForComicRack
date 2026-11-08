@@ -36,7 +36,7 @@ public sealed class Strings
 			.Select(text => (Key: ((string?)text.Attribute("Key"))?.Trim() ?? "", Text: ((string?)text.Attribute("Text"))?.Trim() ?? ""))
 			.Where(text => text.Key.Length > 0 && text.Text.Length > 0)
 			.GroupBy(text => text.Key)
-			.ToDictionary(group => group.Key, group => group.Last().Text.Replace("\n", "\n").Replace("\t", "\t"));
+			.ToDictionary(group => group.Key, group => group.Last().Text.Replace("\\n", "\n").Replace("\\t", "\t"));
 		return new Strings(env, defaults);
 	}
 
