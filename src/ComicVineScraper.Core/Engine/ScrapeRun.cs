@@ -42,7 +42,11 @@ public sealed record ScrapeServices(
 	IClock Clock,
 	DebugLog Log,
 	ChosenSeries Chosen,
-	CoverPreferences Covers);
+	CoverPreferences Covers)
+{
+	/// <summary>Stands in for the AutoMatcher, so the engine oracle can say which books match without cover images.</summary>
+	internal Func<BookFacts, IScrapeBook, CancellationToken, Task<SeriesRef?>>? AutoMatch { get; init; }
+}
 
 /// <summary>
 /// A run that stopped on an error: an invalid key, a rate limit, a network failure outside a fast rescrape, or a bug.
@@ -61,6 +65,9 @@ public sealed class ScrapeFailedException(RunSummary summary, Exception cause)
 public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 {
 	private readonly MergeSettings merge = config.ToMergeSettings();
+
+	private readonly Func<BookFacts, IScrapeBook, CancellationToken, Task<SeriesRef?>> autoMatch =
+		services.AutoMatch ?? new AutoMatcher(services.ComicVine, services.Chosen.Contains, services.Clock.Now.Year).FindAsync;
 
 	// Python's scrape_cache: the series chosen for each unique series key, shared by every book of the run.
 	private readonly Dictionary<string, ResolvedSeries> seriesCache = new(StringComparer.Ordinal);
@@ -181,8 +188,7 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 		if (!seriesCache.ContainsKey(key) && policy.Auto)
 		{
 			services.Log.Debug("trying to match this book automatically...");
-			var matcher = new AutoMatcher(services.ComicVine, services.Chosen.Contains, services.Clock.Now.Year);
-			if (await matcher.FindAsync(facts, entry.Book, ct) is not { } auto)
+			if (await autoMatch(facts, entry.Book, ct) is not { } auto)
 			{
 				services.Log.Debug("...couldn't find a match. leave it until the end.");
 				return Done(BookOutcome.Delayed);
