@@ -30,7 +30,8 @@ internal static class ScrapeHost
 			if (run is not null && !finished)
 			{
 				e.Cancel = true;
-				cts.Cancel();
+				// Deferred so a continuation that runs inline on Cancel cannot call form.Close() inside this handler.
+				form.BeginInvoke(new Action(cts.Cancel));
 				form.ShowCancelling();
 			}
 		};
