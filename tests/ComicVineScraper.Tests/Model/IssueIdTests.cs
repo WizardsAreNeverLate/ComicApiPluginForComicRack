@@ -27,6 +27,8 @@ public sealed class IssueIdTests
 	[Arguments(null)]
 	[Arguments("-3")]
 	[Arguments("-3.0")]
+	[Arguments("0")]
+	[Arguments("0.0")]
 	[Arguments("abc")]
 	[Arguments("1e3")]
 	[Arguments("1,200")]

@@ -9,13 +9,13 @@ public readonly record struct IssueId(int Value)
 
 	/// <summary>
 	/// Parses a stored key: "123", and also whole-number floats such as "12.0" (deviations.md #9).
-	/// Returns null for blank, fractional, negative, or out-of-range text. This is the only place a stored issue key is parsed.
+	/// Returns null for blank, fractional, zero, negative, or out-of-range text, because Comic Vine ids start at 1. This is the only place a stored issue key is parsed.
 	/// </summary>
 	public static IssueId? TryParseStored(string? text)
 	{
 		const NumberStyles Styles = NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite | NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
 		if (!decimal.TryParse(text, Styles, CultureInfo.InvariantCulture, out decimal number)
-			|| number != decimal.Truncate(number) || number < 0 || number > int.MaxValue)
+			|| number != decimal.Truncate(number) || number < 1 || number > int.MaxValue)
 		{
 			return null;
 		}
