@@ -94,10 +94,18 @@ def issue_values(values):
 	return dict((name, getattr(issue, name)) for name in values.keys())
 
 def update(crbook, settings, values, now):
-	_attached(crbook, settings, now).update(_issue(values))
+	try:
+		_attached(crbook, settings, now).update(_issue(values))
+		return ''
+	except Exception as e:
+		return 'error ' + repr(e)
 
 def skip_forever(crbook, settings, now):
-	_attached(crbook, settings, now).skip_forever()
+	try:
+		_attached(crbook, settings, now).skip_forever()
+		return ''
+	except Exception as e:
+		return 'error ' + repr(e)
 
 def strftime(fmt, values):
 	return time.strftime(fmt, tuple(values))

@@ -159,7 +159,7 @@ Rejected from the Fable sketch:
 | Question | Decision | Why |
 |---|---|---|
 | An unset `ReleasedTime` reads as (1,1,1), not blank | Bug, fixed as deviation 11 | The release date is filled in only when "overwrite existing" is on, which is clearly not intended |
-| Skip forever writes the series, number, and year from the filename, and clears the Comic Vine ids | Keep | It fills only blank fields and removes stale ids. That looks intended, not wrong |
+| Skip forever writes the series, number, and year from the filename, and writes every other field back as read | Keep | It fills only blank fields. The ids are written back unchanged, not cleared (phase 3d oracle) |
 | The inferred format is always written to `Format` | Keep | It makes a value that ComicRack inferred explicit. That is not a wrong result |
 | `UrlPathEncode` does not escape `&`, `+`, or `#` | Not observable, so closed | Search cleanup removes those characters first. The port uses `Uri.EscapeDataString` |
 | `SCRAPE_DELAY` defaults to 1, but parsed values are clamped to 2..3600 | Keep | Unusual but harmless |
@@ -206,3 +206,17 @@ The shared types compile in `ComicVineScraper.Core` so that workstreams 3a to 3d
 - **`PartialDate.Of` checks day against 1..31 only,** not against the month length, as the Python setters do. Year 0 is valid.
 - **`ComicVineException` keeps `IsRecoverable`.** The property is a one-line classification of the error kind. 3b owns the URL redaction that fills `redactedUrl`.
 - **`ComicRackBook` is unchanged.** It still writes `Notes` only. 3d fills in the other fields.
+
+### Phase 3d: book data and merge rules
+
+- **`BookValues.Published` is a `BookDate`, not a `PartialDate`.** ComicRack stores Year, Month, and Day separately, and Python's `BookData` keeps or drops each part on its own. So a book can hold a month without a year, and Python counts that date as not blank, which decides whether a merge without overwrite writes the date. `PartialDate` cannot hold such a date. `BookDate` has the same `Year`, `Month`, `Day`, and `IsBlank` members and converts implicitly from `PartialDate`, so code that reads the date or assigns a `PartialDate` still compiles. Comic Vine dates stay `PartialDate`.
+- **`DateGate.Restrict` is the one date write rule.** `MergeRules` applies it when it plans, and `ComicRackBook.Apply` refuses a patch that breaks it before it writes anything. `Released` is written only when the date is complete, the year is 1..9998, and the day exists in that month (deviation 12).
+- **`BookFacts.From` takes a parser delegate,** `Func<string, (string Series, string Number, string Year)>`, not workstream 3a's `FileNameParser`. That avoids a dependency between the workstreams. The engine passes `name => parser.Extract(name)` with the tuple fields. The oracle tests pass Python's own `fnameparser.extract`.
+- **`SeriesId.TryParseStored` is added.** Python parses `comicvine_volume` with the same `int()` call as the issue key, so it shares `IssueId.TryParseStored`'s rules through an internal `StoredKey`.
+- **`MergeRules.PlanSkipForever(book, settings, now)` takes the settings and the time,** because the skip note carries the scrape date when that setting is on. `MergeRules.PlanThumbnail` returns the cover `Uri` or null, not a `ThumbnailPlan` record.
+- **`Configuration.ToMergeSettings` changes Python's merge behaviour, and this branch does not change it.** `ToMergeSettings` reports `IgnoreBlanks` as false when overwrite is off. Python's `ConfigForm` saves the ignore-blanks checkbox even while it is disabled, and `ComicBook.update` reads the raw value. With overwrite off and the saved checkbox on, Python keeps a field that holds only whitespace, and the port clears it to "". `MergeRules` uses `IgnoreBlanks` as it is given, and the merge oracle passes the raw value. To match Python, `ToMergeSettings` must pass the raw value. That is a change to a shared contract file, so this branch leaves it to the coordinator.
+- **The merge writes no debug log lines yet.** Python logs one line per field, with `*` marking a change. `MergeRules.Plan` returns only the patch. The engine phase can add the lines when the debug log exists.
+- **The oracle runs the original `ComicBook` over real ComicRack books.** A helper module, `tests/ComicVineScraper.Oracle.Tests/python/cvs_book_oracle.py`, is on the oracle's search path. It builds `ComicBook` with a stand-in scraper whose config holds the test settings. The oracle project now references `ComicRack.Engine` and the plugin project, and the plugin grants `InternalsVisibleTo` to both test projects.
+- **Deviation 10 is not a bug under IronPython 2.7.4.** `%X` gives `HH:mm:ss` under every thread culture and every `LC_TIME` culture, and nothing calls `setlocale`. So Python's own regex finds every note it wrote. The port writes the same note text and keeps Python's regex.
+- **IronPython's `str.lower()` uses a fixed culture,** `ToLower(new CultureInfo("en"))`. The unique series key and the publisher lookups lowercase the same way, so they do not change with the user's culture.
+- **`ComicRackBook.GetPage` still throws.** It needs 3a's back-cover strip, and its caller, the cover panel, comes in phase 4.
