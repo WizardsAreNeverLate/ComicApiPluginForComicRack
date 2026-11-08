@@ -19,16 +19,10 @@ public sealed class SettingsStoreTests : IDisposable
 {
 	private readonly string root = Path.Combine(Path.GetTempPath(), "cvs-store-" + Guid.NewGuid().ToString("N"));
 	private string Profile => Path.Combine(root, "profile");
-	private string Plugin => Path.Combine(root, "plugin");
-
-	public SettingsStoreTests()
-	{
-		Directory.CreateDirectory(Plugin);
-	}
 
 	public void Dispose() => Directory.Delete(root, true);
 
-	private SettingsStore Store() => new(Profile, Plugin, new FixedClock());
+	private SettingsStore Store() => new(Profile, new FixedClock());
 
 	[Test]
 	public async Task The_default_folder_is_Comic_Vine_Scraper_under_AppData()
@@ -107,43 +101,6 @@ public sealed class SettingsStoreTests : IDisposable
 	}
 
 	[Test]
-	public async Task Migration_copies_the_four_files_once_when_settings_dat_is_missing()
-	{
-		foreach (string name in new[] { "settings.dat", "advanced.dat", "geometry.dat", "series.dat" })
-		{
-			File.WriteAllText(Path.Combine(Plugin, name), "legacy " + name);
-		}
-		SettingsStore store = Store();
-
-		store.MigrateIfNeeded();
-		File.WriteAllText(Path.Combine(Profile, "series.dat"), "changed after migration");
-		File.WriteAllText(Path.Combine(Plugin, "series.dat"), "legacy changed");
-		store.MigrateIfNeeded();
-
-		await Assert.That(File.ReadAllText(Path.Combine(Profile, "settings.dat"))).IsEqualTo("legacy settings.dat");
-		await Assert.That(File.ReadAllText(Path.Combine(Profile, "geometry.dat"))).IsEqualTo("legacy geometry.dat");
-		await Assert.That(File.ReadAllText(Path.Combine(Profile, "series.dat"))).IsEqualTo("changed after migration");
-	}
-
-	[Test]
-	public async Task Migration_does_nothing_when_settings_dat_already_exists_and_copes_with_missing_legacy_files()
-	{
-		Directory.CreateDirectory(Profile);
-		File.WriteAllText(Path.Combine(Profile, "settings.dat"), "mine");
-		File.WriteAllText(Path.Combine(Plugin, "advanced.dat"), "legacy");
-
-		Store().MigrateIfNeeded();
-
-		await Assert.That(File.Exists(Path.Combine(Profile, "advanced.dat"))).IsFalse();
-
-		Directory.Delete(Profile, true);
-		Store().MigrateIfNeeded();
-
-		await Assert.That(File.Exists(Path.Combine(Profile, "settings.dat"))).IsFalse();
-		await Assert.That(File.ReadAllText(Path.Combine(Profile, "advanced.dat"))).IsEqualTo("legacy");
-	}
-
-	[Test]
 	public async Task Chosen_series_records_through_to_the_file_and_reloads()
 	{
 		SettingsStore store = Store();
@@ -206,7 +163,7 @@ public sealed class SettingsStoreTests : IDisposable
 
 	private static FileStream Lock(string path, FileShare share) => new(path, FileMode.Open, FileAccess.Read, share);
 
-	private SettingsStore Store(DebugLog log) => new(Profile, Plugin, new FixedClock(), log);
+	private SettingsStore Store(DebugLog log) => new(Profile, new FixedClock(), log);
 
 	[Test]
 	public async Task Recording_a_series_while_series_dat_is_locked_logs_and_carries_on()

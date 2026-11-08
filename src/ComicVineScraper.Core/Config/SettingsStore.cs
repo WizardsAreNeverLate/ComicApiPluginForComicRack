@@ -20,19 +20,15 @@ public sealed class SettingsStore
 	public const string GeometryFileName = "geometry.dat";
 	public const string SeriesFileName = "series.dat";
 
-	private static readonly string[] DatFiles = [SettingsFileName, AdvancedFileName, GeometryFileName, SeriesFileName];
-
 	private readonly string folder;
-	private readonly string pluginFolder;
 	private readonly IClock clock;
 	private readonly DebugLog? log;
 	private readonly object gate = new();
 	private readonly HashSet<string> unreadable = new(StringComparer.OrdinalIgnoreCase);
 
-	public SettingsStore(string folder, string pluginFolder, IClock clock, DebugLog? log = null)
+	public SettingsStore(string folder, IClock clock, DebugLog? log = null)
 	{
 		this.folder = folder;
-		this.pluginFolder = pluginFolder;
 		this.clock = clock;
 		this.log = log;
 	}
@@ -40,28 +36,6 @@ public sealed class SettingsStore
 	public static string DefaultFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Comic Vine Scraper");
 
 	public string Folder => folder;
-
-	/// <summary>Copies the four .dat files from the plugin folder once, when settings.dat is missing (resources.py __import_legacy_settings). Never overwrites.</summary>
-	public void MigrateIfNeeded()
-	{
-		lock (gate)
-		{
-			Directory.CreateDirectory(folder);
-			if (File.Exists(PathOf(SettingsFileName)))
-			{
-				return;
-			}
-			foreach (string name in DatFiles)
-			{
-				string source = Path.Combine(pluginFolder, name);
-				string target = PathOf(name);
-				if (File.Exists(source) && !File.Exists(target))
-				{
-					File.Copy(source, target, false);
-				}
-			}
-		}
-	}
 
 	public Configuration Load()
 	{

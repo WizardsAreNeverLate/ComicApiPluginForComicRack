@@ -59,7 +59,7 @@ public sealed class StoreFilesOracleTests
 		await Assert.That(geometry.Get("pbform")).IsEqualTo((new Point(5, 6), new Size(7, 8)));
 	}
 
-	private static SettingsStore Store(TempFolder folder) => new(folder.Path, Path.Combine(folder.Path, "plugin"), new FixedClock());
+	private static SettingsStore Store(TempFolder folder) => new(folder.Path, new FixedClock());
 
 	private sealed class FixedClock : IClock
 	{

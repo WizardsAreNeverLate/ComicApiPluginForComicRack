@@ -12,12 +12,11 @@ namespace ComicVineScraper.Plugin;
 /// <summary>Per-invocation services the forms share.</summary>
 public sealed record PluginContext(Strings Strings, IThemePlugin? Theme, SettingsStore Settings, DebugLog Log)
 {
-	/// <summary>Opens the services and, as the Python plugin did at start-up, copies the settings from the plugin folder when the profile has none.</summary>
+	/// <summary>Opens the services the forms share.</summary>
 	public static PluginContext Open(IPluginEnvironment env)
 	{
 		var log = new DebugLog();
-		var settings = new SettingsStore(SettingsStore.DefaultFolder, env.CommandPath, new PluginClock(), log);
-		settings.MigrateIfNeeded();
+		var settings = new SettingsStore(SettingsStore.DefaultFolder, new PluginClock(), log);
 		return new PluginContext(Strings.Load(env), env.Theme, settings, log);
 	}
 
