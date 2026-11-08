@@ -25,6 +25,17 @@ public sealed class MergeRulesTests
 
 	private static BookFacts Facts(BookValues values, string path = "") => new(0, new BookSnapshot(values, path, 0, false), values, new StoredMarker.None(), null, "key");
 
+	private static MergeSettings FromConfiguration(bool overwrite, bool ignoreBlanks) => new Configuration
+	{
+		Advanced = new AdvancedSettings(
+			RawText: "", IgnoredPublishers: [], IgnoredSearchTerms: [], IgnoreBeforeYear: 1950, IgnoreAfterYear: 2030, NeverIgnoreThreshold: 5,
+			ScrapeRating: false, ShowCovers: true, WelcomeDialog: true, AltSearchRegex: null, IgnoreFolders: false, ForceSeriesArt: false,
+			NoteScrapeDate: false, PublisherAliases: new Dictionary<string, string>(), UserImprints: new Dictionary<string, string>(),
+			ScrapeDelaySeconds: 2, MaxSearchResults: 100),
+		OverwriteExisting = overwrite,
+		IgnoreBlanks = ignoreBlanks,
+	}.ToMergeSettings();
+
 	[Test]
 	public async Task A_full_merge_writes_every_enabled_field_from_the_issue()
 	{
@@ -77,8 +88,8 @@ public sealed class MergeRulesTests
 		var old = new BookValues { Summary = "" };
 		Issue blank = Sample with { Summary = " " };
 
-		BookPatch kept = MergeRules.Plan(Facts(old), blank, Settings(overwrite: false, ignoreBlanks: true), Now);
-		BookPatch written = MergeRules.Plan(Facts(old), blank, Settings(overwrite: false, ignoreBlanks: false), Now);
+		BookPatch kept = MergeRules.Plan(Facts(old), blank, FromConfiguration(overwrite: false, ignoreBlanks: true), Now);
+		BookPatch written = MergeRules.Plan(Facts(old), blank, FromConfiguration(overwrite: false, ignoreBlanks: false), Now);
 
 		await Assert.That(kept.Fields.HasFlag(BookFields.Summary)).IsFalse();
 		await Assert.That(written.Fields.HasFlag(BookFields.Summary)).IsTrue();

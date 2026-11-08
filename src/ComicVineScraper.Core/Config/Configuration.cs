@@ -18,7 +18,7 @@ public sealed partial record Configuration
 
 	public bool OverwriteExisting { get; init; } = true;
 
-	/// <summary>Meaningful only with OverwriteExisting. ToMergeSettings reports false otherwise.</summary>
+	/// <summary>Saved as the checkbox was; Python reads it without looking at OverwriteExisting.</summary>
 	public bool IgnoreBlanks { get; init; }
 
 	public bool ConvertImprints { get; init; } = true;
@@ -57,7 +57,7 @@ public sealed partial record Configuration
 	public MergeSettings ToMergeSettings() => new(
 		Update: ScrapeRating ? Update | BookFields.Rating : Update & ~BookFields.Rating,
 		OverwriteExisting,
-		IgnoreBlanks: IgnoreBlanks && OverwriteExisting,
+		IgnoreBlanks,
 		ConvertImprints,
 		DownloadThumbs,
 		PreserveThumbs: PreserveThumbs && DownloadThumbs,

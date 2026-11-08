@@ -10,7 +10,7 @@ namespace ComicVineScraper.Config;
 public sealed record MergeSettings(
 	BookFields Update,            // the toggled fields, plus Rating when SCRAPE_RATING is on
 	bool OverwriteExisting,
-	bool IgnoreBlanks,            // false whenever OverwriteExisting is false
+	bool IgnoreBlanks,            // the saved value, whatever OverwriteExisting says
 	bool ConvertImprints,
 	bool DownloadThumbs,
 	bool PreserveThumbs,          // false whenever DownloadThumbs is false
