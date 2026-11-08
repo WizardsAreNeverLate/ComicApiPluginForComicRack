@@ -216,7 +216,7 @@ public sealed class KeyMarkerOracleTests
 		await Assert.That(compared).IsGreaterThanOrEqualTo(minimumCompared);
 	}
 
-	// deviations.md #13: a stored key of 0 makes IssueRef raise, and a key beyond int.MaxValue is no Comic Vine id.
+	// deviations.md #14: a stored key of 0 makes IssueRef raise, and a key beyond int.MaxValue is no Comic Vine id.
 	// deviations.md #9: int() raises on a custom value such as "12.0".
 	private static bool IsDeviation(string python) =>
 		python.StartsWith("error", StringComparison.Ordinal)

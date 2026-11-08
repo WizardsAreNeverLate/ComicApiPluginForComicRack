@@ -30,7 +30,7 @@ public sealed class BookFactsOracleTests
 			var seriesRef = (string)python[4];
 			if (!IsComicVineId(marker, "issue ") || !IsComicVineId(seriesRef, ""))
 			{
-				// deviations.md #9 and #13: Python raises on 12.0 and 0, and keeps ids that are no Comic Vine id.
+				// deviations.md #9 and #14: Python raises on 12.0 and 0, and keeps ids that are no Comic Vine id.
 				continue;
 			}
 			compared++;

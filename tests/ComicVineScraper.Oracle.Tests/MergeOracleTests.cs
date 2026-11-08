@@ -66,7 +66,7 @@ public sealed class MergeOracleTests
 			bool unsetReleaseFilled = original.ReleasedTime == DateTime.MinValue && !settings.OverwriteExisting && settings.Update.HasFlag(BookFields.Released);
 			if (error.Length > 0)
 			{
-				// deviations.md #12: Python's DateTime(y, m, d) throws on a store date such as 2010-02-31, part way through the write.
+				// deviations.md #13: Python's DateTime(y, m, d) throws on a store date such as 2010-02-31, part way through the write.
 				if (!IsUnrealDate(issue.Released) || !error.Contains("un-representable DateTime"))
 				{
 					differences.Add($"{BookCorpus.Describe(original)}: python raised {error}");

@@ -43,7 +43,7 @@ public sealed class KeyMarkersTests
 	[Test]
 	public async Task A_stored_key_that_is_no_Comic_Vine_id_is_passed_over()
 	{
-		// deviations.md #13: Python raises on CVDB0 and keeps a key beyond int.MaxValue.
+		// deviations.md #14: Python raises on CVDB0 and keeps a key beyond int.MaxValue.
 		await Assert.That(KeyMarkers.Find(["CVDB0"], "CVDB5", "")).IsEqualTo(new StoredMarker.Issue(new IssueId(5)));
 		await Assert.That(KeyMarkers.Find(["CVDB99999999999"], "", "7")).IsEqualTo(new StoredMarker.Issue(new IssueId(7)));
 	}
