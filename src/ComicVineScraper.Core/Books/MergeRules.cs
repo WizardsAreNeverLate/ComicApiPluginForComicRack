@@ -1,3 +1,4 @@
+using ComicVineScraper.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -158,5 +159,5 @@ public static class Publishers
 	}
 
 	// IronPython 2.7.4's str.lower() is ToLower(new CultureInfo("en")).
-	private static string Lower(string text) => text.ToLower(System.Globalization.CultureInfo.GetCultureInfo("en"));
+	private static string Lower(string text) => PyStr.Lower(text);
 }

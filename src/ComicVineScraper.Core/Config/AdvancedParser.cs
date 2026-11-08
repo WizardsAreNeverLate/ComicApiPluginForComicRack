@@ -92,7 +92,7 @@ internal static class AdvancedParser
 			folders, seriesArt, noteDate, aliases, imprints, delay, maxResults);
 	}
 
-	private static string Lower(string text) => text.ToLowerInvariant();
+	private static string Lower(string text) => PyStr.Lower(text);
 
 	private static void AddOnce(List<string> list, string item)
 	{

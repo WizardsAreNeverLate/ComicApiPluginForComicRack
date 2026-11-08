@@ -35,7 +35,6 @@ public abstract record DatValue
 /// <summary>The utils.persist_map and utils.load_map format of settings.dat, series.dat, and geometry.dat.</summary>
 public static class DatFile
 {
-	private static readonly CultureInfo PythonCasing = CultureInfo.GetCultureInfo("en");
 
 	/// <summary>Lines that do not split into exactly two parts on ':' are skipped; both parts are trimmed. A later key wins.</summary>
 	public static IReadOnlyDictionary<string, DatValue> Parse(string text)
@@ -88,7 +87,7 @@ public static class DatFile
 
 	private static DatValue ParseValue(string value)
 	{
-		string lowered = value.ToLower(PythonCasing);
+		string lowered = PyStr.Lower(value);
 		if (lowered == "false")
 		{
 			return new DatValue.Bool(false);

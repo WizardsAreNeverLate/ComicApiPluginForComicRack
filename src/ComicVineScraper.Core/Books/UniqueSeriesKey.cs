@@ -1,3 +1,4 @@
+using ComicVineScraper.Text;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -16,13 +17,12 @@ public static class UniqueSeriesKey
 	private static readonly Regex NonWord = new(@"\W+");
 
 	// IronPython 2.7.4's str.lower() is ToLower(new CultureInfo("en")), whatever the user's culture.
-	private static readonly CultureInfo PythonCasing = CultureInfo.GetCultureInfo("en");
 
 	/// <param name="index">The book's place in the run. A nameless book's key uses it where Python used id(self).</param>
 	public static string Compute(string series, string format, int? volume, string filePath, bool ignoreFolders, int index)
 	{
 		string name = series.Length > 0 ? series + format : "";
-		name = NonWord.Replace(name, "").ToLower(PythonCasing);
+		name = PyStr.Lower(NonWord.Replace(name, ""));
 		string volumeText = "";
 		if (name.Length == 0)
 		{
