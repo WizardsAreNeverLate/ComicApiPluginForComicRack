@@ -31,7 +31,7 @@ public sealed class ComicVineScraperPlugin(IPluginEnvironment env)
 		{
 			PluginContext ctx = PluginContext.Open(env);
 			List<IScrapeBook> targets = books.Select(book => (IScrapeBook)new ComicRackBook(book, env.App)).ToList();
-			ScrapeHost.Run(env.MainWindow, ctx, (form, ct) => PrototypeRun.RunAsync(targets, form, ctx.Strings, ct));
+			ScrapeHost.Run(env.MainWindow, ctx, (form, ct) => PrototypeRun.RunAsync(targets, form, ct));
 		}
 		finally
 		{
