@@ -12,6 +12,7 @@ using ComicVineScraper.Config;
 using ComicVineScraper.Engine;
 using ComicVineScraper.Fixtures;
 using ComicVineScraper.Model;
+using TUnit.Assertions.Enums;
 
 namespace ComicVineScraper.Oracle.Tests.ComicVine;
 
@@ -316,6 +317,54 @@ public sealed class CatalogOracleTests
 
 	/// <summary>deviations.md, "Blank issue number": Python's _query_issue_id_dom raises ValueError('bad parameters') once the number is stripped.</summary>
 	internal static bool IsBlankIssueNumber(string number) => number.Trim().Length == 0;
+
+	/// <summary>deviations.md 3b-2: Python's int(volume.id) raises on the first volume with a non-numeric id and the whole search fails.</summary>
+	[Test]
+	public async Task A_search_volume_with_a_non_numeric_id_aborts_Python_and_is_dropped_by_CSharp()
+	{
+		SearchSettings settings = SettingsCorpus[0];
+		(_, string? pythonError, _) = Replay.Unpack(Oracle.Call("cvoracle", "search", Replay.Serve, "badvolid",
+			settings.IgnoredSearchTerms.ToArray(), settings.MaxSearchResults, settings.IgnoredPublishers.ToArray(),
+			settings.IgnoreBeforeYear, settings.IgnoreAfterYear, settings.NeverIgnoreThreshold));
+		(ComicVineCatalog catalog, _) = Replay.Catalog(settings);
+
+		IReadOnlyList<SeriesRef> found = await catalog.SearchSeriesAsync("badvolid", null, CancellationToken.None);
+
+		await Assert.That(pythonError).StartsWith("ValueError");
+		await Assert.That(found.Select(s => s.Name)).IsEquivalentTo(new[] { "Before Bad Id", "After Bad Id" }, CollectionOrdering.Matching);
+	}
+
+	/// <summary>deviations.md 3b-3: Python writes the publisher of a search volume whose publisher name is empty as sstr(object).</summary>
+	[Test]
+	public async Task A_search_volume_whose_publisher_name_is_empty_has_an_object_name_in_Python_and_none_in_CSharp()
+	{
+		SearchSettings settings = SettingsCorpus[0];
+		(object? value, string? pythonError, _) = Replay.Unpack(Oracle.Call("cvoracle", "search", Replay.Serve, "emptypubname",
+			settings.IgnoredSearchTerms.ToArray(), settings.MaxSearchResults, settings.IgnoredPublishers.ToArray(),
+			settings.IgnoreBeforeYear, settings.IgnoreAfterYear, settings.NeverIgnoreThreshold));
+		(ComicVineCatalog catalog, _) = Replay.Catalog(settings);
+
+		IReadOnlyList<SeriesRef> found = await catalog.SearchSeriesAsync("emptypubname", null, CancellationToken.None);
+
+		var pythonSeries = (object[])((object[])((object[])value!)[0]).Single()!;
+		await Assert.That(pythonError).IsNull();
+		await Assert.That(ObjectName.IsMatch((string)pythonSeries[3])).IsTrue();
+		await Assert.That(found.Single().Publisher).IsEqualTo("");
+		await Assert.That(found.Single().Name).IsEqualTo((string)pythonSeries[1]);
+	}
+
+	/// <summary>deviations.md 3b-4: Python reads dom.results.issue when the total is 1, and a response with no issue element has none.</summary>
+	[Test]
+	public async Task An_issue_number_search_with_a_total_of_one_and_no_issue_crashes_Python_and_finds_nothing_in_CSharp()
+	{
+		(_, string? pythonError, _) = Replay.Unpack(Oracle.Call("cvoracle", "find_issue", Replay.Serve, 9996, "3"));
+		(ComicVineCatalog catalog, _) = Replay.Catalog(SettingsCorpus[0]);
+
+		IssueRef? found = await catalog.FindIssueAsync(new SeriesId(9996), "3", CancellationToken.None);
+
+		await Assert.That(pythonError).StartsWith("AttributeError");
+		await Assert.That(found).IsNull();
+	}
 
 	/// <summary>deviations.md #1 and #2: Python's first test is re.match("0*.50*"), and its replace calls never match.</summary>
 	internal static bool PythonFractionBug(string number) =>

@@ -1,0 +1,5 @@
+GET https://comicvine.gamespot.com/api/issues/?api_key=REDACTED&client=cvscraper&format=xml&field_list=name,issue_number,id,image&filter=volume:9996,issue_number:3
+HTTP 200
+
+<?xml version="1.0" encoding="utf-8"?>
+<response><error><![CDATA[OK]]></error><limit>100</limit><offset>0</offset><number_of_page_results>1</number_of_page_results><number_of_total_results>1</number_of_total_results><status_code>1</status_code><results></results><version>1.0</version></response>
