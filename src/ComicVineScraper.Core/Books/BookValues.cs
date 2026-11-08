@@ -41,7 +41,8 @@ public sealed record BookValues
 	/// <summary>An unset ReleasedTime reads as blank (deviations.md #11).</summary>
 	public PartialDate Released { get; init; }
 
-	public PartialDate Published { get; init; }
+	/// <summary>Year, Month, and Day as the book holds them, each kept or dropped on its own (BookDate).</summary>
+	public BookDate Published { get; init; }
 }
 
 /// <summary>What the adapter reads from one ComicRack book, on the UI thread, in one synchronous call.</summary>
@@ -51,5 +52,5 @@ public sealed record BookSnapshot(
 	int PageCount,
 	bool HasCustomThumbnail);  // CustomThumbnailKey is set
 
-/// <summary>One write: every flag in Fields takes its value from Values.</summary>
+/// <summary>One write: every flag in Fields takes its value from Values. Date bits obey DateGate.</summary>
 public sealed record BookPatch(BookValues Values, BookFields Fields);
