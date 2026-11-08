@@ -38,7 +38,7 @@ public sealed record BookValues
 	/// <summary>Raw text of the custom value comicvine_volume.</summary>
 	public string SeriesKey { get; init; } = "";
 
-	/// <summary>An unset ReleasedTime reads as blank (deviations.md #11).</summary>
+	/// <summary>An unset ReleasedTime reads as blank (deviations.md #11). Stays PartialDate because ComicRack stores it as a full DateTime, so only the issue date can lack a part, unlike Published.</summary>
 	public PartialDate Released { get; init; }
 
 	/// <summary>Year, Month, and Day as the book holds them, each kept or dropped on its own (BookDate).</summary>
