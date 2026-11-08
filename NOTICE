@@ -1,0 +1,8 @@
+Comic Vine Scraper for .NET
+
+This project is a C# port of Comic Vine Scraper by Cory Banack
+(https://github.com/cbanack/comic-vine-scraper), version 1.0.102,
+licensed under the Apache License, Version 2.0.
+
+The port rewrites the original IronPython source in C#. The translation
+files and images in this repository come from the original project.
