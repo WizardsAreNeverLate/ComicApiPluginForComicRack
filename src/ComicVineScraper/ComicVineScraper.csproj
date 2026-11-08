@@ -17,4 +17,20 @@
 	<ItemGroup>
 		<ProjectReference Include="..\ComicVineScraper.Core\ComicVineScraper.Core.csproj" />
 	</ItemGroup>
+	<ItemGroup>
+		<None Include="Package\**\*" />
+	</ItemGroup>
+	<Target Name="PackCrPlugin" AfterTargets="Build">
+		<PropertyGroup>
+			<CrPluginStaging>$(IntermediateOutputPath)crplugin\</CrPluginStaging>
+			<CrPluginPath>$(OutDir)ComicVineScraper.crplugin</CrPluginPath>
+		</PropertyGroup>
+		<ItemGroup>
+			<CrPluginContent Include="$(TargetPath);$(OutDir)ComicVineScraper.Core.dll;Package\Package.ini;Package\Images\*;Package\Languages\*.zip" />
+		</ItemGroup>
+		<RemoveDir Directories="$(CrPluginStaging)" />
+		<Copy SourceFiles="@(CrPluginContent)" DestinationFolder="$(CrPluginStaging)" />
+		<ZipDirectory SourceDirectory="$(CrPluginStaging)" DestinationFile="$(CrPluginPath)" Overwrite="true" />
+		<Message Importance="high" Text="$(MSBuildProjectName) -> $([System.IO.Path]::GetFullPath('$(CrPluginPath)'))" />
+	</Target>
 </Project>
