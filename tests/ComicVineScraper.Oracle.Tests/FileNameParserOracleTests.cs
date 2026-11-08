@@ -109,7 +109,7 @@ public sealed class FileNameParserOracleTests
 	[Arguments(@"[a-")]
 	public async Task Patterns_Python_rejects_do_not_compile(string pattern)
 	{
-		bool pythonRejects = Oracle.Call("fnameparser", "regex", "Batman 1.cbr", pattern) is null;
+		bool pythonRejects = !PythonConfig.Compiles(pattern);
 
 		await Assert.That(pythonRejects).IsTrue();
 		await Assert.That(PyRegex.TryCompile(pattern, TimeSpan.FromSeconds(1))).IsNull();
