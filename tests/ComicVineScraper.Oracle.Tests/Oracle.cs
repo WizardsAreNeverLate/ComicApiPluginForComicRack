@@ -26,6 +26,9 @@ public static class Oracle
 		"resources", "resources/languages",
 	];
 
+	// Python helpers that ship with the tests (py/*.py), such as the Comic Vine replay in cvoracle.py.
+	private static readonly string HelperFolder = Path.Combine(AppContext.BaseDirectory, "py");
+
 	private static readonly Lazy<ScriptEngine> engine = new(CreateEngine);
 	private static readonly object gate = new();
 
@@ -51,7 +54,7 @@ public static class Oracle
 			throw new InvalidOperationException($"{SourceVariable} is '{root}', which is not the src folder of comic-vine-scraper.");
 		}
 		ScriptEngine python = Python.CreateEngine();
-		List<string> paths = [.. python.GetSearchPaths(), .. SourceFolders.Select(folder => Path.Combine(root, folder))];
+		List<string> paths = [.. python.GetSearchPaths(), .. SourceFolders.Select(folder => Path.Combine(root, folder)), HelperFolder];
 		python.SetSearchPaths(paths);
 		return python;
 	}

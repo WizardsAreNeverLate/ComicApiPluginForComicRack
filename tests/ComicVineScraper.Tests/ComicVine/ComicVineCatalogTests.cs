@@ -77,12 +77,14 @@ public sealed class ComicVineCatalogTests
 	}
 
 	[Test]
-	public async Task Search_results_are_mapped_like_SeriesRef()
+	public async Task Search_results_are_mapped_like_SeriesRef_including_xml2py_folding()
 	{
 		(ComicVineCatalog catalog, _) = Catalog();
 
 		IReadOnlyList<SeriesRef> found = await catalog.SearchSeriesAsync("edgecases", null, CancellationToken.None);
 
+		// xml2py reads an element whose only child is a string element as that string, so an image with one URL has no
+		// thumb_url (900015) and a publisher with only a name has no publisher (900016).
 		Uri Small(int id) => new($"https://comicvine.gamespot.com/a/uploads/scale_small/{id}.jpg");
 		await Assert.That(found).IsEquivalentTo(new[]
 		{
@@ -90,8 +92,8 @@ public sealed class ComicVineCatalogTests
 			new SeriesRef(new SeriesId(900012), "Year With Dash", 2004, "Image", 5, Small(900012)),
 			new SeriesRef(new SeriesId(900013), "Spaced & Named", 1999, "Vertigo", 7, Small(900013)),
 			new SeriesRef(new SeriesId(900014), "Series 900014", 1950, "Marvel", 0, Small(900014)),
-			new SeriesRef(new SeriesId(900015), "Thumb Only", null, "Marvel", 0, new Uri("https://comicvine.gamespot.com/a/uploads/scale_avatar/900015.jpg")),
-			new SeriesRef(new SeriesId(900016), "Many Issues 1950", 1950, "Marvel", 40, null),
+			new SeriesRef(new SeriesId(900015), "Thumb Only", null, "Marvel", 0, null),
+			new SeriesRef(new SeriesId(900016), "Many Issues 1950", 1950, "", 40, null),
 		}, CollectionOrdering.Matching);
 	}
 
@@ -320,7 +322,7 @@ public sealed class ComicVineCatalogTests
 		await Assert.That(sparse.Released).IsEqualTo(PartialDate.None);
 		await Assert.That(sparse.Title).IsEqualTo("");
 		await Assert.That(sparse.Summary).IsEqualTo("");
-		await Assert.That(sparse.CoverUrls.Single().OriginalString).IsEqualTo("https://comicvine.gamespot.com/a/uploads/scale_medium/i9000002.jpg");
+		await Assert.That(sparse.CoverUrls).IsEmpty();
 	}
 
 	[Test]

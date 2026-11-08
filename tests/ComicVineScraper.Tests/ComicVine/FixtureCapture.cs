@@ -39,6 +39,7 @@ public sealed class FixtureCapture
 		("issue-535328", ApiRequest.IssueDetail(new IssueId(535328)), false),
 		("issues-91273-p1", ApiRequest.IssueList(new SeriesId(91273), 1), false),
 		("issues-91273-p2", ApiRequest.IssueList(new SeriesId(91273), 2), false),
+		("series-00796-padded", new ApiRequest("volume/4050-00796/", "field_list=name,start_year,publisher,image,count_of_issues,id"), false),
 	];
 
 	[Test]

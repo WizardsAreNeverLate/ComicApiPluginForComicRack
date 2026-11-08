@@ -60,9 +60,12 @@ public sealed class FixtureHandler : HttpMessageHandler
 {
 	private readonly Dictionary<string, RecordedResponse> responses;
 	private readonly ConcurrentQueue<string> requested = new();
+	private readonly Func<string, RecordedResponse?>? fallback;
 
-	public FixtureHandler(IEnumerable<RecordedResponse> responses)
+	/// <param name="fallback">Answers a request no fixture matches; without one, such a request throws.</param>
+	public FixtureHandler(IEnumerable<RecordedResponse> responses, Func<string, RecordedResponse?>? fallback = null)
 	{
+		this.fallback = fallback;
 		this.responses = new Dictionary<string, RecordedResponse>(StringComparer.Ordinal);
 		foreach (RecordedResponse response in responses)
 		{
@@ -81,7 +84,7 @@ public sealed class FixtureHandler : HttpMessageHandler
 	{
 		string key = FixtureFiles.Key(request.RequestUri!.AbsoluteUri);
 		requested.Enqueue(key);
-		if (!responses.TryGetValue(key, out RecordedResponse? response))
+		if (!responses.TryGetValue(key, out RecordedResponse? response) && (response = fallback?.Invoke(key)) is null)
 		{
 			throw new InvalidOperationException("No fixture for " + key);
 		}
