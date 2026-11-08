@@ -1,0 +1,20 @@
+<Project>
+	<PropertyGroup>
+		<TargetFramework>net48</TargetFramework>
+		<Platform>AnyCPU</Platform>
+		<PlatformTarget>AnyCPU</PlatformTarget>
+		<LangVersion>14.0</LangVersion>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+		<ComicRackDir Condition="'$(ComicRackDir)' == ''">$(COMICRACK_DIR)</ComicRackDir>
+		<ComicRackPath Condition="'$(ComicRackDir)' != ''">$([MSBuild]::EnsureTrailingSlash('$(ComicRackDir)'))</ComicRackPath>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="PolySharp" Version="1.16.0">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+	</ItemGroup>
+</Project>
