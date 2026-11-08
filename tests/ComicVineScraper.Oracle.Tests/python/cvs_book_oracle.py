@@ -69,7 +69,7 @@ def add_key_to_notes(notes, issue_key, now):
 def unique_series(series, format, volume, path, ignore_folders):
 	book = _detached({'ignore_folders_b': ignore_folders},
 		fields={'series_s': series, 'format_s': format, 'volume_year_n': volume, 'path_s': path})
-	return book.unique_series_s
+	return [book.unique_series_s, str(id(book))]
 
 def facts(crbook, ignore_folders):
 	''' What ComicBook derives from a ComicRack book: the name fields, the stored marker, the series key. '''
