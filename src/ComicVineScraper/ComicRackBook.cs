@@ -69,10 +69,14 @@ internal sealed class ComicRackBook(ComicBook book, IApplication app) : IScrapeB
 
 	/// <summary>
 	/// Writes in one synchronous pass with no awaits, so a write can only be partial if a ComicRack setter throws.
-	/// A patch whose date bits break DateGate is a planning bug, and is refused before anything is written.
+	/// A patch whose date bits break DateGate, or a thumbnail for a book with a file, is a planning bug, and is refused before anything is written.
 	/// </summary>
 	public void Apply(BookPatch patch, Bitmap? thumbnail)
 	{
+		if (thumbnail is not null && !string.IsNullOrEmpty(book.FilePath))
+		{
+			throw new ArgumentException("A thumbnail is only ever set on a book without a file.", nameof(thumbnail));
+		}
 		BookFields ungated = patch.Fields & ~DateGate.Restrict(patch.Fields, patch.Values);
 		if (ungated != BookFields.None)
 		{

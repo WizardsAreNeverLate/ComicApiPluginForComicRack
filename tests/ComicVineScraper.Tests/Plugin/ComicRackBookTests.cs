@@ -279,6 +279,19 @@ public sealed class ComicRackBookTests
 		await Assert.That(app.Thumbnails.Count).IsEqualTo(1);
 	}
 
+	[Test]
+	public async Task Apply_refuses_a_thumbnail_for_a_book_with_a_file_before_writing_anything()
+	{
+		var app = new FakeApplication();
+		var book = new ComicBook { FilePath = @"C:\Comics\Batman 012.cbz" };
+		using var thumbnail = new Bitmap(4, 4);
+
+		await Assert.That(() => new ComicRackBook(book, app).Apply(new BookPatch(new BookValues { Series = "Batman" }, BookFields.Series), thumbnail))
+			.Throws<ArgumentException>();
+		await Assert.That(app.Thumbnails.Count).IsEqualTo(0);
+		await Assert.That(book.Series).IsEqualTo("");
+	}
+
 	internal static string Dump(ComicBook book) => string.Join("|",
 		book.Series, book.Number, book.Volume, book.Format, book.Title, book.AlternateSeries, book.Summary, book.Publisher, book.Imprint,
 		book.Characters, book.Teams, book.Locations, book.Writer, book.Penciller, book.Inker, book.Colorist, book.Letterer,
