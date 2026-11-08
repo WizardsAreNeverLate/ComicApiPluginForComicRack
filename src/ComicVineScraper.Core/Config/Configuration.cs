@@ -6,9 +6,9 @@ namespace ComicVineScraper.Config;
 /// <summary>
 /// Immutable settings for one run: settings.dat plus advanced.dat. Edit with `with`.
 /// MergeSettings and SearchSettings are computed on demand and never stored, so they cannot drift.
-/// Phase 3c adds the conversions from and to the .dat maps.
+/// FromMaps and ToSettingsMap convert from and to the settings.dat map.
 /// </summary>
-public sealed record Configuration
+public sealed partial record Configuration
 {
 	public string ApiKey { get; init; } = "";
 
