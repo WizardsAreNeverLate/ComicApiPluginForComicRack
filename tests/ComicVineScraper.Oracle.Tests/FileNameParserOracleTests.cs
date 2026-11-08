@@ -66,6 +66,15 @@ public sealed class FileNameParserOracleTests
 	}
 
 	[Test]
+	public async Task A_year_in_Extended_Arabic_Indic_digits_makes_Python_fall_back_to_the_whole_name()
+	{
+		var python = (object[])Oracle.Call("fnameparser", "extract", "Batman 4 (۲۰۰۴).cbz")!;
+
+		await Assert.That(new ParsedName((string)python[0]!, (string)python[1]!, (string)python[2]!)).IsEqualTo(new ParsedName("Batman 4 (۲۰۰۴)", "", ""));
+		await Assert.That(FileNameParser.Extract("Batman 4 (۲۰۰۴).cbz")).IsEqualTo(new ParsedName("Batman", "4", "2004"));
+	}
+
+	[Test]
 	public async Task Alt_search_regex_matches_Python()
 	{
 		string[] patterns =
@@ -120,6 +129,10 @@ public sealed class FileNameParserOracleTests
 		int compared = 0;
 		foreach (string name in names)
 		{
+			if (HasYearPythonCannotRead(name))
+			{
+				continue; // deviations.md #20
+			}
 			var python = (object[])Oracle.Call("fnameparser", "extract", name)!;
 			var expected = new ParsedName((string)python[0]!, (string)python[1]!, (string)python[2]!);
 			await Assert.That(FileNameParser.Extract(name)).IsEqualTo(expected).Because(name);
@@ -127,6 +140,9 @@ public sealed class FileNameParserOracleTests
 		}
 		await Assert.That(compared).IsGreaterThan(0);
 	}
+
+	private static bool HasYearPythonCannotRead(string name) =>
+		Regex.Matches(name, @"\d{4}").Cast<Match>().Any(m => m.Value.Any(c => c > 127 && c is not (>= (char)0x660 and <= (char)0x669)));
 
 	private static IEnumerable<string> GoldenNames()
 	{

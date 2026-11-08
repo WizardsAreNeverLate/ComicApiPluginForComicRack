@@ -100,8 +100,8 @@ public static class FileNameParser
 			name = match.Groups[1].Value + " " + match.Groups[2].Value;
 		}
 
-		ParsedName? parsed = ExtractDetails(name);
-		return parsed is null || parsed.Series.Trim().Length == 0 ? new ParsedName(name, "", "") : parsed;
+		ParsedName parsed = ExtractDetails(name);
+		return parsed.Series.Trim().Length == 0 ? new ParsedName(name, "", "") : parsed;
 	}
 
 	private static string? Found(Match match, string group)
@@ -110,14 +110,11 @@ public static class FileNameParser
 		return found.Success && found.Value.Trim().Length > 0 ? found.Value : null;
 	}
 
-	/// <summary>fnameparser.__extract. Null where the Python raised (int() of a year in non-ASCII digits), which extract() catches.</summary>
-	private static ParsedName? ExtractDetails(string name)
+	/// <summary>fnameparser.__extract.</summary>
+	private static ParsedName ExtractDetails(string name)
 	{
 		string s = name;
-		if (ExtractYear(s) is not { } year)
-		{
-			return null;
-		}
+		string year = ExtractYear(s);
 
 		foreach (Regex bracket in Brackets)
 		{
@@ -137,18 +134,11 @@ public static class FileNameParser
 			s = Dash.Replace(s, " ");
 		}
 
-		if (NumberCandidates(s) is not { } matches)
-		{
-			return null;
-		}
+		List<Match> matches = NumberCandidates(s);
 		if (matches.Count > 1 && ReadingListPrefix.IsMatch(s))
 		{
 			s = ReadingListPrefix.Replace(s, "", 1);
-			if (NumberCandidates(s) is not { } relisted)
-			{
-				return null;
-			}
-			matches = relisted;
+			matches = NumberCandidates(s);
 		}
 
 		string number = "";
@@ -177,8 +167,8 @@ public static class FileNameParser
 			: BigInteger.Parse(number, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
 	}
 
-	/// <summary>fnameparser.__extract_numbers. Null where __isYear raised.</summary>
-	private static List<Match>? NumberCandidates(string s)
+	/// <summary>fnameparser.__extract_numbers.</summary>
+	private static List<Match> NumberCandidates(string s)
 	{
 		List<Match> matches = NumberCandidate.Matches(s).Cast<Match>().ToList();
 		if (IsAtStart(Is2000AD, s) || IsAtStart(IsBeano, s))
@@ -189,11 +179,7 @@ public static class FileNameParser
 		foreach (Match match in matches)
 		{
 			Group number = match.Groups[2];
-			if (IsYear(number.Value) is not { } isYear)
-			{
-				return null;
-			}
-			if (!isYear || (number.Index > 0 && s[number.Index - 1] == '#'))
+			if (!IsYear(number.Value) || (number.Index > 0 && s[number.Index - 1] == '#'))
 			{
 				kept.Add(match);
 			}
@@ -201,55 +187,53 @@ public static class FileNameParser
 		return kept;
 	}
 
-	/// <summary>fnameparser.__extract_year: one "V2003" tag, else the last bracketed year or year range. Null where __isYear raised.</summary>
-	private static string? ExtractYear(string s)
+	/// <summary>fnameparser.__extract_year: one "V2003" tag, else the last bracketed year or year range. "" when there is none.</summary>
+	private static string ExtractYear(string s)
 	{
 		var vYears = new List<string>();
 		foreach (Match match in VYear.Matches(s))
 		{
 			string candidate = match.Groups[2].Value;
-			if (IsYear(candidate) is not { } isYear)
-			{
-				return null;
-			}
-			if (isYear)
+			if (IsYear(candidate))
 			{
 				vYears.Add(candidate);
 			}
 		}
 		if (vYears.Count == 1)
 		{
-			return vYears[0];
+			return AsciiDigits(vYears[0]);
 		}
 
 		string found = "";
 		foreach (Match match in BracketedText.SelectMany(pattern => pattern.Matches(s).Cast<Match>()))
 		{
 			string candidate = YearRange.Replace(match.Value.Trim(BracketChars).Trim(), "$1");
-			if (IsYear(candidate) is not { } isYear)
-			{
-				return null;
-			}
-			if (isYear)
+			if (IsYear(candidate))
 			{
 				found = candidate;
 			}
 		}
-		return found;
+		return AsciiDigits(found);
 	}
 
-	/// <summary>fnameparser.__isYear: four digits, strictly between 1900 and 2100. Null where Python's int() raised.</summary>
-	private static bool? IsYear(string text)
+	/// <summary>
+	/// fnameparser.__isYear: four digits, strictly between 1900 and 2100. Python's int() raised for digits such as
+	/// Persian ones, and extract() then lost the series and number (deviations.md #20). Any Unicode decimal digit counts here.
+	/// </summary>
+	private static bool IsYear(string text) =>
+		FourDigits.IsMatch(text) && text.Trim().Aggregate(0, (value, c) => value * 10 + CharUnicodeInfo.GetDecimalDigitValue(c)) is > 1900 and < 2100;
+
+	/// <summary>
+	/// The year as ASCII digits where Python's int() would not read it, so later number parsing can. Digits Python reads
+	/// (ASCII and Arabic-Indic) pass through unchanged, as in Python.
+	/// </summary>
+	private static string AsciiDigits(string text)
 	{
-		if (!FourDigits.IsMatch(text))
+		if (PyStr.TryParseInt(text, out _))
 		{
-			return false;
+			return text;
 		}
-		if (!PyStr.TryParseInt(text, out long year))
-		{
-			return null;
-		}
-		return year is > 1900 and < 2100;
+		return string.Concat(text.Select(c => CharUnicodeInfo.GetDecimalDigitValue(c) is >= 0 and var digit ? (char)('0' + digit) : c));
 	}
 
 	private static bool IsAtStart(Regex regex, string s)

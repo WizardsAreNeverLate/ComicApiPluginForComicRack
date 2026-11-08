@@ -31,9 +31,9 @@ public sealed class AutoMatcher(IComicVine comicVine, Func<SeriesId, bool> chose
 		{
 			return null;
 		}
-		// A zero hash means every pixel of the 8x8 copy was equal, as for an all-black page, and it would match any
-		// other such cover. Python's "if hash_local:" treated it as no hash, so the book is not auto-matched.
-		if (await HashAsync(source.GetPage(0), ct) is not { } local || local == 0)
+		// A hash of 0 (every pixel of the 8x8 copy equal, as for an all-black page) is a hash. Python's "if hash_local:"
+		// treated it as no hash (deviations.md #21); only a missing page or a failed hash is "no hash" here.
+		if (await HashAsync(source.GetPage(0), ct) is not { } local)
 		{
 			return null;
 		}

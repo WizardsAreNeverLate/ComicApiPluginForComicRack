@@ -16,6 +16,7 @@ public sealed class AutoMatcherTests
 {
 	private static readonly Uri LeftCover = new("http://covers/left.jpg");
 	private static readonly Uri TopCover = new("http://covers/top.jpg");
+	private static readonly Uri BlackCover = new("http://covers/black.jpg");
 	private static readonly Uri AlsoLeftCover = new("http://covers/left-again.jpg");
 
 	[Test]
@@ -88,13 +89,21 @@ public sealed class AutoMatcherTests
 	}
 
 	[Test]
-	public async Task Does_not_match_without_a_page_or_with_a_page_that_hashes_to_zero()
+	public async Task Does_not_match_without_a_page()
 	{
 		var comicVine = new FakeComicVine(Series(10, LeftCover));
 
 		await Assert.That(await Find(Book("5"), comicVine, () => null)).IsNull();
-		await Assert.That(await Find(Book("5"), comicVine, () => Filled(Color.Black))).IsNull();
 		await Assert.That(comicVine.FoundIssues).IsEmpty();
+	}
+
+	[Test]
+	public async Task A_page_that_hashes_to_zero_is_a_hash_like_any_other()
+	{
+		var comicVine = new FakeComicVine(Series(10, BlackCover));
+
+		await Assert.That((await Find(Book("5"), comicVine, () => Filled(Color.Black)))?.Id).IsEqualTo(new SeriesId(10));
+		await Assert.That(await Find(Book("5"), new FakeComicVine(Series(10, LeftCover)), () => Filled(Color.Black))).IsNull();
 	}
 
 	[Test]
@@ -167,6 +176,6 @@ public sealed class AutoMatcherTests
 		public Task<SeriesRef?> ResolveSeriesAsync(ComicVineTarget target, CancellationToken ct) => throw new NotSupportedException();
 
 		public Task<Bitmap?> GetImageAsync(Uri url, CancellationToken ct) =>
-			Task.FromResult<Bitmap?>(url == TopCover ? Halves(vertical: false) : url == LeftCover || url == AlsoLeftCover ? Halves(vertical: true) : null);
+			Task.FromResult<Bitmap?>(url == TopCover ? Halves(vertical: false) : url == LeftCover || url == AlsoLeftCover ? Halves(vertical: true) : url == BlackCover ? Filled(Color.Black) : null);
 	}
 }

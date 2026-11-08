@@ -56,6 +56,15 @@ public sealed class FileNameParserTests
 		await Assert.That(log.Snapshot().Count).IsEqualTo(1);
 	}
 	[Test]
+	[Arguments("Batman 4 (۲۰۰۴).cbz", "Batman", "4", "2004")]
+	[Arguments("Batman 4 (۱۸۰۰).cbz", "Batman", "4", "")]
+	[Arguments("Batman 4 (٢٠٠٤).cbz", "Batman", "4", "٢٠٠٤")]
+	public async Task A_year_in_non_ASCII_digits_keeps_the_series_and_number(string fileName, string series, string number, string year)
+	{
+		await Assert.That(FileNameParser.Extract(fileName)).IsEqualTo(new ParsedName(series, number, year));
+	}
+
+	[Test]
 	[Arguments("Batman 3 DI 5.cbr", "Batman", "3")]
 	[Arguments("BATMAN VOLUME 2 3.cbr", "BATMAN", "3")]
 	[Arguments("Spawn 7 OF 9 COVERS.cbr", "Spawn", "")]
