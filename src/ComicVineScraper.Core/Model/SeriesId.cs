@@ -6,4 +6,7 @@ namespace ComicVineScraper.Model;
 public readonly record struct SeriesId(int Value)
 {
 	public override string ToString() => Value.ToString(CultureInfo.InvariantCulture);
+
+	/// <summary>Parses the custom value comicvine_volume with the rules of IssueId.TryParseStored.</summary>
+	public static SeriesId? TryParseStored(string? text) => StoredKey.TryParse(text) is int value ? new SeriesId(value) : null;
 }

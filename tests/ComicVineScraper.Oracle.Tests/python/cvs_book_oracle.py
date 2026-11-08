@@ -80,7 +80,7 @@ def facts(crbook, ignore_folders):
 		sref = str(ref.series_key) if ref else ''
 	except Exception as e:
 		sref = 'error ' + repr(e)
-	return [book.series_s, book.issue_num_s, book.pub_year_n, _marker(book), sref, book.unique_series_s]
+	return [book.series_s, book.issue_num_s, book.pub_year_n, _marker(book), sref, book.unique_series_s, str(id(book))]
 
 def _issue(values):
 	issue = Issue(IssueRef(values['issue_num_s'], values['issue_key'], '', None))
