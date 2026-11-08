@@ -206,7 +206,7 @@ public sealed class CatalogOracleTests
 			if (value is object[] pythonIssues)
 			{
 				// deviations.md #8: Python drops emoji and other surrogate pairs, so a field where C# keeps one is not compared.
-				// deviations.md #15: Python lists an empty <name/> credit as "<name object at 0x...>", so such a field is not compared.
+				// deviations.md #25: Python lists an empty <name/> credit as "<name object at 0x...>", so such a field is not compared.
 				string[] csharpFields = issues.SelectMany(FormatIssue).ToArray();
 				string[] pythonFields = pythonIssues.SelectMany(i => FormatIssue((object[])i)).ToArray();
 				bool[] hasPair = csharpFields.Select(HasSurrogatePair).ToArray();
@@ -339,7 +339,7 @@ public sealed class CatalogOracleTests
 	/// <summary>deviations.md, "Blank issue number": Python's _query_issue_id_dom raises ValueError('bad parameters') once the number is stripped.</summary>
 	internal static bool IsBlankIssueNumber(string number) => number.Trim().Length == 0;
 
-	/// <summary>deviations.md 3b-2: Python's int(volume.id) raises on the first volume with a non-numeric id and the whole search fails.</summary>
+	/// <summary>deviations.md #27: Python's int(volume.id) raises on the first volume with a non-numeric id and the whole search fails.</summary>
 	[Test]
 	public async Task A_search_volume_with_a_non_numeric_id_aborts_Python_and_is_dropped_by_CSharp()
 	{
@@ -355,7 +355,7 @@ public sealed class CatalogOracleTests
 		await Assert.That(found.Select(s => s.Name)).IsEquivalentTo(new[] { "Before Bad Id", "After Bad Id" }, CollectionOrdering.Matching);
 	}
 
-	/// <summary>deviations.md 3b-3: Python writes the publisher of a search volume whose publisher name is empty as sstr(object).</summary>
+	/// <summary>deviations.md #28: Python writes the publisher of a search volume whose publisher name is empty as sstr(object).</summary>
 	[Test]
 	public async Task A_search_volume_whose_publisher_name_is_empty_has_an_object_name_in_Python_and_none_in_CSharp()
 	{
@@ -374,7 +374,7 @@ public sealed class CatalogOracleTests
 		await Assert.That(found.Single().Name).IsEqualTo((string)pythonSeries[1]);
 	}
 
-	/// <summary>deviations.md 3b-4: Python reads dom.results.issue when the total is 1, and a response with no issue element has none.</summary>
+	/// <summary>deviations.md #29: Python reads dom.results.issue when the total is 1, and a response with no issue element has none.</summary>
 	[Test]
 	public async Task An_issue_number_search_with_a_total_of_one_and_no_issue_crashes_Python_and_finds_nothing_in_CSharp()
 	{
@@ -481,7 +481,7 @@ public sealed class CatalogOracleTests
 	private static IEnumerable<string> FormatIssue(object[] i)
 	{
 		static string List(object? items) => string.Join(" ; ", ((object[])items!).Select(item => item?.ToString()));
-		// deviations.md 3b-6: a person listed twice in one credit list is listed once, at the first place.
+		// deviations.md #31: a person listed twice in one credit list is listed once, at the first place.
 		static string People(object? items) => string.Join(" ; ", ((object[])items!).Select(item => item?.ToString()).Distinct(StringComparer.Ordinal));
 		PartialDate published = PartialDate.Of(Year(i[9]), Part(i[10]), Part(i[11]));
 		PartialDate released = PartialDate.Of(Year(i[12]), Part(i[13]), Part(i[14]));
