@@ -206,3 +206,20 @@ The shared types compile in `ComicVineScraper.Core` so that workstreams 3a to 3d
 - **`PartialDate.Of` checks day against 1..31 only,** not against the month length, as the Python setters do. Year 0 is valid.
 - **`ComicVineException` keeps `IsRecoverable`.** The property is a one-line classification of the error kind. 3b owns the URL redaction that fills `redactedUrl`.
 - **`ComicRackBook` is unchanged.** It still writes `Notes` only. 3d fills in the other fields.
+
+### Phase 3a: text and matching algorithms
+
+The algorithms live in `ComicVineScraper.Text` (`Text/`) and `ComicVineScraper.Matching` (`Matching/`). Differences from the sketch:
+
+- **`RankedSeries.Score` is a `double`, not an `int`.** This changes a contract type instead of adding to it. `compute_n` returns a float: its recency term, `-(now - start year) / 100`, is the tie-breaker between series with the same other scores. An `int` would lose it. Nothing used the type yet.
+- **`MatchScore.Compute` and `Rank` take `BookValues`, not `BookFacts`.** The score reads only the effective values (series, number, format, and the two years). The caller passes `BookFacts.Effective`.
+- **`AutoMatcher.FindAsync(book, source, ct)` has no `SearchSettings` parameter.** `IComicVine.SearchSeriesAsync` already strips the ignored terms, cleans the search, and applies the series filter, as Python's `db.query_series_refs` and `filter_series_refs` did before `__find_best_series` scored the result.
+- **`FileNameParser` is a static class.** The sketch made it an instance to remember a failed ALT_SEARCH_REGEX. The regex is now compiled once, with `PyRegex.TryCompile`, so no failure is left to remember. `FileNameParser.Parse(fileName, altSearchRegex)` runs the regex and then `Extract`, as `comicbook.py` does.
+- **Phase 3c must build `AdvancedSettings.AltSearchRegex` with `PyRegex.TryCompile(pattern, timeout)`, not `new Regex(pattern)`.** The pattern is Python syntax. `PyRegex` ports IronPython's pre-parse, which rewrites `(?P<name>...)` and `(?P=name)` and drops `(?u)` and `(?L)`. Without it, the documented `(?P<series>...)` form does not compile. A timeout of about one second is enough for a file name.
+- **`SearchTerms` mirrors the Python calls.** `StripIgnored(terms, ignored)` is the strip in `db.py`. `Clean(terms, alternate)` is `cvdb.__cleanup_search_terms`. Phase 3b runs `Clean(StripIgnored(terms, ignored), false)`, searches when the result is not blank, and when nothing is found retries once with `Clean(cleaned, true)` if that differs. The sketch's `WithNumberWords(cleaned)` would apply the number words after the punctuation strip, which is not the Python order.
+- **The back cover strip is `CoverImage.StripBackCover` in `Matching`.** 3b's `GetImageAsync` and 3d's `GetPage` call it, so `AutoMatcher` does not strip again. Python stripped twice, but the second strip never applies to a half image.
+- **`SeriesFilter.Apply(found, SearchSettings)` keeps Comic Vine's order and does not remove duplicates.** Python held search results in a `set`, which also merged equal series ids. Phase 3b should drop a repeated series id when it pages.
+- **`ImageHash.Compute` takes an `Image?`.** `imagehash.hash` accepted any .NET image.
+- **Golden file count.** `test_fnameparser.data` has 286 lines, of which 218 are cases. The others are comments and blank lines. `FileNameParserGoldenTests` checks the count.
+- **Oracle adapters.** `tests/ComicVineScraper.Oracle.Tests/Python/oracle_text.py` builds the inputs that some Python code expects, such as a book object for `compute_n` and a DOM stub for the summary cleanup. `OracleAdapters` loads it with `imp.load_source`, so `Oracle.cs` is unchanged. The adapter calls the original functions and adds no logic.
+- **Not in 3a.** The sketch's `Algorithms.cs` also lists `KeyMarkers`, `SeriesKey`, `ComicVineUrl`, and `BookOrder`. The phase 3 brief gives the first two to 3d and the URL to 3b. `BookOrder` has no owner in phase 3.

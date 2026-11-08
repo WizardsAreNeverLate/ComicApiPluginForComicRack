@@ -11,8 +11,8 @@ namespace ComicVineScraper.Text;
 public sealed record ParsedName(string Series, string Number, string Year);
 
 /// <summary>
-/// fnameparser.py. The patterns are the Python ones verbatim: IronPython hands them to .NET's Regex with
-/// CultureInvariant, so the same pattern text gives the same matches here.
+/// fnameparser.py. The patterns are the Python ones verbatim, less one "(?u)" that IronPython also drops. IronPython hands
+/// the rest to .NET's Regex unchanged, so they match the same text. The port adds CultureInvariant (deviations.md #12).
 /// </summary>
 public static class FileNameParser
 {
