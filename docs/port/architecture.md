@@ -176,3 +176,12 @@ Rejected from the Fable sketch:
 ## Implementation reconciliation
 
 Implementers record accepted deviations from this design here. Each entry says why the shared contract still holds.
+
+### Phase 2: scaffold and `DatFile`
+
+- **The oracle is IronPython, not CPython.** `PyStr` ports the IronPython 2.7.4 runtime code for `str(float)`, `float()`, and `int()`, read from the shipped `IronPython.dll`. It is not the CPython algorithm, because the two differ. For example, IronPython writes `str(999999999999.5)` as `1000000000000.0` where CPython writes `1e+12`, and IronPython's `int("- 5")` returns -5. `PyStr.Format` calls .NET Framework's own number formatting, as IronPython does, so it matches only on .NET Framework. The oracle test `Format_matches_str_of_float` checks about 6,000 values.
+- **`DatValue.Int` holds a `long`, not an `int`.** IronPython returns a `long` above 2^31, and series ids are whole numbers. A `long` keeps such values typed. Values beyond the 64-bit range stay text, as `deviations.md` records.
+- **`DatFile` gained `ToBytes` and `FromBytes`.** These pure functions own the UTF-8 BOM, so the oracle can compare the files byte for byte. `SettingsStore` writes the bytes from `ToBytes` atomically.
+- **The plugin key is `comic-vine-scraper-net`, not `comic-vine-scraper`.** The phase 2 brief changed it, and the package name is `Comic Vine Scraper .NET`, so that the C# and Python plugins can be installed side by side for the end-to-end comparison. With the same key, `PluginEngine.Initialize` keeps only the first command it loads. One effect follows. ComicRack localizes a command's name and description from `<Key>.xml` in the language zips, and those zips contain only `comic-vine-scraper.xml`. So the command name is not localized until the zips gain a `comic-vine-scraper-net.xml`, or until the key changes back after the comparison.
+- **Test projects are AnyCPU, not x64.** A TUnit exe on .NET Framework needs `Prefer32Bit=false` to run as a 64-bit process. With that setting, AnyCPU runs as x64 on a 64-bit machine and stays portable.
+- **The oracle search path leaves out `tools/comicrack`.** That folder in `build.xml`'s `include.paths` holds an old `ComicRack.Engine.dll` and no Python source, and no oracle call needs it.

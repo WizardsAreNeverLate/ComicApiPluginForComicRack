@@ -39,6 +39,8 @@ These items were checked and kept. `architecture.md` gives the reason for each.
 | Area | Python behaviour | C# behaviour | Why |
 |---|---|---|---|
 | Main window during a scrape | ComicRack stays partly usable between `DoEvents` calls. The user can edit a book or start a second scrape while a merge is in progress. | ComicRack's main window is disabled until the scrape ends. The ComicForm shows progress and has a Cancel button. | Without this, an edit or a second scrape can race the merge, and the command must block until the end anyway for the undo group and the book dialog. See `architecture.md`. |
+| `.dat` header time | `persist_map` writes the header time with `%X`, which follows the user's locale. | `DatFile.Format` writes the header time as invariant `HH:mm:ss`. | Python skips the header line when it reads, so no reader sees the difference. The oracle test `Files_match_byte_for_byte_after_the_header_line` compares everything after that line. |
+| Very large whole numbers in `.dat` files | `load_map` reads a whole number beyond the 64-bit range as a Python `long`. | `DatFile.Parse` keeps such a value as text, so it is written back unchanged. | No key the plugin writes holds such a number. The oracle test `Whole_numbers_beyond_long_stay_text_where_Python_returns_a_long` pins the difference. |
 
 ## Still to check
 
