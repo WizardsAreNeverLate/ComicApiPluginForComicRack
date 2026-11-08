@@ -7,6 +7,7 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="TUnit" Version="1.81.10" />
+		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="8.0.1" />
 	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="IronPython" HintPath="$(ComicRackPath)IronPython.dll" />
@@ -15,6 +16,16 @@
 		<Reference Include="Microsoft.Dynamic" HintPath="$(ComicRackPath)Microsoft.Dynamic.dll" />
 	</ItemGroup>
 	<ItemGroup>
+		<Reference Include="System.Drawing" />
+		<Reference Include="ComicRack.Plugins" HintPath="$(ComicRackPath)ComicRack.Plugins.dll" />
+		<Reference Include="ComicRack.Engine" HintPath="$(ComicRackPath)ComicRack.Engine.dll" />
+		<Reference Include="cYo.Common" HintPath="$(ComicRackPath)cYo.Common.dll" />
+	</ItemGroup>
+	<ItemGroup>
 		<ProjectReference Include="..\..\src\ComicVineScraper.Core\ComicVineScraper.Core.csproj" />
+		<ProjectReference Include="..\..\src\ComicVineScraper\ComicVineScraper.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="python\*.py" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 </Project>
