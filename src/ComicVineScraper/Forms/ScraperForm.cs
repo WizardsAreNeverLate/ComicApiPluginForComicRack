@@ -68,7 +68,14 @@ internal abstract class ScraperForm : Form
 		{
 			if (IsHandleCreated)
 			{
-				BeginInvoke(new Action(CloseAsCancelled));
+				try
+				{
+					BeginInvoke(new Action(CloseAsCancelled));
+				}
+				catch (Exception e) when (e is InvalidOperationException or ObjectDisposedException)
+				{
+					// The handle went away between the check and the call: the dialog is already closing.
+				}
 			}
 		}))
 		{
