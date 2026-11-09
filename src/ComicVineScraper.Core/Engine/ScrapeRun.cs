@@ -339,10 +339,6 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 			services.Log.Debug("   ...identified issue number " + number);
 			return new IssueChoice.Pick(found);
 		}
-		if (issues.Count == 0)
-		{
-			return new IssueChoice.Back();
-		}
 		services.Log.Debug("displaying the issue selection dialog...");
 		IReadOnlyList<IssueRef> ordered = [.. issues.OrderBy(issue => issue.IssueNumber, NaturalOrder.Instance)];
 		return await services.Ui.ChooseIssueAsync(new IssueQuestion(facts, series.Ref, ordered, found), services.Covers, ct);
