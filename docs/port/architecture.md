@@ -290,7 +290,4 @@ The algorithms live in `ComicVineScraper.Text` (`Text/`) and `ComicVineScraper.M
 - **Not closed by the run's token.** `ShowNoIssues` takes no token in `IScrapeUi`, so its warning stays open until the user closes it, as Python's `MessageBox` did.
 - **Not covered by tests.** The Ctrl+Shift+L shortcut and the save dialog behind it are not tested. A test cannot inject modifier keys into `PreProcessMessage`, and it cannot drive the common file dialog. `LogFile.Save`, which writes the file and confirms, is tested. The link to the API key page calls `Process.Start` and is not tested.
 - **Test harness.** `tests/ComicVineScraper.Tests/Plugin/Forms/FormHarness.cs` runs each test on its own STA thread and turns an exception in a UI handler into a test failure. It drives forms through their controls, keys, and mouse messages. It can wrap every localized string in `⟦ ⟧`, and `Ui.UnlocalizedTexts` then lists any visible text with a letter outside those marks. Every form has such a test. `Ui.Render` draws a form with `DrawToBitmap` into the test output's `form-renders` folder.
-
-### Phase 4: dialogs
-
 - **Book pages are decoded on ComicRack's UI thread.** `ComicForm` and `BookPagePanel` call `IScrapeBook.GetPage`, which fills the `ImagePool`, from the UI thread. This is deliberate: `ComicBook` is never touched off the thread it belongs to. Python decoded pages on its scraper thread. The cost is that a very large archive can stall the window briefly while a page decodes.
