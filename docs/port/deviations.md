@@ -83,4 +83,3 @@ These items were checked and kept. `architecture.md` gives the reason for each.
 
 ## Still to check
 
-- A creator whose roles map to the same list twice is listed twice. For example, "penciler, artist" adds the person to the pencillers twice, and the merge writes "Name, Name" to `Penciller`. The port keeps this for now. Is it a bug?
