@@ -27,7 +27,7 @@ param(
 	[string]$Bin = $env:COMICRACK_DIR,
 	[string]$PythonSource = "D:\Data\_Code\comic-vine-scraper\src",
 	[string]$KeyFile = "c:\data\ai\ComicRackCe\comic-vine.md",
-	[int]$TimeoutMinutes = 60
+	[int]$TimeoutMinutes = 25
 )
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
@@ -92,6 +92,57 @@ foreach ($folder in $settingsPy, $settingsNet) {
 	[System.IO.File]::WriteAllText((Join-Path $folder "advanced.dat"), $advanced, (New-Object System.Text.UTF8Encoding($false)))
 }
 
+$inputs = Join-Path $run "inputs"
+$covers = Join-Path $run "covers"
+New-Item -ItemType Directory -Force $inputs, $covers | Out-Null
+
+# Comic Vine lookups for the book table: each volume id is checked once, and a cover book's issue cover becomes page 1 of a .cbz in the run's covers folder.
+# An error from Invoke-RestMethod can quote the request URL, which carries the key, so it is rethrown without it.
+$apiHeaders = @{ 'User-Agent' = 'cvs-net-differential-test' }
+function Invoke-ComicVine([string]$resource, [string]$query) {
+	Start-Sleep -Milliseconds 1200
+	try { Invoke-RestMethod -Uri "https://comicvine.gamespot.com/api/$resource/?api_key=$apiKey&format=json&$query" -Headers $apiHeaders }
+	catch { throw ("Comic Vine lookup of $resource failed: " + $_.Exception.Message.Replace($apiKey, "<key>")) }
+}
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+try {
+$lookupLines = New-Object System.Collections.Generic.List[string]
+$lookupFailures = 0
+$bookRows = @()
+$index = 0
+foreach ($b in (Import-Csv (Join-Path $here "books.tsv") -Delimiter "`t")) {
+	$file = ""
+	if ($b.VolumeId) {
+		$volume = (Invoke-ComicVine "volume/4050-$($b.VolumeId)" "field_list=id,name,start_year,count_of_issues,publisher").results
+		$ok = ($volume.name -eq $b.ExpectName) -and ([string]$volume.start_year -eq $b.ExpectYear)
+		if (-not $ok) { $lookupFailures++ }
+		$lookupLines.Add("VOLUME $($b.VolumeId) '$($volume.name)' $($volume.start_year), $($volume.count_of_issues) issues, $($volume.publisher.name): $(if ($ok) { 'matches the table' } else { 'DOES NOT MATCH the table' })")
+	}
+	if ($b.Cover -eq "y") {
+		$issue = (Invoke-ComicVine "issues" "filter=volume:$($b.VolumeId),issue_number:$($b.Number)&field_list=id,issue_number,image").results | Where-Object { $_.issue_number -eq $b.Number } | Select-Object -First 1
+		if (-not $issue) { $lookupFailures++; $lookupLines.Add("COVER $($b.Series) #$($b.Number): no such issue in volume $($b.VolumeId)"); $bookRows += $b; $index++; continue }
+		$jpg = Join-Path $covers "cover-$index.jpg"
+		Invoke-WebRequest -Uri $issue.image.medium_url -Headers $apiHeaders -OutFile $jpg
+		$name = if ($b.FromName -eq "y") { "{0} {1:000} ({2}).cbz" -f $b.Series, [int]$b.Number, $b.Year } else { "cover-$index.cbz" }
+		$file = Join-Path $covers $name
+		$zip = [System.IO.Compression.ZipFile]::Open($file, 'Create')
+		[void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $jpg, "001.jpg")
+		$zip.Dispose()
+		Remove-Item $jpg
+		$lookupLines.Add("COVER $($b.Series) #$($b.Number): issue $($issue.id), cover packed as $name ($((Get-Item $file).Length) bytes)")
+	}
+	$b | Add-Member -NotePropertyName File -NotePropertyValue $file -Force
+	$bookRows += $b
+	$index++
+}
+$bookRows | Export-Csv (Join-Path $inputs "books.tsv") -Delimiter "`t" -NoTypeInformation -UseQuotes Never
+}
+catch {
+	Remove-Item -Recurse -Force $covers, $settingsPy, $settingsNet -ErrorAction SilentlyContinue
+	throw
+}
+
 $net = Join-Path $Bin "Scripts\ComicVineScraperNet"
 $probe = Join-Path $Bin "Scripts\CvsDiffProbe"
 $py = Join-Path $Bin "Scripts\ComicVineScraperPy"
@@ -126,23 +177,57 @@ try {
 	[System.IO.File]::WriteAllText($resources, $patched)
 	Add-Content -Path $report -Value "Python plugin $version installed as a copy; its profile_dir is the run's settings-py folder"
 
+	# Neither plugin logs its requests, so both are counted at the HTTP seam: the switch build's handler for C#, and, in the installed Python copy
+	# only, one line before each request that appends the host and path (never the query, which carries the key) to requests.txt.
+	$counter = 'from System.IO import File as CvsDiffFile; CvsDiffFile.AppendAllText(r"' + $settingsPy + '\requests.txt", {0}.split("?")[0].split("//")[-1] + "\n")'
+	$connection = Join-Path $py "cvconnection.py"
+	$cText = [System.IO.File]::ReadAllText($connection)
+	$cPatched = [regex]::Replace($cText, '(?m)^(   )(wait_until_ready\(\) # throttle request speed to make ComicVine happy)', { param($m) $m.Groups[1].Value + ($counter -f 'url') + "`n" + $m.Value })
+	if ($cPatched -eq $cText) { throw "cvconnection.py no longer has the request line the script instruments" }
+	[System.IO.File]::WriteAllText($connection, $cPatched)
+	$database = Join-Path $py "cvdb.py"
+	$dText = [System.IO.File]::ReadAllText($database)
+	$dPatched = [regex]::Replace($dText, '(?m)^(         )(request = WebRequest\.Create\(image_url_s\))', { param($m) $m.Groups[1].Value + ($counter -f 'image_url_s') + "`n" + $m.Value })
+	if ($dPatched -eq $dText) { throw "cvdb.py no longer has the image request line the script instruments" }
+	[System.IO.File]::WriteAllText($database, $dPatched)
+
 	$env:CVS_DIFF_OUT = $out
+	$env:CVS_DIFF_INPUT = $inputs
 	$env:CVS_NET_LIVE_FOLDER = $settingsNet
 	# Start-Process -PassThru gives this run's own process. It is the only one waited on and the only one ever killed.
 	$p = Start-Process (Join-Path $Bin "ComicRack.exe") -ArgumentList "-ac", "CvsDiff" -PassThru
-	Remove-Item Env:CVS_DIFF_OUT, Env:CVS_NET_LIVE_FOLDER
-	$closedItself = $p.WaitForExit($TimeoutMinutes * 60000)
-	if (-not $closedItself) { $p.Kill(); $p.WaitForExit() }
+	Remove-Item Env:CVS_DIFF_OUT, Env:CVS_DIFF_INPUT, Env:CVS_NET_LIVE_FOLDER
+	$exited = $p.WaitForExit($TimeoutMinutes * 60000)
+	if (-not $exited) { $p.Kill(); $p.WaitForExit() }
+	$closedItself = $exited -and $p.ExitCode -eq 0
 	Add-Content -Path $report -Value "ComicRack pid $($p.Id) exited with $($p.ExitCode)"
-	Assert-Run "ComicRack closed itself" $closedItself "the probe calls MainForm.MenuClose; the script kills pid $($p.Id) only if this fails"
+	Assert-Run "ComicRack closed itself" $closedItself "the probe calls MainForm.MenuClose and ComicRack exits with code 0 inside $TimeoutMinutes minutes; the script kills pid $($p.Id) only if this fails"
 }
 finally {
-	Remove-Item Env:CVS_DIFF_OUT, Env:CVS_NET_LIVE_FOLDER -ErrorAction SilentlyContinue
-	Remove-Item -Recurse -Force $net, $probe, $py -ErrorAction SilentlyContinue
+	Remove-Item Env:CVS_DIFF_OUT, Env:CVS_DIFF_INPUT, Env:CVS_NET_LIVE_FOLDER -ErrorAction SilentlyContinue
+	Remove-Item -Recurse -Force $net, $probe, $py, $covers -ErrorAction SilentlyContinue
 	foreach ($root in $env:APPDATA, $env:LOCALAPPDATA) {
 		Remove-Item -Recurse -Force (Join-Path $root "cYo\ComicRack Community Edition\Configurations\CvsDiff") -ErrorAction SilentlyContinue
 	}
 }
+
+function Get-RequestCounts([string]$file) {
+	$counts = [ordered]@{}
+	if (Test-Path $file) {
+		foreach ($line in Get-Content $file | Where-Object { $_.Trim() }) {
+			$parts = $line.Trim().Split('/')
+			$category = if ($parts[0] -like '*comicvine.gamespot.com' -and $parts[1] -eq 'api') { "api/" + $parts[2] } else { "images or other: " + $parts[0] }
+			$counts[$category] = 1 + [int]$counts[$category]
+		}
+	}
+	return $counts
+}
+$requestLines = foreach ($pair in @(@("python", $settingsPy), @("net", $settingsNet))) {
+	$counts = Get-RequestCounts (Join-Path $pair[1] "requests.txt")
+	$api = ($counts.GetEnumerator() | Where-Object { $_.Key -like "api/*" } | Measure-Object -Property Value -Sum).Sum
+	"REQUESTS $($pair[0]): $([int]$api) Comic Vine API calls ($(($counts.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', '))"
+}
+Remove-Item -Recurse -Force $covers -ErrorAction SilentlyContinue
 
 # What each plugin wrote into its own settings folder, by name and size. The folders hold the key, so they are deleted afterwards.
 $written = foreach ($folder in $settingsPy, $settingsNet) {
@@ -160,9 +245,13 @@ if (Test-Path $snapshot) {
 	$comparison = Compare-Snapshot -Path $snapshot
 	Add-Content -Path $report -Value ""
 	Add-Content -Path $report -Value $comparison.Lines
+	Add-Content -Path $report -Value ""
+	Add-Content -Path $report -Value $requestLines
 	Assert-Run "both plugins scraped the same number of books" ($comparison.Books -gt 0) "$($comparison.Books) books per set"
 }
 Add-Content -Path $report -Value ""
+Add-Content -Path $report -Value "--- Comic Vine lookups for the book table"
+Add-Content -Path $report -Value $lookupLines
 Add-Content -Path $report -Value "--- probe.txt"
 Add-Content -Path $report -Value $probeText
 Add-Content -Path $report -Value "--- files each plugin wrote"
@@ -172,6 +261,8 @@ $after = @(Get-UserSettings)
 Assert-Run "user settings unchanged" ($null -eq (Compare-Object $before $after)) "$($before.Count) entries before, $($after.Count) after, in %APPDATA%\Comic Vine Scraper (names, sizes, write times)"
 $left = (Test-Path $net) -or (Test-Path $probe) -or (Test-Path $py) -or (Test-Path (Join-Path $env:APPDATA "cYo\ComicRack Community Edition\Configurations\CvsDiff")) -or (Test-Path (Join-Path $env:LOCALAPPDATA "cYo\ComicRack Community Edition\Configurations\CvsDiff"))
 Assert-Run "nothing left behind" (-not $left) "the three Scripts folders and the run's ComicRack configuration are removed"
+Assert-Run "volume table matches Comic Vine" ($lookupFailures -eq 0) "$($lookupLines.Count) lookups, $lookupFailures mismatches"
+Assert-Run "no cover left behind" (-not (Test-Path $covers)) "the downloaded covers and the .cbz files are deleted from the run folder"
 Assert-Run "no ComicRack process left" ($null -eq (Get-Process ComicRack -ErrorAction SilentlyContinue)) "Get-Process ComicRack finds nothing"
 Assert-Run "settings folders removed" (-not ((Test-Path $settingsPy) -or (Test-Path $settingsNet))) "the folders that held the key are deleted"
 

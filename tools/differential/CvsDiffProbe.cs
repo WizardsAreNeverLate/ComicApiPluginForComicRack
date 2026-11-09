@@ -15,7 +15,7 @@ using cYo.Projects.ComicRack.Plugins;
 namespace CvsDiffProbe;
 
 /// <summary>
-/// Scrapes two identical sets of fileless books with the original Python plugin and with the C# plugin, both in auto-choose
+/// Scrapes two identical sets of books (books.tsv: fileless ones, and ones made from a .cbz with a real cover) with the original Python plugin and with the C# plugin, both in auto-choose
 /// mode against the live Comic Vine API, then writes every field either plugin can write to snapshot.tsv. Dialogs that still
 /// appear are answered by one policy for both plugins and logged. Closes ComicRack through MainForm.MenuClose when done.
 /// </summary>
@@ -30,30 +30,30 @@ public sealed class Probe(IPluginEnvironment env)
 	private Form main = null!;
 	private string currentSet = "setup";
 	private int dialogCount;
-	private string? scrapingNumber;
 	private readonly Dictionary<string, int> signatures = [];
 
-	/// <summary>The books both sets contain. Series, number and volume (the series' start year) are all a fileless book carries.</summary>
-	private static readonly (string Series, string Number, int Volume, string Why)[] Books =
-	[
-		("Saga", "1", 2012, "clear single match, Image"),
-		("Saga", "2", -1, "no volume year"),
-		("Batman", "497", 1940, "long series, first volume"),
-		("Batman", "1", 2016, "long series, later volume"),
-		("Batman Annual", "1", 2012, "annual"),
-		("Savage Dragon", "0", -1, "issue #0, Image"),
-		("Guardians of the Galaxy", "0.1", 2013, "decimal issue number"),
-		("Wizard", "\u00BD", -1, "fraction issue number"),
-		("Y: The Last Man", "1", 2002, "punctuation, Vertigo"),
-		("Hack/Slash", "1", -1, "slash in the title"),
-		("Rick & Morty", "1", 2015, "ampersand; Comic Vine says 'Rick and Morty'"),
-		("The Walking Dead", "1", 2003, "Image, with article"),
-		("Hellboy", "1", -1, "Dark Horse, colon title on Comic Vine"),
-		("Teenage Mutant Ninja Turtles", "1", 2011, "IDW"),
-		("Amazing Spider-Man", "300", 1963, "Comic Vine adds 'The'"),
-		("Zzxqv Nonexistent Chronicle", "1", -1, "no series match"),
-		("Batman", "99999", 1940, "series exists, issue does not"),
-	];
+	/// <summary>One row of books.tsv. Cover books are made from a .cbz (File, written by the runner); the rest are fileless.</summary>
+	private sealed record Book(string Series, string Number, int Year, long VolumeId, bool FromName, string File, string Why)
+	{
+		public string Label => $"{Series} #{Number}";
+	}
+
+	private readonly List<Book> books = [];
+	private readonly Dictionary<int, List<string>> events = [];
+	private int currentBook = -1;
+
+	private void LoadBooks()
+	{
+		string[] lines = File.ReadAllLines(Path.Combine(Environment.GetEnvironmentVariable("CVS_DIFF_INPUT")!, "books.tsv"));
+		string[] header = lines[0].Split('\t');
+		foreach (string line in lines.Skip(1).Where(l => l.Length > 0))
+		{
+			string[] cells = line.Split('\t');
+			string Cell(string name) => cells[Array.IndexOf(header, name)];
+			long.TryParse(Cell("VolumeId"), out long volumeId);
+			books.Add(new Book(Cell("Series"), Cell("Number"), int.Parse(Cell("Year"), CultureInfo.InvariantCulture), volumeId, Cell("FromName") == "y", Cell("File"), Cell("Why")));
+		}
+	}
 
 	[PluginCommand("Startup", Name = "CvsDiff Probe")]
 	public void Start()
@@ -88,34 +88,76 @@ public sealed class Probe(IPluginEnvironment env)
 		report.Add($"python command: key={python.Key} hook={python.Hook}; net command: key={net.Key} hook={net.Hook}");
 
 		using var snapshot = new StreamWriter(Path.Combine(output, "snapshot.tsv"), false, new UTF8Encoding(false));
+		LoadBooks();
 		ComicBook[] baseline = NewBooks();
 		Dump(snapshot, "baseline", baseline);
-		for (int i = 0; i < Books.Length; i++)
+		Preflight(baseline);
+
+		for (int i = 0; i < books.Count; i++)
 		{
-			Line(snapshot, "baseline", i, "~label", $"{Books[i].Series} #{Books[i].Number} (volume {Books[i].Volume}): {Books[i].Why}");
+			Line(snapshot, "baseline", i, "~label", $"{books[i].Label} (volume {books[i].Year}, {(books[i].File.Length > 0 ? "from a .cbz" + (books[i].FromName ? " named after the book" : "") : "fileless")}): {books[i].Why}");
 		}
 		snapshot.Flush();
 
 		foreach ((string set, Command command) in new[] { ("python", python), ("net", net) })
 		{
 			currentSet = set;
-			ComicBook[] books = NewBooks();
+			lastProgress = DateTime.UtcNow;
+			events.Clear();
+			ComicBook[] batch = NewBooks();
 			var watch = System.Diagnostics.Stopwatch.StartNew();
-			createBookCode.Invoke(null, [main, command, (Func<IEnumerable<ComicBook>>)(() => books)]);
-			report.Add($"{set} scrape of {books.Length} books returned after {watch.Elapsed.TotalSeconds:F0} s");
-			Dump(snapshot, set, books);
+			createBookCode.Invoke(null, [main, command, (Func<IEnumerable<ComicBook>>)(() => batch)]);
+			report.Add($"{set} scrape of {batch.Length} books returned after {watch.Elapsed.TotalSeconds:F0} s");
+			Dump(snapshot, set, batch);
+			if (fatal)
+			{
+				throw new InvalidOperationException("the probe stopped the run after a failure; see the EXCEPTION line above");
+			}
+			for (int i = 0; i < batch.Length; i++)
+			{
+				Line(snapshot, set, i, "~dialogs", events.TryGetValue(i, out List<string>? seen) ? string.Join(" ", seen) : "");
+			}
+			snapshot.Flush();
 		}
 		currentSet = "done";
 		report.Add($"dialogs answered in total: {dialogCount}");
 	}
 
-	private static ComicBook[] NewBooks() =>
-		[.. Books.Select(b =>
+	/// <summary>ComicRack must hand each cover book's first page to a plugin before any request is spent; a failure here stops the run.</summary>
+	private void Preflight(ComicBook[] baseline)
+	{
+		for (int i = 0; i < baseline.Length; i++)
 		{
-			var book = new ComicBook { Series = b.Series, Number = b.Number };
-			if (b.Volume > 0)
+			if (books[i].File.Length == 0)
 			{
-				book.Volume = b.Volume;
+				continue;
+			}
+			ComicBook book = baseline[i];
+			System.Drawing.Bitmap? page = null;
+			var worker = new System.Threading.Thread(() => page = env.App.GetComicPage(book, 0));
+			worker.Start();
+			bool returned = worker.Join(TimeSpan.FromSeconds(30));
+			report.Add($"PREFLIGHT {Path.GetFileName(books[i].File)}: pages={book.PageCount} GetComicPage(0) {(returned ? (page is null ? "returned null" : $"returned {page.Width}x{page.Height}") : "did not return in 30 s")}");
+			if (!returned || page is null)
+			{
+				throw new InvalidOperationException("ComicRack cannot supply the cover page of " + Path.GetFileName(books[i].File));
+			}
+			page.Dispose();
+		}
+	}
+
+	private ComicBook[] NewBooks() =>
+		[.. books.Select(b =>
+		{
+			ComicBook book = b.File.Length > 0 ? ComicBook.Create(b.File, RefreshInfoOptions.GetPageCount) : new ComicBook();
+			if (!b.FromName)
+			{
+				book.Series = b.Series;
+				book.Number = b.Number;
+				if (b.Year > 0)
+				{
+					book.Volume = b.Year;
+				}
 			}
 			return book;
 		})];
@@ -193,11 +235,50 @@ public sealed class Probe(IPluginEnvironment env)
 		writer.WriteLine($"{set}\t{index}\t{field}\t{text}");
 	}
 
+	private static readonly TimeSpan StuckAfter = TimeSpan.FromMinutes(4);
+	private DateTime lastProgress = DateTime.UtcNow;
+	private bool fatal;
+
+	/// <summary>An unknown book or a dialog the policy cannot answer is not waited on: the run is recorded as failed, the plugin's forms are closed, and ComicRack exits.</summary>
+	private void Fail(string reason)
+	{
+		if (fatal)
+		{
+			return;
+		}
+		fatal = true;
+		report.Add("EXCEPTION " + reason);
+		foreach (Form form in Application.OpenForms.Cast<Form>().Where(f => f != main && IsPluginForm(f)).ToList())
+		{
+			form.Close();
+		}
+		main.BeginInvoke(new Action(() => main.GetType().GetMethod("MenuClose", BindingFlags.Instance | BindingFlags.Public)!.Invoke(main, null)));
+	}
+
+	private void DumpWindows()
+	{
+		foreach (Form form in Application.OpenForms.Cast<Form>())
+		{
+			report.Add($"  open form {form.GetType().FullName} '{form.Text}' visible={form.Visible} enabled={form.Enabled} modal={form.Modal}");
+		}
+	}
+
 	private void Drive()
 	{
+		if (!fatal && DateTime.UtcNow - lastProgress > StuckAfter)
+		{
+			DumpWindows();
+			Fail($"no progress for {StuckAfter.TotalMinutes:F0} minutes");
+		}
 		try
 		{
 			DriveNative();
+			foreach (Form news in Application.OpenForms.Cast<Form>().Where(f => f.Visible && f.GetType().Name == "NewsDialog").ToList())
+			{
+				report.Add($"ComicRack's own '{news.Text}' dialog (modal={news.Modal}) was open and blocked the scrape; closing it");
+				news.Close();
+				lastProgress = DateTime.UtcNow;
+			}
 			List<Form> open = [.. Application.OpenForms.Cast<Form>().Where(f => f != main && f.Visible && f.IsHandleCreated && IsPluginForm(f))];
 			foreach (Form form in open)
 			{
@@ -205,8 +286,19 @@ public sealed class Probe(IPluginEnvironment env)
 				string? scraping = Descendants(form).OfType<Label>().Select(l => l.Text).FirstOrDefault(t => t.StartsWith("Scraping:", StringComparison.Ordinal));
 				if (scraping is not null)
 				{
-					int hash = scraping.LastIndexOf('#');
-					scrapingNumber = hash < 0 ? null : scraping.Substring(hash + 1).Split(' ')[0];
+					string name = System.Text.RegularExpressions.Regex.Replace(scraping.Substring("Scraping:".Length), @"\s*\(Vol\. [^)]*\)\s*$", "");
+					name = System.Text.RegularExpressions.Regex.Replace(name, @"\s+", " ").Trim();
+					int found = books.FindIndex(b => name == (b.File.Length > 0 ? Path.GetFileName(b.File) : System.Text.RegularExpressions.Regex.Replace(b.Label, @"\s+", " ")));
+					if (found < 0)
+					{
+						Fail($"the status form names a book that is not in books.tsv: '{name}'");
+						return;
+					}
+					if (found != currentBook)
+					{
+						lastProgress = DateTime.UtcNow;
+					}
+					currentBook = found;
 				}
 				if (IsStatusForm(form, type) || !handled.Add(form))
 				{
@@ -242,82 +334,107 @@ public sealed class Probe(IPluginEnvironment env)
 		{
 			return;
 		}
+		lastProgress = DateTime.UtcNow;
 		dialogCount++;
-		var labels = Descendants(form).OfType<Label>().Select(l => l.Text).Where(t => !string.IsNullOrWhiteSpace(t));
+		var labels = Descendants(form).OfType<Label>().Select(l => l.Text).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
 		var buttons = Descendants(form).OfType<Button>().Select(b => b.Text + (b.Enabled ? "" : "(disabled)"));
-		report.Add($"DIALOG set={currentSet} type={type} title='{form.Text}' labels=[{string.Join(" | ", labels)}] buttons=[{string.Join(" | ", buttons)}]");
-		foreach (DataGridView grid in Descendants(form).OfType<DataGridView>())
+		string bookLabel = currentBook >= 0 ? books[currentBook].Label : "unknown book";
+		report.Add($"DIALOG set={currentSet} book='{bookLabel}' type={type} title='{form.Text}' labels=[{string.Join(" | ", labels)}] buttons=[{string.Join(" | ", buttons)}]");
+		Button[] all = [.. Descendants(form).OfType<Button>().Where(b => b.Enabled && b.Visible)];
+		Button? Named(string text) => all.FirstOrDefault(b => b.Text == text);
+		Button? accept = form.AcceptButton as Button ?? all.FirstOrDefault(b => b.DialogResult == DialogResult.OK || b.Text == "OK");
+		Button? skip = Named("Skip") ?? form.CancelButton as Button;
+		string signature = type + "|" + form.Text + "|" + string.Join("|", labels) + "|" + bookLabel;
+		signatures.TryGetValue(signature, out int seenBefore);
+		signatures[signature] = seenBefore + 1;
+
+		DataGridView? grid = Descendants(form).OfType<DataGridView>().FirstOrDefault();
+		if (grid is not null)
 		{
 			report.Add($"  grid {grid.Name}: {grid.Rows.Count} rows");
 			foreach (DataGridViewRow row in grid.Rows.Cast<DataGridViewRow>().Take(6))
 			{
 				report.Add("    " + string.Join(" ; ", row.Cells.Cast<DataGridViewCell>().Select(c => Convert.ToString(c.Value)?.Replace("\r\n", " ") ?? "")));
 			}
-			if (grid.Rows.Count > 0)
+		}
+		if (seenBefore >= 3)
+		{
+			Record("repeated", "skip");
+			Press(form, skip ?? form.CancelButton as Button);
+			return;
+		}
+		if (grid is not null && grid.Rows.Count > 0)
+		{
+			bool isSeriesList = ColumnNamed(grid, "Match") is not null;
+			Book? book = currentBook >= 0 ? books[currentBook] : null;
+			DataGridViewRow? row = null;
+			string why;
+			if (book is null)
 			{
-				DataGridViewRow chosen = BestRow(grid, scrapingNumber);
-				grid.CurrentCell = chosen.Cells.Cast<DataGridViewCell>().First(c => c.Visible);
-				grid.ClearSelection();
-				chosen.Selected = true;
-				report.Add("  selected row " + chosen.Index);
+				why = "the book being scraped is unknown";
+				Fail("a dialog appeared while no known book was being scraped: " + form.Text);
+				return;
 			}
-		}
-		string signature = type + "|" + form.Text + "|" + string.Join("|", labels);
-		signatures.TryGetValue(signature, out int seenBefore);
-		signatures[signature] = seenBefore + 1;
-		bool repeated = signatures[signature] > 3;
-		Button[] all = [.. Descendants(form).OfType<Button>().Where(b => b.Enabled && b.Visible)];
-		Button? accept = form.AcceptButton as Button ?? all.FirstOrDefault(b => b.DialogResult == DialogResult.OK || b.Text == "OK");
-		if (repeated)
-		{
-			report.Add("  the same dialog appeared more than three times; cancelling it");
-			(form.CancelButton as Button ?? all.FirstOrDefault(b => b.DialogResult == DialogResult.Cancel || b.Text is "Cancel" or "Skip"))?.PerformClick();
-			if (form.Visible)
+			else if (isSeriesList)
 			{
-				form.Close();
+				DataGridViewColumn? id = ColumnNamed(grid, "ID");
+				row = book.VolumeId == 0 || id is null ? null : grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => Convert.ToInt64(r.Cells[id.Index].Value, CultureInfo.InvariantCulture) == book.VolumeId);
+				why = book.VolumeId == 0 ? "the book has no correct volume" : $"volume {book.VolumeId} is not listed";
 			}
+			else
+			{
+				row = grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => string.Equals(Convert.ToString(r.Cells[0].Value)?.Trim(), book.Number, StringComparison.Ordinal));
+				why = $"issue {book.Number} is not listed";
+			}
+			string kind = isSeriesList ? "series" : "issue";
+			if (row is null)
+			{
+				Record(kind, "skip: " + why);
+				report.Add($"  {kind} dialog: {why}; pressing Skip");
+				Press(form, skip);
+				return;
+			}
+			grid.CurrentCell = row.Cells.Cast<DataGridViewCell>().First(c => c.Visible);
+			grid.ClearSelection();
+			row.Selected = true;
+			Record(kind, "pick");
+			report.Add($"  selected row {row.Index}");
+			Press(form, accept);
+			return;
 		}
-		else if (accept is { Enabled: true })
+		Record(type, "default");
+		Press(form, accept ?? form.CancelButton as Button);
+	}
+
+	private void Record(string kind, string action)
+	{
+		if (currentBook < 0)
 		{
-			report.Add("  pressed accept button '" + accept.Text + "'");
-			accept.PerformClick();
+			return;
 		}
-		else if (form.CancelButton is Button cancel)
+		if (!events.TryGetValue(currentBook, out List<string>? list))
 		{
-			report.Add("  pressed cancel button '" + cancel.Text + "'");
-			cancel.PerformClick();
+			events[currentBook] = list = [];
+		}
+		list.Add($"{kind}={action.Split(':')[0]}");
+	}
+
+	private void Press(Form form, Button? button)
+	{
+		if (button is { Enabled: true })
+		{
+			report.Add("  pressed '" + button.Text + "'");
+			button.PerformClick();
 		}
 		else
 		{
-			report.Add("  no accept or cancel button; closing the form");
+			report.Add("  no usable button; closing the form");
 			form.Close();
 		}
 	}
 
-	/// <summary>On an issue list, the row whose number is the one being scraped. Otherwise the row with the highest Match score, the lowest ID among equals, so the choice does not depend on the order of tied rows. Without a Match column, the first row.</summary>
-	private static DataGridViewRow BestRow(DataGridView grid, string? number)
-	{
-		bool isIssueList = !grid.Columns.Cast<DataGridViewColumn>().Any(c => c.HeaderText == "Match" || c.Name == "Match");
-		if (isIssueList && number is not null)
-		{
-			DataGridViewRow? byNumber = grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => string.Equals(Convert.ToString(r.Cells[0].Value)?.Trim(), number, StringComparison.Ordinal));
-			if (byNumber is not null)
-			{
-				return byNumber;
-			}
-		}
-		DataGridViewColumn? Column(string name) => grid.Columns.Cast<DataGridViewColumn>().FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase) || string.Equals(c.HeaderText, name, StringComparison.OrdinalIgnoreCase));
-		DataGridViewColumn? match = Column("Match");
-		DataGridViewColumn? id = Column("ID");
-		if (match is null || id is null)
-		{
-			return grid.Rows[0];
-		}
-		return grid.Rows.Cast<DataGridViewRow>()
-			.OrderByDescending(r => Convert.ToDouble(r.Cells[match.Index].Value, CultureInfo.InvariantCulture))
-			.ThenBy(r => Convert.ToInt64(r.Cells[id.Index].Value, CultureInfo.InvariantCulture))
-			.First();
-	}
+	private static DataGridViewColumn? ColumnNamed(DataGridView grid, string name) =>
+		grid.Columns.Cast<DataGridViewColumn>().FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase) || string.Equals(c.HeaderText, name, StringComparison.OrdinalIgnoreCase));
 
 	private void DriveNative()
 	{

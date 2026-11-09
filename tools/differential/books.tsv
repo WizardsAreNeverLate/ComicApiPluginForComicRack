@@ -1,0 +1,17 @@
+Series	Number	Year	VolumeId	ExpectName	ExpectYear	Cover	FromName	Why
+Saga	1	2012	46568	Saga	2012	y	n	cover book; two volumes of Saga start in 2012
+Saga	2	-1	46568	Saga	2012	n	n	fileless, no volume year
+Batman	497	1940	796	Batman	1940	n	n	long series, first volume, high issue number
+Batman	1	2016	91273	Batman	2016	y	y	cover book; series, number and year come from the file name
+Batman Annual	1	2012	49197	Batman Annual	2012	n	n	annual
+Savage Dragon	0	-1	5170	Savage Dragon	1993	n	n	issue #0
+Guardians of the Galaxy	0.1	2013	57960	Guardians of the Galaxy	2013	n	n	decimal issue number
+Y: The Last Man	1	2002	9419	Y: The Last Man	2002	y	n	cover book; punctuation in the series name
+Hack/Slash	1	2011	38911	Hack/Slash	2011	n	n	slash in the series name
+Rick & Morty	1	2015	81059	Rick and Morty	2015	n	n	ampersand; Comic Vine says "Rick and Morty"
+The Walking Dead	1	2003	18166	The Walking Dead	2003	y	n	cover book; article in the title
+Hellboy: Seed of Destruction	1	1994	5388	Hellboy: Seed of Destruction	1994	n	n	colon in the series name, Dark Horse
+Teenage Mutant Ninja Turtles	1	2011	42285	Teenage Mutant Ninja Turtles	2011	y	n	cover book; IDW
+Amazing Spider-Man	300	1963	2127	The Amazing Spider-Man	1963	y	n	cover book; Comic Vine adds "The"; high issue number
+Zzxqv Nonexistent Chronicle	1	-1				n	n	no series match: expected skipped
+Batman	99999	1940				n	n	issue does not exist: expected skipped
