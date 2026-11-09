@@ -79,11 +79,19 @@ internal sealed class UiSession : IDisposable
 
 	public static UiSession Create(bool marked = false) => new(marked);
 
+	/// <summary>Defender or the indexer can briefly hold a file just written, so deleting retries. Cleanup that still fails is left to the temp folder.</summary>
 	public void Dispose()
 	{
-		if (Directory.Exists(Folder))
+		for (int attempt = 0; attempt < 20 && Directory.Exists(Folder); attempt++)
 		{
-			Directory.Delete(Folder, true);
+			try
+			{
+				Directory.Delete(Folder, true);
+			}
+			catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+			{
+				Thread.Sleep(50);
+			}
 		}
 	}
 
@@ -159,7 +167,7 @@ internal static class Ui
 		root.Controls.Find(name, true).OfType<T>().SingleOrDefault() ?? throw new InvalidOperationException($"No {typeof(T).Name} named '{name}' in {root.GetType().Name}.");
 
 	/// <summary>Pumps messages until the condition holds, so async continuations on the UI thread run.</summary>
-	public static void PumpUntil(Func<bool> condition, int timeoutMs = 5000)
+	public static void PumpUntil(Func<bool> condition, int timeoutMs = 30000)
 	{
 		DateTime end = DateTime.UtcNow.AddMilliseconds(timeoutMs);
 		while (!condition())

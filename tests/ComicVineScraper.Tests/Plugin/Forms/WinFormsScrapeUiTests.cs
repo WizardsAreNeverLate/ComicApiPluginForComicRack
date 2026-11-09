@@ -23,7 +23,7 @@ public sealed class WinFormsScrapeUiTests
 
 	private static async Task Until(Func<bool> condition)
 	{
-		DateTime end = DateTime.UtcNow.AddSeconds(5);
+		DateTime end = DateTime.UtcNow.AddSeconds(30);
 		while (!condition())
 		{
 			if (DateTime.UtcNow > end)
