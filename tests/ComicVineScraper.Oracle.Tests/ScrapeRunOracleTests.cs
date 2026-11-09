@@ -374,11 +374,11 @@ public sealed class ScrapeRunOracleTests
 
 		public Bitmap? GetPage(int index) => null;
 
-		public void Apply(BookPatch patch, Bitmap? thumbnail)
+		public bool Apply(BookPatch patch, Bitmap? thumbnail)
 		{
 			bool skip = patch.Values.Notes.Contains("CVDBSKIP") || patch.Values.Tags.Any(t => t.Contains("CVDBSKIP"));
 			events.Add(skip ? $"skipforever {position}" : $"write {position} {patch.Values.IssueKey}");
-			adapter.Apply(patch, thumbnail);
+			return adapter.Apply(patch, thumbnail);
 		}
 	}
 

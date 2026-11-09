@@ -385,6 +385,21 @@ public sealed class ScrapeRunTests
 	}
 
 	[Test]
+	[Arguments(BookFields.Tags, "Tags")]
+	[Arguments(BookFields.Notes, "Notes")]
+	[Arguments(BookFields.None, "Tags,Notes")]
+	public async Task Skip_forever_logs_where_it_wrote_the_flag(BookFields update, string where)
+	{
+		using var world = new EngineWorld { Config = Configs.With(ChooseMode.Ask) with { Update = update } };
+		world.Ui.Series(new SeriesChoice.SkipForever());
+
+		await world.RunAsync(FakeBook.File(Batman1));
+
+		string[] log = [.. world.Log.Snapshot().Where(line => line.StartsWith("Added CVDBSKIP", StringComparison.Ordinal))];
+		await Assert.That(log).IsEquivalentTo(where.Split(',').Select(name => $"Added CVDBSKIP flag to comic book '{name}'"), CollectionOrdering.Matching);
+	}
+
+	[Test]
 	public async Task The_write_merges_into_the_book_as_it_is_now_not_as_it_was_read_at_the_start()
 	{
 		using var world = new EngineWorld();
@@ -429,6 +444,83 @@ public sealed class ScrapeRunTests
 
 		await Assert.That(book.Applied.Count).IsEqualTo(1);
 		await Assert.That(world.Requests.Any(r => r.Contains("/uploads/"))).IsFalse();
+	}
+
+	private static readonly string[] MergeLabels =
+	[
+		"Series", "Issue Number", "Title", "Crossovers", "Summary", "Release Date", "Publish Date", "Volume", "Imprint", "Publisher",
+		"Characters", "Teams", "Locations", "Writers", "Pencillers", "Inkers", "Colorists", "Letterers", "CoverArtists", "Editors",
+		"Webpage", "Rating", "Tags", "Notes", "Issue Key", "Series Key", "Cover Art URL",
+	];
+
+	private const string MergeHeader = "setting values for this comic book ('*' = changed):";
+
+	[Test]
+	public async Task The_write_logs_one_line_per_field_in_Pythons_order_and_marks_the_changes()
+	{
+		using var world = new EngineWorld();
+		world.Ui.Series(q => Pick(q, 796));
+		var book = FakeBook.File(Batman497, b => { b.Series = "Batman"; b.Number = "497"; b.Title = "Old title"; });
+
+		await world.RunAsync(book);
+
+		string[] log = [.. world.Log.Snapshot()];
+		int header = Array.IndexOf(log, MergeHeader);
+		string[] lines = [.. log.Skip(header + 1).Take(MergeLabels.Length)];
+		await Assert.That(header).IsGreaterThan(Array.IndexOf(log, "querying comicvine for issue details..."));
+		await Assert.That(lines.Select(line => line.Substring(5, 15).TrimEnd())).IsEquivalentTo(MergeLabels, CollectionOrdering.Matching);
+		await Assert.That(lines.All(line => line.StartsWith("--> ", StringComparison.Ordinal) && line.Substring(20, 2) == ": ")).IsTrue();
+		await Assert.That(lines[0]).IsEqualTo("-->  Series         : Batman");
+		await Assert.That(lines[2]).StartsWith("--> *Title          : ");
+		await Assert.That(lines[24]).IsEqualTo("--> *Issue Key      : 37566");
+		await Assert.That(lines[25]).IsEqualTo("--> *Series Key     : 796");
+		await Assert.That(lines[26]).StartsWith("-->  Cover Art URL  : https://");
+		await Assert.That(log.Any(line => line.Contains(EngineWorld.ApiKey))).IsFalse();
+	}
+
+	[Test]
+	public async Task A_field_that_is_not_written_logs_skipped()
+	{
+		using var world = new EngineWorld { Config = Configs.With(ChooseMode.Ask) with { Update = BookFields.Series } };
+		world.Ui.Series(q => Pick(q, 796));
+		var book = FakeBook.File(Batman497);
+
+		await world.RunAsync(book);
+
+		string[] log = [.. world.Log.Snapshot()];
+		string[] lines = [.. log.Skip(Array.IndexOf(log, MergeHeader) + 1).Take(MergeLabels.Length)];
+		await Assert.That(lines[2]).IsEqualTo("-->  Title          : --- skipped ---");
+		await Assert.That(lines[0]).StartsWith("-->  Series");
+	}
+
+	[Test]
+	public async Task A_thumbnail_ComicRack_refuses_is_logged_after_the_field_lines()
+	{
+		using var world = new EngineWorld();
+		using var cover = new Bitmap(8, 8);
+		world.ImageFor = _ => cover;
+		world.Ui.Search(new SearchChoice.Search("Batman")).Series(q => Pick(q, 796));
+		var book = new FakeBook(new ComicBook { Number = "497" }) { App = new Plugin.FakeApplication { Accepts = false } };
+
+		await world.RunAsync(book);
+
+		string[] log = [.. world.Log.Snapshot()];
+		int refused = Array.FindIndex(log, line => line.StartsWith("ERROR: can't set thumbnail: https://", StringComparison.Ordinal));
+		await Assert.That(refused).IsGreaterThan(Array.IndexOf(log, MergeHeader) + MergeLabels.Length);
+	}
+
+	[Test]
+	public async Task A_thumbnail_that_cannot_be_downloaded_is_logged_after_the_cover_line()
+	{
+		using var world = new EngineWorld();
+		world.Ui.Search(new SearchChoice.Search("Batman")).Series(q => Pick(q, 796));
+		var book = new FakeBook(new ComicBook { Number = "497" });
+
+		await world.RunAsync(book);
+
+		string[] log = [.. world.Log.Snapshot()];
+		int failed = Array.FindIndex(log, line => line.StartsWith("ERROR: can't download thumbnail: https://", StringComparison.Ordinal));
+		await Assert.That(failed).IsEqualTo(Array.FindIndex(log, line => line.Contains("Cover Art URL")) + 1);
 	}
 
 	internal static SeriesChoice Pick(SeriesQuestion question, int id, bool showIssues = false) =>

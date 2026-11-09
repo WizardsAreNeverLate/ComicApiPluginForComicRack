@@ -110,6 +110,26 @@ public sealed class ConfigurationOracleTests
 		await Assert.That(Configuration.FromMaps(map, "").Choose).IsEqualTo(ChooseMode.ConfirmIssue);
 	}
 
+	/// <summary>Deviations.md, "Both choose flags in settings.dat": Python keeps both flags true and writes both back. The port keeps confirm and writes autochooseSeries false.</summary>
+	[Test]
+	public async Task Both_choose_flags_are_written_back_by_Python_as_they_were_and_by_the_port_as_confirm_issue_only()
+	{
+		using var folder = new TempFolder();
+		var both = new Dictionary<string, DatValue> { ["autochooseSeries"] = new DatValue.Bool(true), ["confirmIssue"] = new DatValue.Bool(true) };
+		File.WriteAllBytes(folder.Settings, DatFile.ToBytes(both, Now));
+		object python = PythonConfig.New(folder);
+		PythonConfig.LoadDefaults(python);
+		PythonConfig.SaveDefaults(python);
+
+		IReadOnlyDictionary<string, DatValue> pythonRewrite = DatFile.FromBytes(File.ReadAllBytes(folder.Settings));
+		IReadOnlyDictionary<string, DatValue> csharpRewrite = Configuration.FromMaps(both, "").ToSettingsMap();
+
+		await Assert.That(pythonRewrite["autochooseSeries"]).IsEqualTo(new DatValue.Bool(true));
+		await Assert.That(pythonRewrite["confirmIssue"]).IsEqualTo(new DatValue.Bool(true));
+		await Assert.That(csharpRewrite["autochooseSeries"]).IsEqualTo(new DatValue.Bool(false));
+		await Assert.That(csharpRewrite["confirmIssue"]).IsEqualTo(new DatValue.Bool(true));
+	}
+
 	/// <summary>Deviation: int(float("inf")) raises in Python and aborts loading every setting. The port ignores such a line.</summary>
 	[Test]
 	public async Task Non_finite_numbers_make_Python_throw_and_the_port_ignores_the_line()

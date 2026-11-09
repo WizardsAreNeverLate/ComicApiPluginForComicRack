@@ -47,18 +47,25 @@ public sealed class ComicVineScraperPlugin
 	[PluginCommand(PluginEngine.ScriptTypeBooks + "," + PluginEngine.ScriptTypeEditor, Key = Key, Name = "Comic Vine Scraper", Image = "comicvinescraper.png")]
 	public void Scrape(ComicBook[] books)
 	{
-		if (running || books.Length == 0)
+		if (running)
 		{
 			return;
 		}
-		running = true;
+		// Opened before the flag is raised and failing as Configure does (to ComicRack), so a failed open cannot leave the flag set.
 		PluginContext ctx = Context;
 		// Python built its Configuration before loading it, so the summary default (on) holds when the load itself fails.
 		Configuration config = new() { Advanced = AdvancedSettings.Parse(null) };
 		var summary = new RunSummary(0, books.Length, Cancelled: false);
+		running = true;
 		try
 		{
 			LogStart(ctx);
+			if (books.Length == 0)
+			{
+				// Python still logged the header, said it finished and showed the summary for an empty selection.
+				ctx.Log.Debug("Scraper terminated normally (scraped 0, skipped 0).");
+				return;
+			}
 			config = ctx.Settings.Load();
 			if (string.IsNullOrWhiteSpace(config.ApiKey))
 			{
@@ -96,12 +103,19 @@ public sealed class ComicVineScraperPlugin
 		}
 		finally
 		{
-			// Python's finally: the summary follows every run, including one that stopped early or failed.
-			if (config.SummaryDialog)
+			try
 			{
-				Guarded(ctx, () => FinishForm.Show(env.MainWindow, ctx, summary));
+				// Python's finally: the summary follows every run, including one that stopped early or failed.
+				if (config.SummaryDialog)
+				{
+					Guarded(ctx, () => FinishForm.Show(env.MainWindow, ctx, summary));
+				}
 			}
-			running = false;
+			finally
+			{
+				// Guarded's own error dialog can throw too; the flag must still drop, or every later Scrape does nothing.
+				running = false;
+			}
 			(env.MainWindow as Form)?.Activate();
 		}
 	}

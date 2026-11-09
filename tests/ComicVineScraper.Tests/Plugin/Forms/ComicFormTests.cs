@@ -33,7 +33,7 @@ internal sealed class ColouredBook(params Color[] pages) : IScrapeBook
 		return page;
 	}
 
-	public void Apply(BookPatch patch, Bitmap? thumbnail) => throw new NotSupportedException();
+	public bool Apply(BookPatch patch, Bitmap? thumbnail) => throw new NotSupportedException();
 }
 
 public sealed class ComicFormTests

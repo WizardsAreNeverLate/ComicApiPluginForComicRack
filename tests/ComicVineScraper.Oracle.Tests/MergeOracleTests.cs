@@ -50,6 +50,8 @@ public sealed class MergeOracleTests
 		List<string> differences = [];
 		int compared = 0;
 		int releaseFills = 0;
+		int changedLines = 0;
+		int skippedLines = 0;
 		for (int i = 0; i < 3000; i++)
 		{
 			ComicBook original = BookCorpus.RandomBook(random);
@@ -57,11 +59,13 @@ public sealed class MergeOracleTests
 			(Issue issue, Dictionary<string, object?> pythonIssue) = RandomIssue(random);
 
 			var python = new ComicBook(original);
-			var error = (string)Oracle.Call("cvs_book_oracle", "update", python, pythonSettings, pythonIssue, PythonNow)!;
+			var logged = (object[])Oracle.Call("cvs_book_oracle", "update_logged", python, pythonSettings, pythonIssue, PythonNow)!;
+			var error = (string)logged[0];
 			var port = new ComicBook(original);
 			var adapter = new ComicRackBook(port, null!);
 			BookFacts facts = BookFacts.From(0, adapter.Read(), BookCorpus.ParseFileName, ignoreFolders: false);
-			adapter.Apply(MergeRules.Plan(facts, issue, settings, Now), thumbnail: null);
+			BookPatch patch = MergeRules.Plan(facts, issue, settings, Now);
+			adapter.Apply(patch, thumbnail: null);
 
 			bool unsetReleaseFilled = original.ReleasedTime == DateTime.MinValue && !settings.OverwriteExisting && settings.Update.HasFlag(BookFields.Released);
 			if (error.Length > 0)
@@ -74,6 +78,16 @@ public sealed class MergeOracleTests
 				continue;
 			}
 			compared++;
+			// deviations.md #11: Python reads an unset ReleasedTime as 1-1-1, so its Release Date line (skipped, or marked changed) differs.
+			bool releaseUnset = original.ReleasedTime == DateTime.MinValue;
+			(string[] pythonLines, string[] portLines) = Comparable(((object[])logged[1]).Cast<string>(),
+				["setting values for this comic book ('*' = changed):", .. patch.Decisions.Select(d => d.ToLogLine()), FieldDecision.CoverArt(null).ToLogLine()], releaseUnset);
+			if (!pythonLines.SequenceEqual(portLines))
+			{
+				differences.Add($"{BookCorpus.Describe(original)} {Show(settings)} log:\n  python {string.Join("¦", pythonLines)}\n  C#     {string.Join("¦", portLines)}");
+			}
+			changedLines += portLines.Count(line => line.StartsWith("--> *", StringComparison.Ordinal));
+			skippedLines += portLines.Count(line => line.EndsWith(FieldDecision.SkippedText, StringComparison.Ordinal));
 			string expected = Dump(python, withReleased: !unsetReleaseFilled);
 			string actual = Dump(port, withReleased: !unsetReleaseFilled);
 			if (unsetReleaseFilled)
@@ -97,6 +111,8 @@ public sealed class MergeOracleTests
 		await Assert.That(differences.Take(10)).IsEmpty();
 		await Assert.That(compared).IsGreaterThan(2700);
 		await Assert.That(releaseFills).IsGreaterThan(25);
+		await Assert.That(changedLines).IsGreaterThan(10000);
+		await Assert.That(skippedLines).IsGreaterThan(5000);
 	}
 
 	[Test]
@@ -110,11 +126,21 @@ public sealed class MergeOracleTests
 			(MergeSettings settings, Dictionary<string, object?> pythonSettings) = RandomSettings(random);
 
 			var python = new ComicBook(original);
-			var error = (string)Oracle.Call("cvs_book_oracle", "skip_forever", python, pythonSettings, PythonNow)!;
+			var logged = (object[])Oracle.Call("cvs_book_oracle", "skip_forever_logged", python, pythonSettings, PythonNow)!;
+			var error = (string)logged[0];
 			var port = new ComicBook(original);
 			var adapter = new ComicRackBook(port, null!);
 			BookFacts facts = BookFacts.From(0, adapter.Read(), BookCorpus.ParseFileName, ignoreFolders: false);
 			adapter.Apply(MergeRules.PlanSkipForever(facts, settings, Now), thumbnail: null);
+
+			if (error.Length == 0)
+			{
+				string[] pythonLog = ((object[])logged[1]).Cast<string>().Where(line => line.StartsWith("Added ", StringComparison.Ordinal)).ToArray();
+				if (!pythonLog.SequenceEqual(MergeRules.SkipForeverLog(settings)))
+				{
+					differences.Add($"{Show(settings)} log: python {string.Join("¦", pythonLog)} C# {string.Join("¦", MergeRules.SkipForeverLog(settings))}");
+				}
+			}
 
 			string expected = error.Length > 0 ? "python raised " + error : Dump(python, withReleased: true);
 			string actual = Dump(port, withReleased: true);
@@ -125,6 +151,47 @@ public sealed class MergeOracleTests
 		}
 
 		await Assert.That(differences.Take(10)).IsEmpty();
+	}
+
+	/// <summary>Deviations.md, "Merge log": Python widens ComicRack's float rating to a double, so an unchanged 3.4 is marked changed.</summary>
+	[Test]
+	public async Task An_unchanged_rating_that_a_float_cannot_hold_exactly_is_marked_changed_by_Python_and_not_by_the_port()
+	{
+		var random = new Random(9);
+		ComicBook original = BookCorpus.RandomBook(random);
+		original.CommunityRating = 3.4f;
+		(MergeSettings settings, Dictionary<string, object?> pythonSettings) = RandomSettings(random);
+		settings = settings with { Update = settings.Update | BookFields.Rating, OverwriteExisting = true };
+		pythonSettings["update_rating_b"] = true;
+		pythonSettings["ow_existing_b"] = true;
+		(Issue issue, Dictionary<string, object?> pythonIssue) = RandomIssue(random);
+		pythonIssue["rating_n"] = 3.4;
+		issue = issue with { Rating = 3.4f };
+
+		var logged = (object[])Oracle.Call("cvs_book_oracle", "update_logged", new ComicBook(original), pythonSettings, pythonIssue, PythonNow)!;
+		var adapter = new ComicRackBook(new ComicBook(original), null!);
+		BookPatch patch = MergeRules.Plan(BookFacts.From(0, adapter.Read(), BookCorpus.ParseFileName, ignoreFolders: false), issue, settings, Now);
+
+		await Assert.That(((object[])logged[1]).Cast<string>().Single(line => line.Contains("Rating"))).IsEqualTo("--> *Rating         : 3.4");
+		await Assert.That(patch.Decisions.Single(d => d.Label == "Rating").ToLogLine()).IsEqualTo("-->  Rating         : 3.4");
+	}
+
+	[Test]
+	public async Task The_cover_art_line_is_what_Python_logs_for_an_issue_with_and_without_a_cover()
+	{
+		var random = new Random(5);
+		foreach (string[] covers in new[] { new[] { "https://comicvine.gamespot.com/a/uploads/scale_medium/1.jpg", "https://x/2.jpg" }, [] })
+		{
+			ComicBook original = BookCorpus.RandomBook(random);
+			(_, Dictionary<string, object?> pythonSettings) = RandomSettings(random);
+			(_, Dictionary<string, object?> pythonIssue) = RandomIssue(random);
+			pythonIssue["image_urls_sl"] = covers;
+
+			var logged = (object[])Oracle.Call("cvs_book_oracle", "update_logged", new ComicBook(original), pythonSettings, pythonIssue, PythonNow)!;
+			string pythonLine = ((object[])logged[1]).Cast<string>().Single(line => line.Contains("Cover Art URL"));
+
+			await Assert.That(pythonLine).IsEqualTo(FieldDecision.CoverArt(covers.FirstOrDefault()).ToLogLine());
+		}
 	}
 
 	private static (MergeSettings, Dictionary<string, object?>) RandomSettings(Random random)
@@ -213,6 +280,29 @@ public sealed class MergeOracleTests
 			rating == 0.0 && random.Next(2) == 0 ? null : (float)rating,
 			[]);
 		return (issue, values);
+	}
+
+	private static readonly Regex OrphanDate = new(@"\?\?.*\d", RegexOptions.CultureInvariant);
+
+	/// <summary>
+	/// Drops the lines the two sides cannot share. Python keeps each date part on its own, so the random issues can hold a day without
+	/// a month. PartialDate (and Comic Vine's YYYY-MM-DD text) cannot, and the date gate writes neither. The unset release date is deviations.md #11.
+	/// </summary>
+	private static (string[] Python, string[] Port) Comparable(IEnumerable<string> python, IEnumerable<string> port, bool releaseUnset)
+	{
+		// The lines before the header come from building the ComicBook (parsing the file name), not from the merge.
+		string[] pythonLines = [.. python.SkipWhile(line => !line.StartsWith("setting values", StringComparison.Ordinal))];
+		var drop = new HashSet<string>();
+		foreach (string label in new[] { "Release Date", "Publish Date" })
+		{
+			string? line = pythonLines.FirstOrDefault(l => l.StartsWith("--> ", StringComparison.Ordinal) && l.Substring(5).StartsWith(label, StringComparison.Ordinal));
+			if ((label == "Release Date" && releaseUnset) || (line is not null && OrphanDate.IsMatch(line.Substring(line.IndexOf(':') + 1))))
+			{
+				drop.Add(label);
+			}
+		}
+		bool Keep(string line) => !drop.Any(label => line.Length > 5 && line.StartsWith("--> ", StringComparison.Ordinal) && line.Substring(5).StartsWith(label, StringComparison.Ordinal));
+		return ([.. pythonLines.Where(Keep)], [.. port.Where(Keep)]);
 	}
 
 	private static bool IsUnrealDate(PartialDate date) =>

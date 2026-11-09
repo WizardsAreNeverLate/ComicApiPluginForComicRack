@@ -163,6 +163,53 @@ public sealed class PluginTests
 	}
 
 	[Test]
+	public async Task A_run_that_cannot_open_its_context_fails_visibly_and_does_not_block_the_next_run()
+	{
+		using var world = new PluginWorld();
+		string good = LanguagePack.Folder;
+		world.CommandPath = Path.Combine(world.Folder, "no-such-pack");
+		world.Script
+			.On<ConfigForm>(form => Ui.Find<Button>(form, "cancel").PerformClick())
+			.On<FinishForm>(form => Ui.Find<Button>(form, "ok").PerformClick());
+		var firstFailure = new List<Exception>();
+		var secondFailure = new List<Exception>();
+
+		world.Run(plugin =>
+		{
+			ComicBook[] books = [new ComicBook { Series = "Batman", Number = "497" }];
+			try { plugin.Scrape(books); } catch (Exception error) { firstFailure.Add(error); }
+			try { plugin.Scrape(books); } catch (Exception error) { secondFailure.Add(error); }
+			world.CommandPath = good;
+			plugin.Scrape(books);
+		});
+
+		await Assert.That(firstFailure.Count).IsEqualTo(1);
+		await Assert.That(secondFailure.Count).IsEqualTo(1);
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "FinishForm" }, CollectionOrdering.Matching);
+	}
+
+	[Test]
+	public async Task An_empty_selection_logs_the_header_and_still_shows_the_summary_as_Python_did()
+	{
+		using var world = new PluginWorld();
+		string scraped = "", skipped = "";
+		world.Script.On<FinishForm>(form =>
+		{
+			(scraped, skipped) = (Ui.Find<Label>(form, "scraped").Text, Ui.Find<Label>(form, "skipped").Text);
+			Ui.Find<Button>(form, "ok").PerformClick();
+		});
+
+		world.Run(plugin => plugin.Scrape([]));
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "FinishForm" }, CollectionOrdering.Matching);
+		await Assert.That(scraped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(skipped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormSkippedPlural, 0));
+		await Assert.That(world.Requested).IsEmpty();
+		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
+		await Assert.That(world.Log.Any(line => line.StartsWith("CV Scraper Version:", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
 	public async Task Configure_opens_the_settings_dialog_over_the_same_store_and_log_as_the_scrape()
 	{
 		using var world = new PluginWorld();
@@ -314,6 +361,12 @@ public sealed class PluginTests
 		public Func<string> ProductVersion
 		{
 			set => env.Fake.Version = value;
+		}
+
+		/// <summary>Where the plugin opens its language pack from. A bad folder fails the context open.</summary>
+		public string CommandPath
+		{
+			set => env.CommandPath = value;
 		}
 
 		public Strings Strings => Plugin.Context.Strings;

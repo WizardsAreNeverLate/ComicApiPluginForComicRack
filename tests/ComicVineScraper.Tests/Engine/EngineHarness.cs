@@ -135,17 +135,18 @@ internal sealed class ScriptedUi : IScrapeUi
 /// <summary>A real ComicRack ComicBook behind the real adapter, recording every patch. GetPage serves a set first page.</summary>
 internal sealed class FakeBook : IScrapeBook
 {
-	private readonly ComicRackBook adapter;
+	private ComicRackBook? adapter;
 
 	public FakeBook(ComicBook book)
 	{
 		Book = book;
-		adapter = new ComicRackBook(book, App);
 	}
+
+	private ComicRackBook Adapter => adapter ??= new ComicRackBook(Book, App);
 
 	public ComicBook Book { get; }
 
-	public FakeApplication App { get; } = new();
+	public FakeApplication App { get; init; } = new();
 
 	public List<BookPatch> Applied { get; } = [];
 
@@ -164,16 +165,16 @@ internal sealed class FakeBook : IScrapeBook
 	public BookSnapshot Read()
 	{
 		Threads.Add(Environment.CurrentManagedThreadId);
-		return adapter.Read();
+		return Adapter.Read();
 	}
 
 	public Bitmap? GetPage(int index) => index == 0 && FirstPage is not null ? new Bitmap(FirstPage) : null;
 
-	public void Apply(BookPatch patch, Bitmap? thumbnail)
+	public bool Apply(BookPatch patch, Bitmap? thumbnail)
 	{
 		Threads.Add(Environment.CurrentManagedThreadId);
 		Applied.Add(patch);
-		adapter.Apply(patch, thumbnail);
+		return Adapter.Apply(patch, thumbnail);
 	}
 }
 
@@ -183,7 +184,11 @@ internal sealed class FakeBook : IScrapeBook
 /// </summary>
 internal sealed class EngineWorld : IDisposable
 {
-	public const string ApiKey = "0123456789abcdef0123456789abcdef01234567";
+	/// <summary>
+	/// Not hex on purpose: DebugLog masks every run of 40 hex digits, so a real-looking key would hide a leak from the
+	/// tests that assert the key never reaches the log. DebugLogTests covers that masking on its own.
+	/// </summary>
+	public const string ApiKey = "test-key-not-hex-so-the-log-mask-misses-it";
 
 	private readonly Dictionary<string, RecordedResponse> extra = new(StringComparer.Ordinal);
 	private readonly string folder = Path.Combine(Path.GetTempPath(), "cvs-engine-" + Guid.NewGuid().ToString("N"));
