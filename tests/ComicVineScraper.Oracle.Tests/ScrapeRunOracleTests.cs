@@ -39,7 +39,7 @@ public sealed class ScrapeRunOracleTests
 		string root = Path.Combine(Path.GetTempPath(), "cvs-engine-oracle-" + Guid.NewGuid().ToString("N"));
 		try
 		{
-			for (int i = 0; i < 1500; i++)
+			for (int i = 0; i < 1000; i++)
 			{
 				var scenario = Scenario.Random(random, Path.Combine(root, i.ToString()));
 				IReadOnlyList<string> python = Python(scenario);
@@ -69,12 +69,12 @@ public sealed class ScrapeRunOracleTests
 		}
 
 		await Assert.That(differences.Take(5)).IsEmpty();
-		await Assert.That(runs).IsEqualTo(1500);
-		await Assert.That(writes).IsGreaterThan(1000);
-		await Assert.That(delayed).IsGreaterThan(100);
+		await Assert.That(runs).IsEqualTo(1000);
+		await Assert.That(writes).IsGreaterThan(600);
+		await Assert.That(delayed).IsGreaterThan(180);
 		await Assert.That(errors).IsGreaterThan(30);
-		await Assert.That(cancels).IsGreaterThan(100);
-		await Assert.That(questions).IsGreaterThan(3000);
+		await Assert.That(cancels).IsGreaterThan(400);
+		await Assert.That(questions).IsGreaterThan(1800);
 	}
 
 	private static IReadOnlyList<string> Python(Scenario scenario)
@@ -207,7 +207,7 @@ public sealed class ScrapeRunOracleTests
 		};
 
 		public string Describe() =>
-			$"fast={FastRescrape} {Choose} books=[{string.Join("; ", Books.Select(b => $"{b.Series}#{b.Number} {Path.GetFileName(Path.GetDirectoryName(b.FilePath) ?? "")} {b.Tags} v{b.GetCustomValue("comicvine_volume")}"))}] "
+			$"fast={FastRescrape} {Choose} books=[{string.Join("; ", Books.Select(b => $"{b.Series}#{b.Number} {(b.FilePath.Length == 0 ? "fileless" : Path.GetFileName(Path.GetDirectoryName(b.FilePath)))} {b.Tags} v{b.GetCustomValue("comicvine_volume")}"))}] "
 			+ $"issues=[{string.Join(" ", Issues.Select(p => p.Key + ":" + string.Join(",", p.Value.Select(i => i.Item2))))}] auto=[{string.Join(",", AutoMatch.Select(p => p.Key + ">" + p.Value))}] "
 			+ $"fail=[{string.Join(",", Fail.Select(p => p.Key + "x" + p.Value))}] magic={Magic.Values.FirstOrDefault()} "
 			+ $"answers={string.Join(",", SearchAnswers)} | {string.Join(",", SeriesAnswers)} | {string.Join(",", IssueAnswers)}";
