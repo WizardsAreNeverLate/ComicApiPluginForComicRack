@@ -151,12 +151,20 @@ internal sealed class FakeBook : IScrapeBook
 		return new FakeBook(book) { FirstPage = firstPage };
 	}
 
-	public BookSnapshot Read() => adapter.Read();
+	/// <summary>The managed thread of every Read and Apply.</summary>
+	public List<int> Threads { get; } = [];
+
+	public BookSnapshot Read()
+	{
+		Threads.Add(Environment.CurrentManagedThreadId);
+		return adapter.Read();
+	}
 
 	public Bitmap? GetPage(int index) => index == 0 && FirstPage is not null ? new Bitmap(FirstPage) : null;
 
 	public void Apply(BookPatch patch, Bitmap? thumbnail)
 	{
+		Threads.Add(Environment.CurrentManagedThreadId);
 		Applied.Add(patch);
 		adapter.Apply(patch, thumbnail);
 	}
@@ -277,8 +285,10 @@ internal sealed class EngineWorld : IDisposable
 	{
 		private readonly FixtureHandler fixtures = FixtureHandler.FromOutputFolder();
 
-		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+		protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 		{
+			// A real response completes on a pool thread, so the engine must find its own way back to the thread it runs on.
+			await Task.Delay(1, cancellationToken).ConfigureAwait(false);
 			string url = request.RequestUri!.AbsoluteUri;
 			string key = FixtureFiles.Key(url);
 			world.Requests.Enqueue(key);
@@ -288,22 +298,22 @@ internal sealed class EngineWorld : IDisposable
 			{
 				using var png = new MemoryStream();
 				image.Save(png, ImageFormat.Png);
-				return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(png.ToArray()), RequestMessage = request });
+				return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(png.ToArray()), RequestMessage = request };
 			}
 			if (!key.Contains("/api/"))
 			{
-				return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound) { RequestMessage = request });
+				return new HttpResponseMessage(HttpStatusCode.NotFound) { RequestMessage = request };
 			}
 			RecordedResponse? response = world.extra.TryGetValue(key, out RecordedResponse? found) ? found : fixtures.Find(url);
 			if (response is null)
 			{
 				throw new InvalidOperationException("No fixture for " + key);
 			}
-			return Task.FromResult(new HttpResponseMessage(response.Status)
+			return new HttpResponseMessage(response.Status)
 			{
 				Content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(response.Body)),
 				RequestMessage = request,
-			});
+			};
 		}
 	}
 }
@@ -331,4 +341,35 @@ internal static class Synthetic
 		"<?xml version=\"1.0\" encoding=\"utf-8\"?><response><error><![CDATA[OK]]></error><limit>100</limit><offset>0</offset>"
 		+ $"<number_of_page_results>{total}</number_of_page_results><number_of_total_results>{total}</number_of_total_results><status_code>1</status_code>"
 		+ $"<results>{results}</results>" + "<version>1.0</version></response>";
+}
+
+/// <summary>A one-thread message loop, as ComicRack's UI thread is: every continuation posted to it runs on the thread that called Run.</summary>
+internal sealed class SingleThreadContext : SynchronizationContext
+{
+	private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> queue = [];
+
+	public static T Run<T>(Func<Task<T>> work)
+	{
+		SynchronizationContext? previous = Current;
+		var context = new SingleThreadContext();
+		SetSynchronizationContext(context);
+		try
+		{
+			Task<T> task = work();
+			task.ContinueWith(_ => context.queue.CompleteAdding(), TaskScheduler.Default);
+			foreach ((SendOrPostCallback callback, object? state) in context.queue.GetConsumingEnumerable())
+			{
+				callback(state);
+			}
+			return task.GetAwaiter().GetResult();
+		}
+		finally
+		{
+			SetSynchronizationContext(previous);
+		}
+	}
+
+	public override void Post(SendOrPostCallback d, object? state) => queue.Add((d, state));
+
+	public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException();
 }

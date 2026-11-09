@@ -287,6 +287,25 @@ public sealed class ScrapeRunLoopTests
 		await Assert.That(world.Clock.Delays).IsEmpty();
 	}
 
+	[Test]
+	public async Task Books_are_read_and_written_only_on_the_thread_that_runs_the_scrape()
+	{
+		using var world = new EngineWorld();
+		world.Ui.Series(q => Pick(q, 796));
+		var book = FakeBook.File(Batman497, b => b.Tags = "x");
+		var fast = FakeBook.File(Batman1, b => b.Tags = "CVDB535328");
+		int runThread = 0;
+
+		RunSummary summary = await Task.Run(() => SingleThreadContext.Run(() =>
+		{
+			runThread = Environment.CurrentManagedThreadId;
+			return world.RunAsync(book, fast);
+		}));
+
+		await Assert.That(summary.Scraped).IsEqualTo(2);
+		await Assert.That(book.Threads.Concat(fast.Threads).Distinct()).IsEquivalentTo(new[] { runThread });
+	}
+
 	private static Bitmap LeftHalfBlack()
 	{
 		var image = new Bitmap(64, 64);
