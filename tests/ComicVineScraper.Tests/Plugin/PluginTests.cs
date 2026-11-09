@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Threading.Tasks;
@@ -85,6 +86,8 @@ public sealed class PluginTests
 		await Assert.That(world.Plugin.Context.Settings.LoadChosenSeries().Contains(new SeriesId(796))).IsTrue();
 		await Assert.That(world.Plugin.Context.Settings.LoadChosenSeries().Contains(new SeriesId(91273))).IsTrue();
 		await Assert.That(world.Log.Any(line => line.Contains(EngineWorld.ApiKey))).IsFalse();
+		// The dialogs look up covers at /issues/ (plural) and the images, which no fixture records, so those are expected misses. Only the singular
+		// /issue/ (one issue's details), /search/ and /volume/ requests are the scrape itself, and each of them has a fixture.
 		await Assert.That(world.Unrecorded.Any(key => key.Contains("/issue/") || key.Contains("/search/") || key.Contains("/volume/"))).IsFalse();
 	}
 
@@ -208,6 +211,59 @@ public sealed class PluginTests
 		await Assert.That(book.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
 	}
 
+	[Test]
+	public async Task Two_scrapes_in_sequence_both_run_and_share_one_http_client()
+	{
+		using var world = new PluginWorld();
+		world.SaveSettings(QuietConfiguration(EngineWorld.ApiKey));
+		ComicBook first = new() { Series = "Batman", Number = "497" };
+		ComicBook second = new() { Series = "Batman", Number = "1", Volume = 2016 };
+		world.Script.On<SeriesForm>(PickSeries).On<SeriesForm>(PickSeries);
+
+		world.Run(plugin =>
+		{
+			plugin.Scrape([first]);
+			plugin.Scrape([second]);
+		});
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "SeriesForm", "SeriesForm" }, CollectionOrdering.Matching);
+		await Assert.That(first.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
+		await Assert.That(second.GetCustomValue("comicvine_issue")).IsEqualTo("535328");
+		await Assert.That(world.Handlers.Count).IsEqualTo(1);
+		await Assert.That(world.Handlers[0].Disposed).IsFalse();
+	}
+
+	[Test]
+	public async Task Changing_the_api_key_between_runs_replaces_and_disposes_the_http_client()
+	{
+		const string newKey = "fedcba9876543210fedcba9876543210fedcba98";
+		using var world = new PluginWorld();
+		world.SaveSettings(QuietConfiguration(EngineWorld.ApiKey));
+		world.Script.On<SeriesForm>(PickSeries).On<SeriesForm>(PickSeries);
+
+		world.Run(plugin =>
+		{
+			plugin.Scrape([new ComicBook { Series = "Batman", Number = "497" }]);
+			world.SaveSettings(QuietConfiguration(newKey));
+			plugin.Scrape([new ComicBook { Series = "Batman", Number = "1", Volume = 2016 }]);
+		});
+
+		await Assert.That(world.Handlers.Count).IsEqualTo(2);
+		await Assert.That(world.Handlers[0].Disposed).IsTrue();
+		await Assert.That(world.Handlers[1].Disposed).IsFalse();
+		// Image requests carry no key, so only the API calls are checked.
+		string[] oldCalls = [.. world.Handlers[0].Urls.Where(url => url.Contains("/api/"))];
+		string[] newCalls = [.. world.Handlers[1].Urls.Where(url => url.Contains("/api/"))];
+		await Assert.That(oldCalls).IsNotEmpty();
+		await Assert.That(newCalls).IsNotEmpty();
+		await Assert.That(oldCalls.All(url => url.Contains("api_key=" + EngineWorld.ApiKey))).IsTrue();
+		await Assert.That(newCalls.All(url => url.Contains("api_key=" + newKey))).IsTrue();
+	}
+
+	/// <summary>A key, no welcome form, and no summary, so a run shows only the series dialog.</summary>
+	private static Configuration QuietConfiguration(string apiKey) =>
+		new() { ApiKey = apiKey, SummaryDialog = false, Advanced = AdvancedSettings.Parse("WELCOME_DIALOG = False") };
+
 	private static void PickSeries(SeriesForm form)
 	{
 		string book = Ui.Find<Label>(Ui.Mine<ComicForm>()!, "scraping").Text;
@@ -232,7 +288,7 @@ public sealed class PluginTests
 	private sealed class PluginWorld : IDisposable
 	{
 		private readonly List<RecordedResponse> responses;
-		private readonly List<FixtureHandler> handlers = [];
+		private readonly List<TrackedHandler> handlers = [];
 		private readonly List<string> unrecorded = [];
 		private readonly HostEnvironment env = new();
 
@@ -263,6 +319,9 @@ public sealed class PluginTests
 
 		public IReadOnlyList<string> Log => Plugin.Context.Log.Snapshot();
 
+		/// <summary>One per HttpClient the plugin made, in order.</summary>
+		public IReadOnlyList<TrackedHandler> Handlers => handlers;
+
 		public IReadOnlyList<string> Requested => [.. handlers.SelectMany(handler => handler.Requested)];
 
 		/// <summary>The requests no fixture answered: cover lookups and images the dialogs ask for.</summary>
@@ -292,18 +351,43 @@ public sealed class PluginTests
 			}
 		}
 
-		private FixtureHandler NewHandler()
+		private TrackedHandler NewHandler()
 		{
-			var handler = new FixtureHandler(responses, key =>
+			var handler = new TrackedHandler(new FixtureHandler(responses, key =>
 			{
 				lock (unrecorded)
 				{
 					unrecorded.Add(key);
 				}
 				return FixtureHandler.NothingFound(key);
-			});
+			}));
 			handlers.Add(handler);
 			return handler;
+		}
+	}
+
+	/// <summary>The fixture handler, plus the raw request URLs (with the key) and whether the plugin disposed it.</summary>
+	private sealed class TrackedHandler(FixtureHandler inner) : DelegatingHandler(inner)
+	{
+		public List<string> Urls { get; } = [];
+
+		public bool Disposed { get; private set; }
+
+		public IReadOnlyList<string> Requested => inner.Requested;
+
+		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken ct)
+		{
+			lock (Urls)
+			{
+				Urls.Add(request.RequestUri!.AbsoluteUri);
+			}
+			return base.SendAsync(request, ct);
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			Disposed = true;
+			base.Dispose(disposing);
 		}
 	}
 
