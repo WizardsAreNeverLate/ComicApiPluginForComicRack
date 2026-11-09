@@ -28,6 +28,14 @@ block 'timeout 5 python'
 block 'x=$(python -V)'
 block $'ls\npython - <<EOF\nEOF'
 block 'a | python'
+block 'env python -V'
+block 'PYTHONPATH=x python -'
+block 'A=1 B=2 python3'
+block 'bash -c "python -"'
+block "sh -c 'py -3'"
+block 'pwsh -Command "python"'
+block 'Start-Process python'
+block 'nohup python3 &'
 
 allow 'ls src/py/utils'
 allow 'cat tests/py/cvoracle.py'
@@ -37,6 +45,11 @@ allow './Build.ps1 -Rebuild'
 allow 'log.sh x "the label (Python stripped the localized label) goes"'
 allow 'git commit -m "docs: Python behaviour"'
 allow 'git grep -n "PyStr.Lower"'
+allow 'env | grep PATH'
+allow 'FOO=1 dotnet test'
+allow 'bash -c "ls py"'
+allow 'git commit -m "python: note"'
+allow 'bash -c "echo python is blocked"'
 
 if [ "$failures" -eq 0 ]; then
 	echo "all hook cases passed"
