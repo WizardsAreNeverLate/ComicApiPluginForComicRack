@@ -8,7 +8,7 @@ namespace ComicApiPlugin.Diagnostics;
 
 /// <summary>
 /// The in-memory debug log (log.py). Thread-safe append; nothing goes to disk unless the user saves it.
-/// Every line is also written to Trace so ComicRack's own log listeners see it.
+/// Every line is also written to Trace, and to Console so it appears in ComicRack's script console when that is open.
 /// </summary>
 public sealed class DebugLog
 {
@@ -26,6 +26,7 @@ public sealed class DebugLog
 			lines.Add(message);
 		}
 		Trace.WriteLine(message, "ComicApiPlugin");
+		Console.WriteLine("ComicApiPlugin: " + message);
 	}
 
 	/// <summary>Records the exception type, message, and stack trace, as log.handle_error and debug_exc did.</summary>
