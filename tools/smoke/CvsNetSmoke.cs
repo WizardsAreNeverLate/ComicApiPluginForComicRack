@@ -30,7 +30,7 @@ public sealed class Probe(IPluginEnvironment env)
 	private Form main = null!;
 	private int renders;
 
-	[PluginCommand("Startup", Name = "CvsNet Smoke")]
+	[PluginCommand(PluginHook.Startup, Name = "CvsNet Smoke")]
 	public void Start()
 	{
 		main = (Form)env.MainWindow;

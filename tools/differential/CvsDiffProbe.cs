@@ -55,7 +55,7 @@ public sealed class Probe(IPluginEnvironment env)
 		}
 	}
 
-	[PluginCommand("Startup", Name = "CvsDiff Probe")]
+	[PluginCommand(PluginHook.Startup, Name = "CvsDiff Probe")]
 	public void Start()
 	{
 		main = (Form)env.MainWindow;
