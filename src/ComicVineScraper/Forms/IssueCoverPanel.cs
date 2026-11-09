@@ -67,6 +67,7 @@ internal sealed class IssueCoverPanel : Panel
 	private readonly LinkLabel label;
 	private readonly Button next;
 	private readonly Button previous;
+	private readonly Font pageFont;
 	private readonly LatestLoader lookup;
 	private readonly CancellationTokenSource life = new();
 	private readonly Dictionary<CoverSubject, CoverChoices> choices = [];
@@ -94,6 +95,7 @@ internal sealed class IssueCoverPanel : Panel
 			TextAlign = ContentAlignment.MiddleCenter,
 		};
 		label.LinkClicked += (_, _) => SearchAlternates();
+		pageFont = new Font(Font, FontStyle.Bold);
 		next = PageButton("nextCover", ">", new Point(173, 332));
 		next.Click += (_, _) => Page(forward: true);
 		previous = PageButton("previousCover", "<", new Point(2, 332));
@@ -147,6 +149,7 @@ internal sealed class IssueCoverPanel : Panel
 			lookup.Cancel();
 			life.Cancel();
 			life.Dispose();
+			pageFont.Dispose();
 		}
 		base.Dispose(disposing);
 	}
@@ -278,10 +281,10 @@ internal sealed class IssueCoverPanel : Panel
 		}
 	}
 
-	private static Button PageButton(string name, string text, Point location)
+	private Button PageButton(string name, string text, Point location)
 	{
 		var button = new Button { Name = name, Text = text, Location = location, Size = new Size(20, 24), UseVisualStyleBackColor = true };
-		button.Font = new Font(button.Font, FontStyle.Bold);
+		button.Font = pageFont;
 		return button;
 	}
 }
