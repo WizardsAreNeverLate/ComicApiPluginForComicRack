@@ -35,13 +35,18 @@ public sealed class ScrapeRunOracleTests
 	{
 		var random = new Random(97);
 		List<string> differences = [];
-		int runs = 0, writes = 0, delayed = 0, errors = 0, cancels = 0, questions = 0;
+		int skipped = 0, runs = 0, writes = 0, delayed = 0, errors = 0, cancels = 0, questions = 0;
 		string root = Path.Combine(Path.GetTempPath(), "cvs-engine-oracle-" + Guid.NewGuid().ToString("N"));
 		try
 		{
 			for (int i = 0; i < 1000; i++)
 			{
 				var scenario = Scenario.Random(random, Path.Combine(root, i.ToString()));
+				if (HasTwoNamelessBooks(scenario.Books))
+				{
+					skipped++;
+					continue;
+				}
 				IReadOnlyList<string> python = Python(scenario);
 				IReadOnlyList<string> csharp = await CSharp(scenario);
 				runs++;
@@ -69,12 +74,28 @@ public sealed class ScrapeRunOracleTests
 		}
 
 		await Assert.That(differences.Take(5)).IsEmpty();
-		await Assert.That(runs).IsEqualTo(1000);
+		await Assert.That(skipped).IsLessThan(20);
+		await Assert.That(runs + skipped).IsEqualTo(1000);
 		await Assert.That(writes).IsGreaterThan(600);
 		await Assert.That(delayed).IsGreaterThan(180);
 		await Assert.That(errors).IsGreaterThan(30);
 		await Assert.That(cancels).IsGreaterThan(400);
 		await Assert.That(questions).IsGreaterThan(1800);
+	}
+
+	// A nameless book's key holds Python's id(self) where the port holds its position, so the order of two of them is undefined in Python.
+	private static bool HasTwoNamelessBooks(ComicBook[] books) =>
+		books.Select((book, index) => BookFacts.From(index, new ComicRackBook(book, null!).Read(), BookCorpus.ParseFileName, ignoreFolders: false))
+			.Count(facts => facts.UniqueSeriesKey.StartsWith("uniqueid-", StringComparison.Ordinal)) > 1;
+
+	[Test]
+	public async Task Two_books_with_no_series_and_no_file_are_the_undefined_order_case()
+	{
+		ComicBook nameless() => new() { Number = "1" };
+
+		await Assert.That(HasTwoNamelessBooks([nameless(), nameless()])).IsTrue();
+		await Assert.That(HasTwoNamelessBooks([nameless(), new ComicBook { Series = "alpha" }])).IsFalse();
+		await Assert.That(HasTwoNamelessBooks([nameless(), new ComicBook { FilePath = Path.Combine(Path.GetTempPath(), "alpha 1.cbz") }])).IsFalse();
 	}
 
 	private static IReadOnlyList<string> Python(Scenario scenario)
