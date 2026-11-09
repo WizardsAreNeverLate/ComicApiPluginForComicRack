@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComicVineScraper.Oracle.Tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CvsNetSmoke", "tools\smoke\CvsNetSmoke.csproj", "{5C1D7E22-4B3A-4F0E-9A64-2E8F0B7D3C91}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CvsDiffProbe", "tools\differential\CvsDiffProbe.csproj", "{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{5C1D7E22-4B3A-4F0E-9A64-2E8F0B7D3C91}.Release|x64.Build.0 = Release|Any CPU
 		{5C1D7E22-4B3A-4F0E-9A64-2E8F0B7D3C91}.Release|x86.ActiveCfg = Release|Any CPU
 		{5C1D7E22-4B3A-4F0E-9A64-2E8F0B7D3C91}.Release|x86.Build.0 = Release|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Debug|x64.Build.0 = Debug|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Debug|x86.Build.0 = Debug|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Release|x64.ActiveCfg = Release|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Release|x64.Build.0 = Release|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Release|x86.ActiveCfg = Release|Any CPU
+		{7A2E4C10-8B5D-4D63-A1F7-3C9E5B6D2F48}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

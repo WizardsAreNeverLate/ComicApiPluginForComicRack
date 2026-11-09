@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!-- The differential test probe: a .NET plugin that runs the Python and the C# scraper over identical books. run-differential.ps1 builds and runs it. -->
+	<PropertyGroup>
+		<OutputType>Library</OutputType>
+		<RootNamespace>CvsDiffProbe</RootNamespace>
+		<UsesComicRack>true</UsesComicRack>
+	</PropertyGroup>
+	<ItemGroup>
+		<Reference Include="System.Drawing" />
+		<Reference Include="System.Windows.Forms" />
+		<Reference Include="ComicRack.Plugins" HintPath="$(ComicRackPath)ComicRack.Plugins.dll" Private="false" />
+		<Reference Include="ComicRack.Engine" HintPath="$(ComicRackPath)ComicRack.Engine.dll" Private="false" />
+		<Reference Include="cYo.Common" HintPath="$(ComicRackPath)cYo.Common.dll" Private="false" />
+	</ItemGroup>
+</Project>
