@@ -4,9 +4,21 @@
 		<RootNamespace>ComicVineScraper.Plugin</RootNamespace>
 		<UsesComicRack>true</UsesComicRack>
 	</PropertyGroup>
+	<!-- The in-app smoke test's recorded-response switch (Smoke/RecordedResponses.cs). Never set for a build you ship. -->
+	<PropertyGroup Condition="'$(CvsRecordedResponses)' == 'true'">
+		<DefineConstants>$(DefineConstants);CVS_RECORDED_RESPONSES</DefineConstants>
+	</PropertyGroup>
+	<ItemGroup>
+		<Compile Remove="Smoke\**" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(CvsRecordedResponses)' == 'true'">
+		<Compile Include="Smoke\**\*.cs" />
+		<Compile Include="..\..\tests\Shared\ComicVineFixtures.cs" Link="Smoke\ComicVineFixtures.cs" />
+	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="System.Drawing" />
 		<Reference Include="System.IO.Compression" />
+		<Reference Include="System.Net.Http" />
 		<Reference Include="System.Windows.Forms" />
 		<Reference Include="System.Xml.Linq" />
 		<Reference Include="ComicRack.Plugins" HintPath="$(ComicRackPath)ComicRack.Plugins.dll" Private="false" />
