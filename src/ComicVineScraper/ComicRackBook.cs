@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using ComicVineScraper.Books;
 using ComicVineScraper.Engine;
+using ComicVineScraper.Matching;
 using ComicVineScraper.Model;
 using cYo.Projects.ComicRack.Engine;
 using cYo.Projects.ComicRack.Plugins.Automation;
@@ -65,7 +66,34 @@ internal sealed class ComicRackBook(ComicBook book, IApplication app) : IScrapeB
 		book.PageCount,
 		!string.IsNullOrEmpty(book.CustomThumbnailKey));
 
-	public Bitmap? GetPage(int index) => throw new NotImplementedException("GetPage lands with the cover panel in phase 4.");
+	/// <summary>pluginbookdata.create_image_of_page. ComicRack's GetComicPage returns a clone, so the caller owns it.</summary>
+	public Bitmap? GetPage(int index)
+	{
+		if (string.IsNullOrEmpty(book.FilePath))
+		{
+			return null;
+		}
+		Bitmap? page;
+		try
+		{
+			page = app.GetComicPage(book, index);
+		}
+		catch (Exception)
+		{
+			// Python bug 235: after "clear data" the page count is 0, so a failed read is the only sign of no page.
+			return null;
+		}
+		if (page is null)
+		{
+			return null;
+		}
+		Bitmap front = CoverImage.StripBackCover(page);
+		if (!ReferenceEquals(front, page))
+		{
+			page.Dispose();
+		}
+		return front;
+	}
 
 	/// <summary>
 	/// Writes in one synchronous pass with no awaits, so a write can only be partial if a ComicRack setter throws.

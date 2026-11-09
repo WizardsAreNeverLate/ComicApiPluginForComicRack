@@ -4,9 +4,24 @@
 		<RootNamespace>ComicVineScraper.Plugin</RootNamespace>
 		<UsesComicRack>true</UsesComicRack>
 	</PropertyGroup>
+	<!-- The in-app smoke test's recorded-response switch (Smoke/RecordedResponses.cs). Never set for a build you ship. -->
+	<PropertyGroup Condition="'$(CvsRecordedResponses)' == 'true'">
+		<DefineConstants>$(DefineConstants);CVS_RECORDED_RESPONSES</DefineConstants>
+		<!-- Its own output and intermediate folders, so this build can never overwrite the shipping bin\<Configuration>\net48\ComicVineScraper.crplugin. -->
+		<BaseOutputPath>bin\smoke\</BaseOutputPath>
+		<IntermediateOutputPath>obj\smoke\$(Configuration)\</IntermediateOutputPath>
+	</PropertyGroup>
+	<ItemGroup>
+		<Compile Remove="Smoke\**" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(CvsRecordedResponses)' == 'true'">
+		<Compile Include="Smoke\**\*.cs" />
+		<Compile Include="..\..\tests\Shared\ComicVineFixtures.cs" Link="Smoke\ComicVineFixtures.cs" />
+	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="System.Drawing" />
 		<Reference Include="System.IO.Compression" />
+		<Reference Include="System.Net.Http" />
 		<Reference Include="System.Windows.Forms" />
 		<Reference Include="System.Xml.Linq" />
 		<Reference Include="ComicRack.Plugins" HintPath="$(ComicRackPath)ComicRack.Plugins.dll" Private="false" />
@@ -23,6 +38,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="Package\**\*" />
+		<EmbeddedResource Include="Package\Images\comicvinelogo.png;Package\Images\*arrow.png" LogicalName="%(Filename)%(Extension)" />
 	</ItemGroup>
 	<Target Name="PackCrPlugin" AfterTargets="Build">
 		<PropertyGroup>

@@ -13,9 +13,9 @@ public sealed class FieldTableTests
 {
 	private static readonly string[] PythonUpdateKeys =
 	[
-		"updateSeries", "updateNumber", "updatePublished", "updateReleased", "updateTitle", "updateCrossovers",
-		"updateWriter", "updatePenciller", "updateInker", "updateCoverArtist", "updateColorist", "updateLetterer",
-		"updateEditor", "updateSummary", "updatePublisher", "updateImprint", "updateVolume", "updateCharacters",
+		"updateSeries", "updateVolume", "updateNumber", "updateTitle", "updatePublished", "updateReleased",
+		"updateCrossovers", "updatePublisher", "updateImprint", "updateWriter", "updatePenciller", "updateInker",
+		"updateColorist", "updateLetterer", "updateCoverArtist", "updateEditor", "updateSummary", "updateCharacters",
 		"updateTeams", "updateLocations", "updateWebpage",
 	];
 
@@ -24,7 +24,7 @@ public sealed class FieldTableTests
 	{
 		string[] keys = FieldTable.Toggleable.Select(row => row.SettingsKey).ToArray();
 
-		await Assert.That(keys).IsEquivalentTo(PythonUpdateKeys);
+		await Assert.That(keys.SequenceEqual(PythonUpdateKeys)).IsTrue();
 		await Assert.That(keys.Distinct().Count()).IsEqualTo(21);
 	}
 

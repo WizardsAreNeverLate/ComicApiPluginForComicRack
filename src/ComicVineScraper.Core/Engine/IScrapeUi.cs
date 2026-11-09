@@ -9,6 +9,7 @@ namespace ComicVineScraper.Engine;
 /// <summary>
 /// The engine's view of the UI. Dialog methods may complete synchronously (WinForms ShowDialog) or
 /// later (tests). Each must return Cancel, not throw, when ct is cancelled while the dialog is open.
+/// Every IScrapeUi call is made on the UI thread; only IQueryProgress.Report may arrive from another thread.
 /// </summary>
 public interface IScrapeUi
 {
@@ -21,8 +22,8 @@ public interface IScrapeUi
 
 	Task<IssueChoice> ChooseIssueAsync(IssueQuestion question, CoverPreferences covers, CancellationToken ct);
 
-	/// <summary>The "no issues available in {series}" warning; the engine then goes back to the series list.</summary>
-	void ShowNoIssues(SeriesRef series);
+	/// <summary>The "no issues available in {series}" warning; the engine then goes back to the series list. A cancelled ct closes it.</summary>
+	void ShowNoIssues(SeriesRef series, CancellationToken ct);
 
 	/// <summary>ProgressBarForm for one query. Shown on the first report below 100%, closed on Dispose.</summary>
 	IQueryProgress BeginQuery(QueryKind kind);

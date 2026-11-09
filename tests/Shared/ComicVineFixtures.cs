@@ -75,6 +75,17 @@ public sealed class FixtureHandler : HttpMessageHandler
 
 	public static FixtureHandler FromOutputFolder() => new(FixtureFiles.ReadFolder(FixtureFiles.OutputFolder));
 
+	/// <summary>
+	/// A fallback for a whole run through the dialogs, which also look up covers no fixture records: an API request finds
+	/// nothing, and an image is not found.
+	/// </summary>
+	public static RecordedResponse NothingFound(string key) => key.Contains("/api/")
+		? new RecordedResponse(key, HttpStatusCode.OK,
+			"<?xml version=\"1.0\" encoding=\"utf-8\"?><response><error><![CDATA[OK]]></error><limit>100</limit><offset>0</offset>"
+			+ "<number_of_page_results>0</number_of_page_results><number_of_total_results>0</number_of_total_results>"
+			+ "<status_code>1</status_code><results></results><version>1.0</version></response>")
+		: new RecordedResponse(key, HttpStatusCode.NotFound, "");
+
 	/// <summary>Every request served, as fixture keys, in order.</summary>
 	public IReadOnlyList<string> Requested => requested.ToArray();
 

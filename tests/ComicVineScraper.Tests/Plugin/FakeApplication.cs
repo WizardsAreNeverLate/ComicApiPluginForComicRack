@@ -15,6 +15,11 @@ internal sealed class FakeApplication : IApplication
 
 	public string? SeriesWhenThumbnailSet { get; private set; }
 
+	/// <summary>What GetComicPage returns or throws. Unset, it throws, as ComicRack can for a book whose page count was cleared.</summary>
+	public Func<ComicBook, int, Bitmap?> Pages { get; init; } = (_, _) => throw new InvalidOperationException("no pages");
+
+	public Bitmap GetComicPage(ComicBook cb, int page) => Pages(cb, page)!;
+
 	public bool SetCustomBookThumbnail(ComicBook cb, Bitmap bitmap)
 	{
 		Thumbnails.Add((cb, bitmap));
@@ -22,7 +27,9 @@ internal sealed class FakeApplication : IApplication
 		return Accepts;
 	}
 
-	public string ProductVersion => throw new NotSupportedException();
+	public Func<string> Version { get; set; } = () => "0.0.0-test";
+
+	public string ProductVersion => Version();
 	public void Restart() => throw new NotSupportedException();
 	public void SynchronizeDevices() => throw new NotSupportedException();
 	public void ScanFolders() => throw new NotSupportedException();
@@ -31,7 +38,6 @@ internal sealed class FakeApplication : IApplication
 	public ComicBook AddNewBook(bool showDialog) => throw new NotSupportedException();
 	public bool RemoveBook(ComicBook cb) => throw new NotSupportedException();
 	public ComicBook GetBook(string file) => throw new NotSupportedException();
-	public Bitmap GetComicPage(ComicBook cb, int page) => throw new NotSupportedException();
 	public Bitmap GetComicThumbnail(ComicBook cb, int page) => throw new NotSupportedException();
 	public IDictionary<string, string> GetComicFields() => throw new NotSupportedException();
 	public Bitmap GetComicPublisherIcon(ComicBook cb) => throw new NotSupportedException();
