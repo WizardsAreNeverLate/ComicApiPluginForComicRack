@@ -202,7 +202,7 @@ public sealed class ScraperFormTests
 	{
 		using var session = UiSession.Create();
 		var theme = new RecordingTheme();
-		PluginContext themed = session.Ctx with { Theme = theme };
+		PluginContext themed = session.Ctx with { CurrentTheme = () => theme };
 
 		Sta.Run(() =>
 		{

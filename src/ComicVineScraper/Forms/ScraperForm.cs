@@ -109,7 +109,7 @@ internal abstract class ScraperForm : Form
 	protected override void OnLoad(EventArgs e)
 	{
 		base.OnLoad(e);
-		Ctx.Theme?.ApplyTheme(this);
+		Ctx.CurrentTheme()?.ApplyTheme(this);
 		RestoreGeometry();
 		loaded = true;
 	}

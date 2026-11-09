@@ -68,7 +68,7 @@ internal sealed class UiSession : IDisposable
 		Folder = Path.Combine(Path.GetTempPath(), "cvs-ui-" + Guid.NewGuid().ToString("N"));
 		Log = new DebugLog();
 		Settings = new SettingsStore(Folder, new ManualClock(), Log);
-		Ctx = new PluginContext(ComicVineScraper.Plugin.Strings.Load(new FormsEnvironment(LanguagePack.Folder, marked)), null, Settings, Log);
+		Ctx = new PluginContext(ComicVineScraper.Plugin.Strings.Load(new FormsEnvironment(LanguagePack.Folder, marked)), () => null, Settings, Log);
 	}
 
 	public string Folder { get; }
