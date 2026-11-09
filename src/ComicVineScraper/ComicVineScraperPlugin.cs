@@ -52,6 +52,7 @@ public sealed class ComicVineScraperPlugin(IPluginEnvironment env)
 		}
 		catch (Exception error)
 		{
+			ctx.Log.Error(error);
 			ErrorDialogs.Show(env.MainWindow, ctx, error);
 		}
 	}

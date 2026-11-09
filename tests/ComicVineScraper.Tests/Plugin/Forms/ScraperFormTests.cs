@@ -6,7 +6,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ComicVineScraper.ComicVine;
+using ComicVineScraper.Config;
+using ComicVineScraper.Engine;
+using ComicVineScraper.Fixtures;
 using ComicVineScraper.Plugin;
+using ComicVineScraper.Tests.Engine;
 
 namespace ComicVineScraper.Tests.Plugin.Forms;
 
@@ -344,7 +348,7 @@ public sealed class ErrorDialogsTests
 	}
 
 	[Test]
-	public async Task Any_other_error_asks_to_save_the_log_and_logs_the_error()
+	public async Task Any_other_error_asks_to_save_the_log()
 	{
 		using var session = UiSession.Create();
 
@@ -362,7 +366,27 @@ public sealed class ErrorDialogsTests
 
 		await Assert.That(seen.Text).StartsWith("An unexpected error occurred.");
 		await Assert.That(seen.Caption).IsEqualTo("Unexpected Error");
-		await Assert.That(session.Log.Snapshot().Any(line => line.Contains("the engine broke"))).IsTrue();
+	}
+
+	[Test]
+	public async Task A_run_ending_error_shown_to_the_user_is_logged_once_and_without_the_key()
+	{
+		using var session = UiSession.Create();
+		using var world = new EngineWorld { Config = Configs.With(ChooseMode.Ask) with { ApiKey = EngineWorld.ApiKey } };
+		RecordedResponse invalid = FixtureFiles.Read(Path.Combine(FixtureFiles.OutputFolder, "invalid-key.txt"));
+		world.Respond(Synthetic.IssueUrl(37566), invalid.Body, invalid.Status);
+		ScrapeFailedException failure = (await Assert.ThrowsAsync<ScrapeFailedException>(
+			() => world.RunAsync(FakeBook.File(@"C:\Comics\Batman 497.cbz", b => b.Tags = "CVDB37566"))))!;
+
+		Sta.Run(() =>
+		{
+			using IDisposable driver = Ui.WhenOpen<PromptDialog>(prompt => Ui.Find<Button>(prompt, "ok").PerformClick());
+			ErrorDialogs.Show(null, session.Ctx with { Log = world.Log }, failure.InnerException!);
+		});
+
+		string[] log = [.. world.Log.Snapshot()];
+		await Assert.That(log.Count(line => line.StartsWith("Caught ComicVineException", StringComparison.Ordinal))).IsEqualTo(1);
+		await Assert.That(log.Any(line => line.Contains(EngineWorld.ApiKey))).IsFalse();
 	}
 }
 

@@ -6,12 +6,11 @@ using ComicVineScraper.Diagnostics;
 
 namespace ComicVineScraper.Plugin;
 
-/// <summary>log.handle_error: the error goes to the debug log, then the user sees the prompt ErrorPrompt chose.</summary>
+/// <summary>The prompt half of log.handle_error. The code that caught the error logs it, once, before it calls Show.</summary>
 internal static class ErrorDialogs
 {
 	public static void Show(IWin32Window? owner, PluginContext ctx, Exception error)
 	{
-		ctx.Log.Error(error);
 		ErrorPrompt prompt = ErrorPrompt.For(error);
 		string text = prompt.DatabaseName is { } database ? ctx.Strings.Format(prompt.TextKey, database) : ctx.Strings[prompt.TextKey];
 		string caption = ctx.Strings[prompt.TitleKey];
