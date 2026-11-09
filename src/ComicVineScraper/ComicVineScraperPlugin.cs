@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
@@ -40,10 +41,18 @@ public sealed class ComicVineScraperPlugin(IPluginEnvironment env)
 		}
 	}
 
+	/// <summary>The Configure action: the settings dialog, which saves on OK. An error is logged and shown, never passed to ComicRack.</summary>
 	[PluginCommand(PluginEngine.ScriptTypeConfig, Key = Key)]
 	public void Configure()
 	{
 		PluginContext ctx = PluginContext.Open(env);
-		MessageBox.Show(env.MainWindow, "The settings dialog arrives in phase 4.", ctx.Strings["ConfigFormTitle"], MessageBoxButtons.OK, MessageBoxIcon.Information);
+		try
+		{
+			ConfigForm.Show(env.MainWindow, ctx);
+		}
+		catch (Exception error)
+		{
+			ErrorDialogs.Show(env.MainWindow, ctx, error);
+		}
 	}
 }
