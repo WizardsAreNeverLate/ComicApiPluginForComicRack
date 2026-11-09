@@ -86,8 +86,9 @@ public sealed class PluginTests
 		await Assert.That(world.Plugin.Context.Settings.LoadChosenSeries().Contains(new SeriesId(796))).IsTrue();
 		await Assert.That(world.Plugin.Context.Settings.LoadChosenSeries().Contains(new SeriesId(91273))).IsTrue();
 		await Assert.That(world.Log.Any(line => line.Contains(EngineWorld.ApiKey))).IsFalse();
-		// The dialogs look up covers at /issues/ (plural) and the images, which no fixture records, so those are expected misses. Only the singular
-		// /issue/ (one issue's details), /search/ and /volume/ requests are the scrape itself, and each of them has a fixture.
+		// "/issue/" is one issue's details (ApiRequest.IssueDetail), which the scrape itself fetches, so a miss there is a real gap in the fixtures.
+		// A full run also misses cover images and a few "/issues/" list queries that no fixture records. The "/issue/" substring does not match
+		// "/issues/", so those expected misses stay out of the assertion.
 		await Assert.That(world.Unrecorded.Any(key => key.Contains("/issue/") || key.Contains("/search/") || key.Contains("/volume/"))).IsFalse();
 	}
 
