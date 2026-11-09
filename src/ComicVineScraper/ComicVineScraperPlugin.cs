@@ -51,11 +51,12 @@ public sealed class ComicVineScraperPlugin
 		{
 			return;
 		}
-		running = true;
+		// Opened before the flag is raised and failing as Configure does (to ComicRack), so a failed open cannot leave the flag set.
 		PluginContext ctx = Context;
 		// Python built its Configuration before loading it, so the summary default (on) holds when the load itself fails.
 		Configuration config = new() { Advanced = AdvancedSettings.Parse(null) };
 		var summary = new RunSummary(0, books.Length, Cancelled: false);
+		running = true;
 		try
 		{
 			LogStart(ctx);
