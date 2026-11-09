@@ -31,7 +31,7 @@ public sealed class FinishFormTests
 
 		await Assert.That(seen.Scraped).IsEqualTo(scrapedText);
 		await Assert.That(seen.Skipped).IsEqualTo(skippedText);
-		await Assert.That(seen.Title).IsEqualTo("Comic Vine Scraper - v" + typeof(FinishForm).Assembly.GetName().Version.ToString(3));
+		await Assert.That(seen.Title).IsEqualTo("Comic API Plugin");
 	}
 
 	[Test]

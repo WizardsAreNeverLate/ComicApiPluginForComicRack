@@ -43,8 +43,8 @@ internal abstract class ScraperForm : Form
 
 	protected Strings Strings => Ctx.Strings;
 
-	/// <summary>"Comic Vine Scraper - v1.2.3". Python hard-coded the English name; FinishFormTitle is the same text, localized.</summary>
-	protected string ProductTitle => Strings.Format(TextKeys.FinishFormTitle, typeof(ScraperForm).Assembly.GetName().Version.ToString(3));
+	/// <summary>"Comic API Plugin", with no version. Python hard-coded "Comic Vine Scraper - v1.2.3"; the port reads FinishFormTitle.</summary>
+	protected string ProductTitle => Strings[TextKeys.FinishFormTitle];
 
 	/// <summary>
 	/// Whether Skip was clicked while it read "- Skip -" (Ctrl held). Taken at the click, because a closing dialog loses the
