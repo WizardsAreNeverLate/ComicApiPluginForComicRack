@@ -115,6 +115,28 @@ public sealed class ScrapeRunLoopTests
 	}
 
 	[Test]
+	public async Task A_book_whose_path_cannot_be_read_fails_the_run_as_a_ScrapeFailedException()
+	{
+		using var world = new EngineWorld();
+		var bad = FakeBook.File(@"C:\Comics\Bat|man 1.cbz");
+
+		ScrapeFailedException? failure = null;
+		try
+		{
+			await world.RunAsync(bad);
+		}
+		catch (ScrapeFailedException e)
+		{
+			failure = e;
+		}
+
+		await Assert.That(failure).IsNotNull();
+		await Assert.That(failure!.InnerException).IsTypeOf<ArgumentException>();
+		await Assert.That(failure.Summary).IsEqualTo(new RunSummary(0, 1, false));
+		await Assert.That(bad.Applied).IsEmpty();
+	}
+
+	[Test]
 	public async Task A_fast_rescrape_that_hits_a_network_error_is_retried_as_a_normal_scrape_at_the_end()
 	{
 		using var world = new EngineWorld();

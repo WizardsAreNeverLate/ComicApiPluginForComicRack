@@ -81,15 +81,15 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 	/// </summary>
 	public async Task<RunSummary> RunAsync(IReadOnlyList<IScrapeBook> books, CancellationToken ct)
 	{
-		services.Log.Debug(config.ToString());
-		List<QueueEntry> queue =
-		[
-			.. BookOrder.Sort(books.Select((book, index) => Facts(index, book.Read())), config.FastRescrape)
-				.Select(facts => new QueueEntry(books[facts.Index], facts)),
-		];
 		int scraped = 0;
 		try
 		{
+			services.Log.Debug(config.ToString());
+			List<QueueEntry> queue =
+			[
+				.. BookOrder.Sort(books.Select((book, index) => Facts(index, book.Read())), config.FastRescrape)
+					.Select(facts => new QueueEntry(books[facts.Index], facts)),
+			];
 			for (int i = 0; i < queue.Count; i++)
 			{
 				bool secondPass = i >= books.Count;
