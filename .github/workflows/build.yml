@@ -10,15 +10,16 @@ on:
     inputs:
       comicrack_ref:
         description: ComicRack CE branch, tag, or commit to build against (needs .NET plugin support)
-        default: feat/dotnet-plugins
+        default: integration
 
 permissions:
   contents: read
 
 env:
-  # The plugin compiles against a ComicRack CE build that can load .NET plugins. Upstream does not have that yet.
-  COMICRACK_REPO: jafin/ComicRackCE
-  COMICRACK_REF: ${{ inputs.comicrack_ref || 'feat/dotnet-plugins' }}
+  # The plugin compiles against a ComicRack CE build that can load .NET plugins. Upstream does not have that yet;
+  # integration is upstream master with the fork's feature branches (feat/dotnet-plugins among them) merged in.
+  COMICRACK_REPO: WizardsAreNeverLate/ComicRackCE
+  COMICRACK_REF: ${{ inputs.comicrack_ref || 'integration' }}
   # The oracle tests run the original Python plugin under IronPython. This is the commit the port was compared against.
   PYTHON_PLUGIN_REPO: cbanack/comic-vine-scraper
   PYTHON_PLUGIN_SHA: a4c100bcaa031881f009a28acd398b6a19d35c3d

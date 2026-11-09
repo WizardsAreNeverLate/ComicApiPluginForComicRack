@@ -11,8 +11,8 @@ This is a native C# (.NET Framework 4.8) port of Cory Banack's [Comic Vine Scrap
 > [!IMPORTANT]
 > This plugin needs **a modified ComicRack Community Edition that can load .NET plugins.** Stock ComicRack CE loads only Python (IronPython) plugins, and it cannot load this one.
 
-- The required support is on branch [`feat/dotnet-plugins`](https://github.com/jafin/ComicRackCE/tree/feat/dotnet-plugins) of the ComicRackCE fork [jafin/ComicRackCE](https://github.com/jafin/ComicRackCE). It adds `[PluginCommand]` attributes, so a compiled class can provide ComicRack commands, and it adds `.crplugin` packages that contain .NET assemblies.
-- **Upstream ComicRack CE does not include this support yet:** it hasn't been submitted as a pull request. Until it is merged, build ComicRack CE from that branch to use this plugin.
+- Build ComicRack CE from branch [`integration`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/integration) of the fork [WizardsAreNeverLate/ComicRackCE](https://github.com/WizardsAreNeverLate/ComicRackCE). That branch is upstream `master` with this fork's feature branches merged in, including [`feat/dotnet-plugins`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/feat/dotnet-plugins). That feature adds `[PluginCommand]` attributes, so a compiled class can provide ComicRack commands, and it adds `.crplugin` packages that contain .NET assemblies.
+- **Upstream ComicRack CE does not include this support yet:** it hasn't been submitted as a pull request. The feature branch is kept separate from `integration` so that it can be offered upstream on its own.
 - You need a Comic Vine API key, which is free. You can get one at <https://comicvine.gamespot.com/api/>.
 
 ## Features
@@ -30,14 +30,14 @@ The plugin reads and writes the original plugin's settings files in `%APPDATA%\C
 ## Install
 
 1. Build or get `ComicVineScraper.crplugin` (see the next section).
-2. In a ComicRack CE build of `feat/dotnet-plugins`, open **Edit > Preferences > Scripts**, then install the `.crplugin`. Restart ComicRack when it asks.
+2. In a ComicRack CE build of `integration`, open **Edit > Preferences > Scripts**, then install the `.crplugin`. Restart ComicRack when it asks.
 3. Select books, then run **Comic Vine Scraper** from ComicRack's scripts (the toolbar's Scripts button, or the books' right-click Automation menu). On the first run, the plugin asks for your API key.
 
 If Windows blocked the downloaded file, the plugin's DLL is blocked too, and ComicRack reports it. Unblock the `.crplugin` (**Properties > Unblock**) before you install it.
 
 ## Build
 
-You need Visual Studio 2022 or its Build Tools (MSBuild with the .NET Framework 4.8 targeting pack), and a local build of ComicRack CE from `feat/dotnet-plugins`. The plugin compiles against that build's assemblies.
+You need Visual Studio 2022 or its Build Tools (MSBuild with the .NET Framework 4.8 targeting pack), and a local build of ComicRack CE from `WizardsAreNeverLate/ComicRackCE@integration`. The plugin compiles against that build's assemblies.
 
 ```powershell
 $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
@@ -50,7 +50,7 @@ The package is written to `src\ComicVineScraper\bin\<Configuration>\net48\ComicV
 
 The CI workflow (`.github/workflows/build.yml`) runs in this order:
 
-1. It builds ComicRack CE from `jafin/ComicRackCE@feat/dotnet-plugins`, cached by commit.
+1. It builds ComicRack CE from `WizardsAreNeverLate/ComicRackCE@integration`, cached by commit. A manual run can pick another branch or commit.
 2. It checks out the original Python plugin for the oracle tests.
 3. It runs `Build.ps1 -Configuration Release`.
 4. It uploads the `.crplugin` as an artifact.

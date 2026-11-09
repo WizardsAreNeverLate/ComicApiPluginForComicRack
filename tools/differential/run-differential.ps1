@@ -17,7 +17,7 @@ settings.dat files, and those folders are deleted before the script ends. Nothin
 The exit code is 0 only when every safety assertion passed. Differences between the plugins are not failures here: they are classified in docs/port/architecture.md.
 
 .PARAMETER Bin
-The output folder of a ComicRack CE build of branch feat/dotnet-plugins. Defaults to COMICRACK_DIR.
+The output folder of a ComicRack CE build of WizardsAreNeverLate/ComicRackCE branch integration. Defaults to COMICRACK_DIR.
 .PARAMETER PythonSource
 The original plugin's src folder.
 .PARAMETER KeyFile
@@ -32,7 +32,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $Repo = (Resolve-Path (Join-Path $here "..\..")).Path
-if (!$Bin) { throw "Set COMICRACK_DIR, or pass -Bin, to the output folder of a ComicRack CE build of branch feat/dotnet-plugins." }
+if (!$Bin) { throw "Set COMICRACK_DIR, or pass -Bin, to the output folder of a ComicRack CE build of WizardsAreNeverLate/ComicRackCE branch integration." }
 if (Get-Process ComicRack -ErrorAction SilentlyContinue) { Write-Output "BLOCKED: a ComicRack process is already running"; exit 2 }
 
 $keyMatch = [regex]::Match((Get-Content $KeyFile -Raw), '(?<![0-9a-fA-F])[0-9a-f]{40}(?![0-9a-fA-F])')

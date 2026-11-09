@@ -12,7 +12,7 @@ Everything lands in tools\smoke\runs\<stamp>\out\report.txt. The probe writes th
 adds "user settings unchanged" and the process checks. The exit code is 0 only when every assertion passed.
 
 .PARAMETER Bin
-The output folder of a ComicRack CE build of branch feat/dotnet-plugins. Defaults to COMICRACK_DIR.
+The output folder of a ComicRack CE build of WizardsAreNeverLate/ComicRackCE branch integration. Defaults to COMICRACK_DIR.
 #>
 param(
 	[string]$Bin = $env:COMICRACK_DIR
@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $Repo = (Resolve-Path (Join-Path $here "..\..")).Path
-if (!$Bin) { throw "Set COMICRACK_DIR, or pass -Bin, to the output folder of a ComicRack CE build of branch feat/dotnet-plugins." }
+if (!$Bin) { throw "Set COMICRACK_DIR, or pass -Bin, to the output folder of a ComicRack CE build of WizardsAreNeverLate/ComicRackCE branch integration." }
 if (Get-Process ComicRack -ErrorAction SilentlyContinue) { Write-Output "BLOCKED: a ComicRack process is already running"; exit 2 }
 
 $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1

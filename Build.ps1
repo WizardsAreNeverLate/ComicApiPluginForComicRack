@@ -10,7 +10,7 @@ $ErrorActionPreference = "Stop"
 $solution = Join-Path $PSScriptRoot "ComicVineScraper.sln"
 
 if (!$ComicRackDir) {
-	Write-Error "Set COMICRACK_DIR, or pass -ComicRackDir, to the output folder of a ComicRack CE build of branch feat/dotnet-plugins."
+	Write-Error "Set COMICRACK_DIR, or pass -ComicRackDir, to the output folder of a ComicRack CE build of WizardsAreNeverLate/ComicRackCE branch integration."
 	exit 1
 }
 
