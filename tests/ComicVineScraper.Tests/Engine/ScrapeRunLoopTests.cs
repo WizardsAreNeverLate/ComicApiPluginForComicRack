@@ -93,6 +93,28 @@ public sealed class ScrapeRunLoopTests
 	}
 
 	[Test]
+	public async Task Auto_choose_shows_the_issue_dialog_when_two_issues_match_the_books_number()
+	{
+		using var world = new EngineWorld { Config = Configs.With(ChooseMode.AutoChooseSeries) };
+		// Deviation 32: "7" and "7.0" share a natural key, so no mode guesses between them.
+		foreach (int series in new[] { 91273, 796, 166619 })
+		{
+			world.Respond(Synthetic.IssueNumberUrl(series, "7"), Synthetic.IssueList((9300001, "7"), (9300002, "7.0")));
+		}
+		world.Respond(Synthetic.IssueListUrl(796), Synthetic.IssueList((9300001, "7"), (9300002, "7.0")));
+		using Bitmap cover = LeftHalfBlack();
+		world.ImageFor = _ => cover;
+		world.Ui.Series(q => Pick(q, 796)).Issue(new IssueChoice.Skip());
+
+		RunSummary summary = await world.RunAsync(FakeBook.File(@"C:\Comics\Batman 7.cbz", firstPage: cover));
+
+		await Assert.That(summary).IsEqualTo(new RunSummary(0, 1, false));
+		await Assert.That(world.Ui.Asked).IsEquivalentTo(new[] { "series:Batman", "issue:796:" }, CollectionOrdering.Matching);
+		await Assert.That(world.Ui.IssueQuestions.Single().Issues.Select(i => i.Id.Value)).IsEquivalentTo(new[] { 9300001, 9300002 });
+		await Assert.That(world.StepsOf("Batman 7.cbz")).IsEquivalentTo(new[] { Begin, FindIssue, Done, Begin, Search, ChooseSeries, FindIssue, Done }, CollectionOrdering.Matching);
+	}
+
+	[Test]
 	public async Task A_fast_rescrape_that_hits_a_network_error_is_retried_as_a_normal_scrape_at_the_end()
 	{
 		using var world = new EngineWorld();

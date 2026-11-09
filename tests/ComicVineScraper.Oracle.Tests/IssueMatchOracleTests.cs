@@ -14,11 +14,11 @@ public sealed class IssueMatchOracleTests
 	// No "nan" and no text after a fraction: natural_key differs there on purpose (deviations.md #16 and #19).
 	private static readonly string[] Numbers =
 	[
-		"1", "01", "1.0", "001", "2", "7", "7", "8", "8.0", "08", "½", "0.5", ".5", "1a", "1A", "3", "abc", "ABC", "-1", "1.5", "1½", "10", "", "x",
+		"1", "01", "1.0", "001", "2", "7", "7", "07", "7.0", "007", "8", "8.0", "08", "½", "0.5", ".5", "1a", "1A", "3", "abc", "ABC", "-1", "1.5", "1½", "10", "", "x",
 	];
 
 	[Test]
-	public async Task Find_matches_choose_issue_ref_outside_python_set_order()
+	public async Task Find_matches_choose_issue_ref_outside_the_ambiguous_numbers_where_it_asks()
 	{
 		var random = new Random(71);
 		List<string> differences = [];
@@ -33,8 +33,12 @@ public sealed class IssueMatchOracleTests
 			bool textDuplicate = issues.Count(issue => issue.IssueNumber == number) > 1;
 			if (number.Length > 0 && !textDuplicate && naturalMatches > 1)
 			{
-				// deviations.md #32: Python takes the first match in set order, the port the first in Comic Vine order.
+				// deviations.md #32: Python takes the first match in set order; the port never guesses and asks.
 				setOrder++;
+				if (IssueMatch.Find(issues, number) is not null)
+				{
+					differences.Add($"[{string.Join(", ", issues.Select(x => x.IssueNumber))}] '{number}': several natural-key matches, C# did not answer dialog");
+				}
 				continue;
 			}
 
@@ -55,8 +59,8 @@ public sealed class IssueMatchOracleTests
 		await Assert.That(differences.Take(20)).IsEmpty();
 		await Assert.That(compared).IsGreaterThan(3500);
 		await Assert.That(picked).IsGreaterThan(400);
-		await Assert.That(refused).IsGreaterThan(50);
-		await Assert.That(setOrder).IsGreaterThan(0);
+		await Assert.That(refused).IsGreaterThan(30);
+		await Assert.That(setOrder).IsGreaterThan(50);
 	}
 
 	private static string BookCorpusPick(Random random) => BookCorpus.Pick(random, Numbers);

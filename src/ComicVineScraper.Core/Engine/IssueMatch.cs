@@ -9,9 +9,9 @@ namespace ComicVineScraper.Engine;
 internal static class IssueMatch
 {
 	/// <summary>
-	/// Null when the user must choose. A number that appears more than once, compared as text, is never guessed. Otherwise
-	/// the first issue whose number has the same natural key wins; Python took the first in set order, which is undefined.
-	/// A book with no number takes the series' only issue.
+	/// Null when the user must choose. Two or more issues whose numbers share the book's natural key (such as 7 and 7.0, or
+	/// a book numbered 07 against two 7s) are never guessed between, in any mode. A book with no number takes the series'
+	/// only issue.
 	/// </summary>
 	public static IssueRef? Find(IReadOnlyList<IssueRef> issues, string number)
 	{
@@ -19,10 +19,7 @@ internal static class IssueMatch
 		{
 			return issues.Count == 1 ? issues[0] : null;
 		}
-		if (issues.Count(issue => issue.IssueNumber == number) > 1)
-		{
-			return null;
-		}
-		return issues.FirstOrDefault(issue => NaturalOrder.KeysEqual(issue.IssueNumber, number));
+		IssueRef[] matches = [.. issues.Where(issue => NaturalOrder.KeysEqual(issue.IssueNumber, number)).Take(2)];
+		return matches.Length == 1 ? matches[0] : null;
 	}
 }
