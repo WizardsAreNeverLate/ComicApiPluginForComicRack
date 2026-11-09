@@ -30,7 +30,8 @@ internal sealed class ProgressBarForm : ScraperForm
 	protected override void OnFormClosed(FormClosedEventArgs e)
 	{
 		base.OnFormClosed(e);
-		if (!closingByCode)
+		// The owner is already closing; asking it to close again would re-enter its FormClosed.
+		if (!closingByCode && e.CloseReason != CloseReason.FormOwnerClosing)
 		{
 			userClosed();
 		}

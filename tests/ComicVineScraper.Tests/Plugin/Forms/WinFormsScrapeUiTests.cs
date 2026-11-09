@@ -160,6 +160,25 @@ public sealed class WinFormsScrapeUiTests
 	}
 
 	[Test]
+	public async Task Closing_the_ComicForm_closes_the_progress_window_without_reporting_a_user_close()
+	{
+		int userCloses = 0;
+		bool windowClosed = Sta.Run(() =>
+		{
+			using var session = UiSession.Create();
+			using var host = new ComicForm(session.Ctx);
+			using var window = new ProgressBarForm(session.Ctx, () => userCloses++) { Owner = host };
+			host.Show();
+			window.Show();
+			host.Close();
+			return window.IsDisposed;
+		});
+
+		await Assert.That(windowClosed).IsTrue();
+		await Assert.That(userCloses).IsEqualTo(0);
+	}
+
+	[Test]
 	public async Task An_issue_load_shows_its_percentage()
 	{
 		(string Title, int Value, int Max) seen = Hosted(async (ui, _, _) =>
