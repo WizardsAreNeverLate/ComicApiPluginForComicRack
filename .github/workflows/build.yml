@@ -60,7 +60,7 @@ jobs:
 
     - name: Cache the ComicRack CE build
       id: comicrack-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: _deps/ComicRackCE/ComicRack/bin/Release/net48
         key: comicrack-${{ steps.comicrack.outputs.sha }}
@@ -80,7 +80,7 @@ jobs:
       run: ./Build.ps1 -Configuration Release
 
     - name: Upload the plugin package
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ComicVineScraper.crplugin
         path: src/ComicVineScraper/bin/Release/net48/ComicVineScraper.crplugin
@@ -88,7 +88,7 @@ jobs:
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: test-results
         path: tests/*/bin/Release/net48/TestResults/
