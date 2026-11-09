@@ -244,7 +244,12 @@ internal sealed class EngineWorld : IDisposable
 
 	public async Task<RunSummary> RunAsync(params IScrapeBook[] books) => await RunAsync(CancellationToken.None, books);
 
-	public async Task<RunSummary> RunAsync(CancellationToken ct, params IScrapeBook[] books)
+	/// <summary>Runs on a one-thread message loop, as ComicRack's UI thread does.</summary>
+	public async Task<RunSummary> RunAsync(CancellationToken ct, params IScrapeBook[] books) =>
+		await Task.Run(() => SingleThreadContext.Run(() => StartAsync(ct, books)));
+
+	/// <summary>Calls ScrapeRun.RunAsync on the caller's thread and context, whatever they are.</summary>
+	public async Task<RunSummary> StartAsync(CancellationToken ct, params IScrapeBook[] books)
 	{
 		var run = new ScrapeRun(new ScrapeServices(catalog.Value, Ui, Clock, Log, Chosen, Covers), Config);
 		run.StepEntered += (facts, step) => Steps.Add(new StepTrace(Path.GetFileName(facts.Snapshot.FilePath), step));
@@ -341,35 +346,4 @@ internal static class Synthetic
 		"<?xml version=\"1.0\" encoding=\"utf-8\"?><response><error><![CDATA[OK]]></error><limit>100</limit><offset>0</offset>"
 		+ $"<number_of_page_results>{total}</number_of_page_results><number_of_total_results>{total}</number_of_total_results><status_code>1</status_code>"
 		+ $"<results>{results}</results>" + "<version>1.0</version></response>";
-}
-
-/// <summary>A one-thread message loop, as ComicRack's UI thread is: every continuation posted to it runs on the thread that called Run.</summary>
-internal sealed class SingleThreadContext : SynchronizationContext
-{
-	private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> queue = [];
-
-	public static T Run<T>(Func<Task<T>> work)
-	{
-		SynchronizationContext? previous = Current;
-		var context = new SingleThreadContext();
-		SetSynchronizationContext(context);
-		try
-		{
-			Task<T> task = work();
-			task.ContinueWith(_ => context.queue.CompleteAdding(), TaskScheduler.Default);
-			foreach ((SendOrPostCallback callback, object? state) in context.queue.GetConsumingEnumerable())
-			{
-				callback(state);
-			}
-			return task.GetAwaiter().GetResult();
-		}
-		finally
-		{
-			SetSynchronizationContext(previous);
-		}
-	}
-
-	public override void Post(SendOrPostCallback d, object? state) => queue.Add((d, state));
-
-	public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException();
 }

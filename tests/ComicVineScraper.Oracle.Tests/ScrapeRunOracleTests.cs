@@ -10,6 +10,7 @@ using ComicVineScraper.ComicVine;
 using ComicVineScraper.Config;
 using ComicVineScraper.Diagnostics;
 using ComicVineScraper.Engine;
+using ComicVineScraper.Fixtures;
 using ComicVineScraper.Model;
 using ComicVineScraper.Plugin;
 using cYo.Projects.ComicRack.Engine;
@@ -125,7 +126,7 @@ public sealed class ScrapeRunOracleTests
 		RunSummary summary;
 		try
 		{
-			summary = await new ScrapeRun(services, config).RunAsync(books, CancellationToken.None);
+			summary = await Task.Run(() => SingleThreadContext.Run(() => new ScrapeRun(services, config).RunAsync(books, CancellationToken.None)));
 		}
 		catch (ScrapeFailedException e)
 		{

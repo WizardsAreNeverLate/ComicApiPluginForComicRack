@@ -353,6 +353,21 @@ public sealed class ScrapeRunLoopTests
 	}
 
 	[Test]
+	public async Task Starting_a_run_without_a_synchronization_context_fails_loudly_and_touches_nothing()
+	{
+		using var world = new EngineWorld();
+		var book = FakeBook.File(Batman1, b => b.Tags = "CVDBSKIP");
+
+		// A thread-pool thread has no SynchronizationContext, so the run's continuations would read and write books anywhere.
+		InvalidOperationException? error = await Assert.ThrowsAsync<InvalidOperationException>(
+			() => Task.Run(() => world.StartAsync(CancellationToken.None, book)));
+
+		await Assert.That(error!.Message).Contains("SynchronizationContext");
+		await Assert.That(book.Threads).IsEmpty();
+		await Assert.That(world.Ui.Started).IsEmpty();
+	}
+
+	[Test]
 	public async Task Books_are_read_and_written_only_on_the_thread_that_runs_the_scrape()
 	{
 		using var world = new EngineWorld();
@@ -364,7 +379,7 @@ public sealed class ScrapeRunLoopTests
 		RunSummary summary = await Task.Run(() => SingleThreadContext.Run(() =>
 		{
 			runThread = Environment.CurrentManagedThreadId;
-			return world.RunAsync(book, fast);
+			return world.StartAsync(CancellationToken.None, book, fast);
 		}));
 
 		await Assert.That(summary.Scraped).IsEqualTo(2);

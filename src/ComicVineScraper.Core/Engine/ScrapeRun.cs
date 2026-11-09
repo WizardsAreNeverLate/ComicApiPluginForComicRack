@@ -77,10 +77,14 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 
 	/// <summary>
 	/// Scrapes the books in BookOrder. Returns when every book is done, or when the run is cancelled through ct or a
-	/// Cancel answer. Any other failure ends the run with <see cref="ScrapeFailedException"/>.
+	/// Cancel answer. Any other failure ends the run with <see cref="ScrapeFailedException"/>. Throws InvalidOperationException, before anything is read, when the caller has no SynchronizationContext.
 	/// </summary>
 	public async Task<RunSummary> RunAsync(IReadOnlyList<IScrapeBook> books, CancellationToken ct)
 	{
+		if (SynchronizationContext.Current is null)
+		{
+			throw new InvalidOperationException("ScrapeRun must start on a thread with a SynchronizationContext, such as ComicRack's UI thread: its continuations read and write books and show dialogs, and they must come back to that thread.");
+		}
 		int scraped = 0;
 		try
 		{
