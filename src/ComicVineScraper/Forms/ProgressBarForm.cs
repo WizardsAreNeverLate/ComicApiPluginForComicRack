@@ -85,11 +85,9 @@ internal sealed class QueryProgressWindow : IQueryProgress
 		}
 		if (kind == QueryKind.SeriesSearch)
 		{
-			Open(value.Total)?.Bar.PerformStep();
-			if (window is not null)
-			{
-				window.Text = ctx.Strings.Format(TextKeys.SearchProgbarText, value.Done);
-			}
+			ProgressBarForm searching = Open(value.Total);
+			searching.Bar.PerformStep();
+			searching.Text = ctx.Strings.Format(TextKeys.SearchProgbarText, value.Done);
 			return;
 		}
 		double done = value.Total <= 0 ? 1 : Math.Max(0.0, Math.Min(1.0, value.Done / (double)value.Total));
@@ -106,7 +104,7 @@ internal sealed class QueryProgressWindow : IQueryProgress
 	}
 
 	/// <summary>Opens the window with the given maximum the first time; afterwards returns the open window.</summary>
-	private ProgressBarForm? Open(int maximum)
+	private ProgressBarForm Open(int maximum)
 	{
 		if (window is null)
 		{
