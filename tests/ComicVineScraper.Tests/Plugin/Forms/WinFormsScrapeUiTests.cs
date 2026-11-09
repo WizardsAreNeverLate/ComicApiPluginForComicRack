@@ -146,7 +146,8 @@ public sealed class WinFormsScrapeUiTests
 			Ui.Render(window, "ProgressBarForm");
 			(string, int) second = (window.Text, bar.Value);
 			bool owned = window.Owner == form;
-			query.Dispose();
+			await Task.Run(query.Dispose);
+			await Until(() => Ui.Mine<ProgressBarForm>() is null);
 			return (first.Item1, first.Item2, first.Item3, second.Item1, second.Item2, owned, Ui.Mine<ProgressBarForm>() is not null, ct.IsCancellationRequested);
 		});
 

@@ -73,6 +73,18 @@ internal sealed class QueryProgressWindow : IQueryProgress
 	public void Dispose()
 	{
 		disposed = true;
+		if (ui is null)
+		{
+			Close();
+		}
+		else
+		{
+			ui.Post(_ => Close(), null);
+		}
+	}
+
+	private void Close()
+	{
 		window?.CloseByCode();
 		window?.Dispose();
 		window = null;
