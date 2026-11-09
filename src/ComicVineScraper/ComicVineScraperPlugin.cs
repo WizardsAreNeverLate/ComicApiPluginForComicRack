@@ -103,12 +103,19 @@ public sealed class ComicVineScraperPlugin
 		}
 		finally
 		{
-			// Python's finally: the summary follows every run, including one that stopped early or failed.
-			if (config.SummaryDialog)
+			try
 			{
-				Guarded(ctx, () => FinishForm.Show(env.MainWindow, ctx, summary));
+				// Python's finally: the summary follows every run, including one that stopped early or failed.
+				if (config.SummaryDialog)
+				{
+					Guarded(ctx, () => FinishForm.Show(env.MainWindow, ctx, summary));
+				}
 			}
-			running = false;
+			finally
+			{
+				// Guarded's own error dialog can throw too; the flag must still drop, or every later Scrape does nothing.
+				running = false;
+			}
 			(env.MainWindow as Form)?.Activate();
 		}
 	}

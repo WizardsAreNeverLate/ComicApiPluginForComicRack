@@ -382,7 +382,9 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 		{
 			ct.ThrowIfCancellationRequested();
 			BookFacts current = Facts(entry.Facts.Index, entry.Book.Read());
-			Bitmap? install = MergeRules.PlanThumbnail(current.Snapshot, cover, merge) is null ? null : thumbnail;
+			// Planned again on the book as it is now: a thumbnail it gained meanwhile cancels both the install and the error line.
+			bool wanted = MergeRules.PlanThumbnail(current.Snapshot, cover, merge) is not null;
+			Bitmap? install = wanted ? thumbnail : null;
 			BookPatch patch = MergeRules.Plan(current, issue, merge, services.Clock.Now);
 			// Python logs every field line and the cover line first, and the thumbnail errors last, from PluginBookData.update.
 			services.Log.Debug("setting values for this comic book ('*' = changed):");
@@ -391,13 +393,13 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 				services.Log.Debug(decision.ToLogLine());
 			}
 			services.Log.Debug(FieldDecision.CoverArt(cover?.OriginalString).ToLogLine());
-			if (downloadFailed)
+			if (downloadFailed && wanted)
 			{
-				services.Log.Debug("ERROR: can't download thumbnail: " + cover);
+				services.Log.Debug("ERROR: can't download thumbnail: " + cover?.OriginalString);
 			}
 			if (!entry.Book.Apply(patch, install))
 			{
-				services.Log.Debug("ERROR: can't set thumbnail: " + cover);
+				services.Log.Debug("ERROR: can't set thumbnail: " + cover?.OriginalString);
 			}
 		}
 		if (step.RecordChoice is { } chosen)

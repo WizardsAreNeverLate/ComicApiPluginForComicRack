@@ -184,7 +184,11 @@ internal sealed class FakeBook : IScrapeBook
 /// </summary>
 internal sealed class EngineWorld : IDisposable
 {
-	public const string ApiKey = "0123456789abcdef0123456789abcdef01234567";
+	/// <summary>
+	/// Not hex on purpose: DebugLog masks every run of 40 hex digits, so a real-looking key would hide a leak from the
+	/// tests that assert the key never reaches the log. DebugLogTests covers that masking on its own.
+	/// </summary>
+	public const string ApiKey = "test-key-not-hex-so-the-log-mask-misses-it";
 
 	private readonly Dictionary<string, RecordedResponse> extra = new(StringComparer.Ordinal);
 	private readonly string folder = Path.Combine(Path.GetTempPath(), "cvs-engine-" + Guid.NewGuid().ToString("N"));
