@@ -47,7 +47,7 @@ public sealed class ComicVineScraperPlugin
 	[PluginCommand(PluginEngine.ScriptTypeBooks + "," + PluginEngine.ScriptTypeEditor, Key = Key, Name = "Comic Vine Scraper", Image = "comicvinescraper.png")]
 	public void Scrape(ComicBook[] books)
 	{
-		if (running || books.Length == 0)
+		if (running)
 		{
 			return;
 		}
@@ -60,6 +60,12 @@ public sealed class ComicVineScraperPlugin
 		try
 		{
 			LogStart(ctx);
+			if (books.Length == 0)
+			{
+				// Python still logged the header, said it finished and showed the summary for an empty selection.
+				ctx.Log.Debug("Scraper terminated normally (scraped 0, skipped 0).");
+				return;
+			}
 			config = ctx.Settings.Load();
 			if (string.IsNullOrWhiteSpace(config.ApiKey))
 			{

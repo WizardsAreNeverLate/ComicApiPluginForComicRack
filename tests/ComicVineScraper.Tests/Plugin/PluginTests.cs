@@ -189,6 +189,27 @@ public sealed class PluginTests
 	}
 
 	[Test]
+	public async Task An_empty_selection_logs_the_header_and_still_shows_the_summary_as_Python_did()
+	{
+		using var world = new PluginWorld();
+		string scraped = "", skipped = "";
+		world.Script.On<FinishForm>(form =>
+		{
+			(scraped, skipped) = (Ui.Find<Label>(form, "scraped").Text, Ui.Find<Label>(form, "skipped").Text);
+			Ui.Find<Button>(form, "ok").PerformClick();
+		});
+
+		world.Run(plugin => plugin.Scrape([]));
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "FinishForm" }, CollectionOrdering.Matching);
+		await Assert.That(scraped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(skipped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormSkippedPlural, 0));
+		await Assert.That(world.Requested).IsEmpty();
+		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
+		await Assert.That(world.Log.Any(line => line.StartsWith("CV Scraper Version:", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
 	public async Task Configure_opens_the_settings_dialog_over_the_same_store_and_log_as_the_scrape()
 	{
 		using var world = new PluginWorld();
