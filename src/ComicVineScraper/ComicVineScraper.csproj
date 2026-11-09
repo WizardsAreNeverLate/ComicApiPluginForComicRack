@@ -7,6 +7,9 @@
 	<!-- The in-app smoke test's recorded-response switch (Smoke/RecordedResponses.cs). Never set for a build you ship. -->
 	<PropertyGroup Condition="'$(CvsRecordedResponses)' == 'true'">
 		<DefineConstants>$(DefineConstants);CVS_RECORDED_RESPONSES</DefineConstants>
+		<!-- Its own output and intermediate folders, so this build can never overwrite the shipping bin\<Configuration>\net48\ComicVineScraper.crplugin. -->
+		<BaseOutputPath>bin\smoke\</BaseOutputPath>
+		<IntermediateOutputPath>obj\smoke\$(Configuration)\</IntermediateOutputPath>
 	</PropertyGroup>
 	<ItemGroup>
 		<Compile Remove="Smoke\**" />
