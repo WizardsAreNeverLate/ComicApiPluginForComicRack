@@ -19,6 +19,7 @@ using cYo.Projects.ComicRack.Plugins;
 using cYo.Projects.ComicRack.Plugins.Automation;
 using cYo.Projects.ComicRack.Plugins.Theme;
 using TUnit.Assertions.Enums;
+using EntryPlugin = ComicApiPlugin.Plugin.ComicApiPlugin;
 
 namespace ComicApiPlugin.Tests.Plugin;
 
@@ -344,12 +345,12 @@ public sealed class PluginTests
 		{
 			responses = [.. FixtureFiles.ReadFolder(FixtureFiles.OutputFolder), .. overrides];
 			var ports = new PluginPorts(NewHandler, Folder, new ManualClock());
-			Plugin = new ComicApiPlugin(env, ports);
+			Plugin = new EntryPlugin(env, ports);
 		}
 
 		public string Folder { get; } = Path.Combine(Path.GetTempPath(), "cvs-plugin-" + Guid.NewGuid().ToString("N"));
 
-		public ComicApiPlugin Plugin { get; }
+		public EntryPlugin Plugin { get; }
 
 		public DialogScript Script { get; } = new();
 
@@ -384,7 +385,7 @@ public sealed class PluginTests
 		public void SaveSettings(Configuration config) => new SettingsStore(Folder, new ManualClock()).Save(config);
 
 		/// <summary>Runs the commands on a UI thread with a visible main window, as ComicRack calls them.</summary>
-		public void Run(Action<ComicApiPlugin> commands) => Sta.Run(() =>
+		public void Run(Action<EntryPlugin> commands) => Sta.Run(() =>
 		{
 			using var main = new Form { Text = "ComicRack (test)", ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new System.Drawing.Point(0, 0) };
 			env.Main = main;
