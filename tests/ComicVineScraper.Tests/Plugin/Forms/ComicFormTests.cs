@@ -41,9 +41,9 @@ public sealed class ComicFormTests
 	private static readonly Color[] FivePages = [Color.Red, Color.Orange, Color.Yellow, Color.Green, Color.Blue];
 
 	/// <summary>Shows a ComicForm, runs act once it is up, closes it, and returns what act returned.</summary>
-	private static T WithForm<T>(Func<ComicForm, T> act, bool marked = false) => Sta.Run(() =>
+	private static T WithForm<T>(Func<ComicForm, T> act, bool marked = false, string localizedSuffix = "") => Sta.Run(() =>
 	{
-		using var session = UiSession.Create(marked);
+		using var session = UiSession.Create(marked, localizedSuffix);
 		using var form = new ComicForm(session.Ctx);
 		T result = default!;
 		Ui.WhenShown(form, () =>
@@ -86,6 +86,19 @@ public sealed class ComicFormTests
 		await Assert.That(states[0]).IsEqualTo(("Scraping: Batman 001.cbz", "Cancel (3 remaining)", 0, 3));
 		await Assert.That(states[1]).IsEqualTo(("Scraping: Batman 002.cbz", "Cancel (2 remaining)", 1, 3));
 		await Assert.That(states[2]).IsEqualTo(("Scraping: Batman 003.cbz", "Cancel (1 remaining)", 2, 3));
+	}
+
+	[Test]
+	public async Task The_label_has_one_space_before_the_name_however_much_the_localized_text_ends_in()
+	{
+		// Python's i18n trims only the English defaults; ComicRack hands back the translation untrimmed ("Scraping:  " in en.zip).
+		string label = WithForm(form =>
+		{
+			form.ShowBook(new ColouredBook(Color.Red), TestBooks.Facts(path: @"C:\Comics\Batman 001.cbz"), 1);
+			return Ui.Find<Label>(form, "scraping").Text;
+		}, localizedSuffix: "   ");
+
+		await Assert.That(label).IsEqualTo("Scraping: Batman 001.cbz");
 	}
 
 	[Test]

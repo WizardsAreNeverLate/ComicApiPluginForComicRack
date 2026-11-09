@@ -63,12 +63,12 @@ internal sealed class UiSession : IDisposable
 	public const string Open = "⟦";
 	public const string Close = "⟧";
 
-	private UiSession(bool marked)
+	private UiSession(bool marked, string suffix)
 	{
 		Folder = Path.Combine(Path.GetTempPath(), "cvs-ui-" + Guid.NewGuid().ToString("N"));
 		Log = new DebugLog();
 		Settings = new SettingsStore(Folder, new ManualClock(), Log);
-		Ctx = new PluginContext(ComicVineScraper.Plugin.Strings.Load(new FormsEnvironment(LanguagePack.Folder, marked)), () => null, Settings, Log);
+		Ctx = new PluginContext(ComicVineScraper.Plugin.Strings.Load(new FormsEnvironment(LanguagePack.Folder, marked, suffix)), () => null, Settings, Log);
 	}
 
 	public string Folder { get; }
@@ -77,7 +77,8 @@ internal sealed class UiSession : IDisposable
 	public PluginContext Ctx { get; }
 	public Strings Strings => Ctx.Strings;
 
-	public static UiSession Create(bool marked = false) => new(marked);
+	/// <param name="suffix">Appended to every localized text, as ComicRack hands back the untrimmed "Scraping:  " from en.zip.</param>
+	public static UiSession Create(bool marked = false, string suffix = "") => new(marked, suffix);
 
 	/// <summary>Defender or the indexer can briefly hold a file just written, so deleting retries. Cleanup that still fails is left to the temp folder.</summary>
 	public void Dispose()
@@ -95,7 +96,7 @@ internal sealed class UiSession : IDisposable
 		}
 	}
 
-	private sealed class FormsEnvironment(string commandPath, bool marked) : IPluginEnvironment
+	private sealed class FormsEnvironment(string commandPath, bool marked, string suffix) : IPluginEnvironment
 	{
 		public IEnumerable<string> LibraryPaths => [];
 		public IWin32Window MainWindow => null!;
@@ -105,7 +106,7 @@ internal sealed class UiSession : IDisposable
 		public IComicDisplay ComicDisplay => null!;
 		public string CommandPath { get; set; } = commandPath;
 		public IThemePlugin Theme { get; set; } = null!;
-		public string Localize(string resourceKey, string elementKey, string text) => marked ? Open + text + Close : text;
+		public string Localize(string resourceKey, string elementKey, string text) => (marked ? Open + text + Close : text) + suffix;
 		public object Clone() => this;
 	}
 }

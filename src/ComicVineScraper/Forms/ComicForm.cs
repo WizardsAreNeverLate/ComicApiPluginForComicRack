@@ -64,7 +64,8 @@ internal sealed class ComicForm : ScraperForm
 	/// <summary>The engine starts a book: its name, its first page, one more step of progress, and how many books are left, this one included.</summary>
 	public void ShowBook(IScrapeBook book, BookFacts facts, int remaining)
 	{
-		scraping.Text = Strings[TextKeys.ComicFormScrapingLabel] + " " + Describe(facts);
+		// Python concatenated the label as ComicRack returned it, which is untrimmed (en.zip has "Scraping:  "), and fr.zip has no trailing space at all.
+		scraping.Text = Strings[TextKeys.ComicFormScrapingLabel].TrimEnd() + " " + Describe(facts);
 		pages.ShowBook(book, facts.Snapshot.PageCount);
 		progress.PerformStep();
 		progress.Maximum = progress.Value + remaining;
