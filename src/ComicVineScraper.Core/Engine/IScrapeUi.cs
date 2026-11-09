@@ -9,6 +9,7 @@ namespace ComicVineScraper.Engine;
 /// <summary>
 /// The engine's view of the UI. Dialog methods may complete synchronously (WinForms ShowDialog) or
 /// later (tests). Each must return Cancel, not throw, when ct is cancelled while the dialog is open.
+/// Every IScrapeUi call is made on the UI thread; only IQueryProgress.Report may arrive from another thread.
 /// </summary>
 public interface IScrapeUi
 {

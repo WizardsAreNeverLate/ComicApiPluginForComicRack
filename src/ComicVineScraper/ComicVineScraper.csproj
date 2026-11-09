@@ -23,6 +23,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="Package\**\*" />
+		<EmbeddedResource Include="Package\Images\comicvinelogo.png;Package\Images\*arrow.png" LogicalName="%(Filename)%(Extension)" />
 	</ItemGroup>
 	<Target Name="PackCrPlugin" AfterTargets="Build">
 		<PropertyGroup>

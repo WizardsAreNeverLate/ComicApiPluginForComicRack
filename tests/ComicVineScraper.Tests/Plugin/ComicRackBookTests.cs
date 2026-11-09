@@ -292,6 +292,47 @@ public sealed class ComicRackBookTests
 		await Assert.That(book.Series).IsEqualTo("");
 	}
 
+	[Test]
+	public async Task GetPage_returns_the_page_ComicRack_gives_for_that_index()
+	{
+		var asked = new List<int>();
+		var app = new FakeApplication { Pages = (_, index) => { asked.Add(index); return new Bitmap(100, 150); } };
+
+		using Bitmap? page = new ComicRackBook(new ComicBook { FilePath = @"C:\Comics\Batman 012.cbz" }, app).GetPage(3);
+
+		await Assert.That(page!.Size).IsEqualTo(new Size(100, 150));
+		await Assert.That(asked).IsEquivalentTo([3]);
+	}
+
+	[Test]
+	public async Task GetPage_strips_the_back_cover_from_a_two_page_scan_and_disposes_the_scan()
+	{
+		Bitmap? scan = null;
+		var app = new FakeApplication { Pages = (_, _) => scan = new Bitmap(260, 200) };
+
+		using Bitmap? page = new ComicRackBook(new ComicBook { FilePath = @"C:\Comics\Batman 012.cbz" }, app).GetPage(0);
+
+		await Assert.That(page!.Size).IsEqualTo(new Size(130, 200));
+		await Assert.That(() => scan!.Width).Throws<ArgumentException>();
+	}
+
+	[Test]
+	public async Task GetPage_is_null_for_a_fileless_book_without_asking_ComicRack()
+	{
+		var app = new FakeApplication { Pages = (_, _) => throw new InvalidOperationException("must not be asked") };
+
+		await Assert.That(new ComicRackBook(new ComicBook(), app).GetPage(0)).IsNull();
+	}
+
+	[Test]
+	public async Task GetPage_is_null_when_ComicRack_throws_or_has_no_page()
+	{
+		var book = new ComicBook { FilePath = @"C:\Comics\Batman 012.cbz" };
+
+		await Assert.That(new ComicRackBook(book, new FakeApplication()).GetPage(7)).IsNull();
+		await Assert.That(new ComicRackBook(book, new FakeApplication { Pages = (_, _) => null }).GetPage(0)).IsNull();
+	}
+
 	internal static string Dump(ComicBook book) => string.Join("|",
 		book.Series, book.Number, book.Volume, book.Format, book.Title, book.AlternateSeries, book.Summary, book.Publisher, book.Imprint,
 		book.Characters, book.Teams, book.Locations, book.Writer, book.Penciller, book.Inker, book.Colorist, book.Letterer,

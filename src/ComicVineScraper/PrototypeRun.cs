@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ComicVineScraper.Books;
 using ComicVineScraper.Engine;
+using ComicVineScraper.Text;
 
 namespace ComicVineScraper.Plugin;
 
@@ -16,15 +16,15 @@ internal static class PrototypeRun
 {
 	public const string Stamp = "cvs-net prototype";
 
-	public static async Task<RunSummary> RunAsync(IReadOnlyList<IScrapeBook> books, ComicForm form, Strings strings, CancellationToken ct)
+	public static async Task<RunSummary> RunAsync(IReadOnlyList<IScrapeBook> books, ComicForm form, CancellationToken ct)
 	{
 		int scraped = 0;
 		try
 		{
 			foreach (IScrapeBook book in books)
 			{
-				string file = Path.GetFileName(book.Read().FilePath);
-				form.ShowBook(file.Length > 0 ? file : strings["ComicFormUnknown"], scraped, books.Count);
+				BookFacts facts = BookFacts.From(scraped, book.Read(), ParseName, ignoreFolders: false);
+				form.ShowBook(book, facts, books.Count - scraped);
 				await Task.Delay(TimeSpan.FromSeconds(1), ct);
 				string notes = book.Read().Values.Notes;
 				book.Apply(new BookPatch(new BookValues { Notes = notes.Length == 0 ? Stamp : notes + Environment.NewLine + Stamp }, BookFields.Notes), null);
@@ -36,5 +36,11 @@ internal static class PrototypeRun
 		{
 			return new RunSummary(scraped, books.Count - scraped, Cancelled: true);
 		}
+	}
+
+	private static (string Series, string Number, string Year) ParseName(string name)
+	{
+		ParsedName parsed = FileNameParser.Extract(name);
+		return (parsed.Series, parsed.Number, parsed.Year);
 	}
 }

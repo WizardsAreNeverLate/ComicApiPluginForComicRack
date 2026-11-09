@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
@@ -31,7 +32,7 @@ public sealed class ComicVineScraperPlugin(IPluginEnvironment env)
 		{
 			PluginContext ctx = PluginContext.Open(env);
 			List<IScrapeBook> targets = books.Select(book => (IScrapeBook)new ComicRackBook(book, env.App)).ToList();
-			ScrapeHost.Run(env.MainWindow, ctx, (form, ct) => PrototypeRun.RunAsync(targets, form, ctx.Strings, ct));
+			ScrapeHost.Run(env.MainWindow, ctx, (form, ct) => PrototypeRun.RunAsync(targets, form, ct));
 		}
 		finally
 		{
@@ -40,10 +41,18 @@ public sealed class ComicVineScraperPlugin(IPluginEnvironment env)
 		}
 	}
 
+	/// <summary>The Configure action: the settings dialog, which saves on OK. An error is logged and shown, never passed to ComicRack.</summary>
 	[PluginCommand(PluginEngine.ScriptTypeConfig, Key = Key)]
 	public void Configure()
 	{
 		PluginContext ctx = PluginContext.Open(env);
-		MessageBox.Show(env.MainWindow, "The settings dialog arrives in phase 4.", ctx.Strings["ConfigFormTitle"], MessageBoxButtons.OK, MessageBoxIcon.Information);
+		try
+		{
+			ConfigForm.Show(env.MainWindow, ctx);
+		}
+		catch (Exception error)
+		{
+			ErrorDialogs.Show(env.MainWindow, ctx, error);
+		}
 	}
 }
