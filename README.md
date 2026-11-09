@@ -25,13 +25,15 @@ The port keeps the original plugin's behaviour:
 
 Where the original had bugs, the port fixes them instead of reproducing them. Each change is listed in [`docs/port/deviations.md`](docs/port/deviations.md) with the test that pins it.
 
-The plugin reads and writes the original plugin's settings files in `%APPDATA%\Comic Vine Scraper` (`settings.dat`, `advanced.dat`, `series.dat` and `geometry.dat`). You can switch between the two plugins and keep your settings. The command key is `comic-api-net`, so both plugins can be installed together. They then share those files. Issue [#2](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/issues/2) tracks whether the key stays this way.
+The plugin reads and writes the original plugin's settings files in `%APPDATA%\Comic Vine Scraper` (`settings.dat`, `advanced.dat`, `series.dat` and `geometry.dat`). You can switch between the two plugins and keep your settings. The command key is `comic-api-net`, not the original's `comic-vine-scraper`, so both plugins can be installed together. They then share those files. This is a deliberate decision ([#2](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/issues/2)), not a temporary state.
 
 ## Install
 
 1. Build or get `ComicApiPlugin.crplugin` (see the next section).
 2. In a ComicRack CE build of `integration`, open **Edit > Preferences > Scripts**, then install the `.crplugin`. Restart ComicRack when it asks.
-3. Select books, then run **Comic Vine Scraper** from ComicRack's scripts (the toolbar's Scripts button, or the books' right-click Automation menu). On the first run, the plugin asks for your API key.
+3. Select books, then run **Comic API Plugin** from ComicRack's scripts (the toolbar's Scripts button, or the books' right-click Automation menu). On the first run, the plugin asks for your API key.
+
+If you installed an earlier build, its package is named **Comic Vine Scraper .NET**. Uninstall it first. ComicRack installs each package into a folder named after the package, so the old package would stay installed beside this one with the same command key, and ComicRack would load only one of them.
 
 If Windows blocked the downloaded file, the plugin's DLL is blocked too, and ComicRack reports it. Unblock the `.crplugin` (**Properties > Unblock**) before you install it.
 

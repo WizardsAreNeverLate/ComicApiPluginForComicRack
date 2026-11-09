@@ -15,7 +15,7 @@ using cYo.Projects.ComicRack.Plugins;
 namespace CvsNetSmoke;
 
 /// <summary>
-/// Drives the Comic Vine Scraper .NET plugin inside ComicRack: a scrape of two fileless books, every dialog answered through
+/// Drives the Comic API Plugin inside ComicRack: a scrape of two fileless books, every dialog answered through
 /// its controls (no keyboard injection), DrawToBitmap renders, Win32 IsWindowEnabled on the main window, and a debug log
 /// save from two forms through the shared log. Writes report.txt and the renders to CVS_NET_SMOKE_OUT, then closes ComicRack.
 /// The report carries one ASSERT line for the claim that the forms share one log; run-smoke.ps1 adds the claim about the user's settings.

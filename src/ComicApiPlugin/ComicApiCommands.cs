@@ -44,7 +44,7 @@ public sealed class ComicApiCommands
 	/// scrapeengine.py's scrape. Blocks until the run ends, as both hooks require: the Editor hook passes a copy of the book
 	/// and reads it back the moment this returns. A second call while a run is in progress returns at once.
 	/// </summary>
-	[PluginCommand(PluginEngine.ScriptTypeBooks + "," + PluginEngine.ScriptTypeEditor, Key = Key, Name = "Comic Vine Scraper", Image = "comicvinescraper.png")]
+	[PluginCommand(PluginEngine.ScriptTypeBooks + "," + PluginEngine.ScriptTypeEditor, Key = Key, Name = "Comic API Plugin", Image = "comicvinescraper.png")]
 	public void Scrape(ComicBook[] books)
 	{
 		if (running)

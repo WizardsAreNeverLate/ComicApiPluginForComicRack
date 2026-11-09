@@ -63,7 +63,7 @@ public sealed class TextKeysTests
 		Dictionary<string, string> texts = table.Element("Texts")!.Elements("Text").ToDictionary(t => (string)t.Attribute("Key")!, t => (string)t.Attribute("Text")!);
 
 		await Assert.That((string)table.Attribute("Name")!).IsEqualTo("comic-api-net");
-		await Assert.That(texts["Name"]).Contains(".NET");
+		await Assert.That(texts["Name"]).IsEqualTo("Comic API Plugin...");
 		await Assert.That(texts["Description"].Length).IsGreaterThan(10);
 	}
 
