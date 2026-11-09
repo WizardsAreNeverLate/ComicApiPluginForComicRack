@@ -1,6 +1,6 @@
-// ComicVineScraper.Oracle.Tests: differential tests against the Python plugin.
+// ComicApiPlugin.Oracle.Tests: differential tests against the Python plugin.
 
-namespace ComicVineScraper.Oracle.Tests;
+namespace ComicApiPlugin.Oracle.Tests;
 
 /// <summary>
 /// Calls the original modules in-process under IronPython 2.7.4 from ComicRack's install (ComicRackDir).

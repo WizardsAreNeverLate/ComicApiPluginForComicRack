@@ -22,7 +22,7 @@ namespace CvsNetSmoke;
 /// </summary>
 public sealed class Probe(IPluginEnvironment env)
 {
-	private const string Key = "comic-vine-scraper-net";
+	private const string Key = "comic-api-net";
 	private const string ApiKey = "0123456789abcdef0123456789abcdef01234567";
 	private readonly Report report = new(Path.Combine(Environment.GetEnvironmentVariable("CVS_NET_SMOKE_OUT")!, "report.txt"));
 	private readonly HashSet<Form> handled = [];
@@ -89,7 +89,7 @@ public sealed class Probe(IPluginEnvironment env)
 		List<Form> open;
 		try
 		{
-			open = [.. Application.OpenForms.Cast<Form>().Where(f => f.Visible && f.IsHandleCreated && f.GetType().Namespace == "ComicVineScraper.Plugin")];
+			open = [.. Application.OpenForms.Cast<Form>().Where(f => f.Visible && f.IsHandleCreated && f.GetType().Namespace == "ComicApiPlugin.Plugin")];
 		}
 		catch (InvalidOperationException)
 		{

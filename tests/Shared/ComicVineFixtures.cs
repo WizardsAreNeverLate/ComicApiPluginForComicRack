@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ComicVineScraper.Fixtures;
+namespace ComicApiPlugin.Fixtures;
 
 /// <summary>A saved Comic Vine response. Url has the key replaced by REDACTED.</summary>
 public sealed record RecordedResponse(string Url, HttpStatusCode Status, string Body);

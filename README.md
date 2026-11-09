@@ -1,4 +1,4 @@
-# Comic Vine Scraper .NET
+# Comic API Plugin for ComicRack CE
 
 [![Build and test](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/actions/workflows/build.yml/badge.svg)](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/actions/workflows/build.yml)
 
@@ -25,11 +25,11 @@ The port keeps the original plugin's behaviour:
 
 Where the original had bugs, the port fixes them instead of reproducing them. Each change is listed in [`docs/port/deviations.md`](docs/port/deviations.md) with the test that pins it.
 
-The plugin reads and writes the original plugin's settings files in `%APPDATA%\Comic Vine Scraper` (`settings.dat`, `advanced.dat`, `series.dat` and `geometry.dat`). You can switch between the two plugins and keep your settings. The command key is `comic-vine-scraper-net`, so both plugins can be installed together. They then share those files. Issue [#2](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/issues/2) tracks whether the key stays this way.
+The plugin reads and writes the original plugin's settings files in `%APPDATA%\Comic Vine Scraper` (`settings.dat`, `advanced.dat`, `series.dat` and `geometry.dat`). You can switch between the two plugins and keep your settings. The command key is `comic-api-net`, so both plugins can be installed together. They then share those files. Issue [#2](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/issues/2) tracks whether the key stays this way.
 
 ## Install
 
-1. Build or get `ComicVineScraper.crplugin` (see the next section).
+1. Build or get `ComicApiPlugin.crplugin` (see the next section).
 2. In a ComicRack CE build of `integration`, open **Edit > Preferences > Scripts**, then install the `.crplugin`. Restart ComicRack when it asks.
 3. Select books, then run **Comic Vine Scraper** from ComicRack's scripts (the toolbar's Scripts button, or the books' right-click Automation menu). On the first run, the plugin asks for your API key.
 
@@ -46,7 +46,7 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 ./Build.ps1 -SkipTests
 ```
 
-The package is written to `src\ComicVineScraper\bin\<Configuration>\net48\ComicVineScraper.crplugin`.
+The package is written to `src\ComicApiPlugin\bin\<Configuration>\net48\ComicApiPlugin.crplugin`.
 
 The CI workflow (`.github/workflows/build.yml`) runs in this order:
 
@@ -59,8 +59,8 @@ Use `Build.ps1` rather than `dotnet build`. The projects contain binary `.resx` 
 
 ## Tests
 
-- **`tests/ComicVineScraper.Tests`:** fast unit tests using [TUnit](https://github.com/thomhurst/TUnit). They run against recorded Comic Vine responses, which are stored with the API key removed.
-- **`tests/ComicVineScraper.Oracle.Tests`:** these tests run the original Python modules under IronPython in the test process. They check that the port gives the same results on a shared set of inputs.
+- **`tests/ComicApiPlugin.Tests`:** fast unit tests using [TUnit](https://github.com/thomhurst/TUnit). They run against recorded Comic Vine responses, which are stored with the API key removed.
+- **`tests/ComicApiPlugin.Oracle.Tests`:** these tests run the original Python modules under IronPython in the test process. They check that the port gives the same results on a shared set of inputs.
 - **`tools/smoke`:** an in-app check that starts ComicRack and drives the plugin over recorded responses.
 - **`tools/differential`:** an in-app comparison of the Python and the C# plugin. It runs against the live API, and needs an API key file.
 
@@ -70,8 +70,8 @@ Both in-app tools use a separate ComicRack configuration and a temporary setting
 
 | Path | Contents |
 |---|---|
-| `src/ComicVineScraper.Core` | Engine, matching, Comic Vine client and settings. No WinForms or ComicRack references. |
-| `src/ComicVineScraper` | The ComicRack plugin: commands, forms, and the mapping to `ComicBook`. |
+| `src/ComicApiPlugin.Core` | Engine, matching, Comic Vine client and settings. No WinForms or ComicRack references. |
+| `src/ComicApiPlugin` | The ComicRack plugin: commands, forms, and the mapping to `ComicBook`. |
 | `docs/port` | Port plan, architecture, and the list of differences from the original. |
 | `.audit/cvs-port.tsv` | Decision log for the port. |
 

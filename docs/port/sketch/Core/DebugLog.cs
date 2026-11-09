@@ -1,6 +1,6 @@
-// ComicVineScraper.Core: diagnostics.
+// ComicApiPlugin.Core: diagnostics.
 
-namespace ComicVineScraper.Diagnostics;
+namespace ComicApiPlugin.Diagnostics;
 
 /// <summary>
 /// The in-memory debug log (log.py). Thread-safe append; nothing goes to disk unless the user saves it.

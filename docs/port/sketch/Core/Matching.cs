@@ -1,6 +1,6 @@
-// ComicVineScraper.Core: series ranking, cover hashing, and auto-match.
+// ComicApiPlugin.Core: series ranking, cover hashing, and auto-match.
 
-namespace ComicVineScraper.Matching;
+namespace ComicApiPlugin.Matching;
 
 /// <summary>MatchScore.compute_n. Pure given the chosen-series set and the current year.</summary>
 public static class MatchScore

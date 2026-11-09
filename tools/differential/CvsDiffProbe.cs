@@ -22,7 +22,7 @@ namespace CvsDiffProbe;
 public sealed class Probe(IPluginEnvironment env)
 {
 	private const string PythonKey = "comic-vine-scraper";
-	private const string NetKey = "comic-vine-scraper-net";
+	private const string NetKey = "comic-api-net";
 	private readonly string output = Environment.GetEnvironmentVariable("CVS_DIFF_OUT")!;
 	private readonly Report report = new(Path.Combine(Environment.GetEnvironmentVariable("CVS_DIFF_OUT")!, "probe.txt"));
 	private readonly HashSet<Form> handled = [];
@@ -322,7 +322,7 @@ public sealed class Probe(IPluginEnvironment env)
 	private static string TypeName(Form form) => form.GetType().Name.Split('$')[0];
 
 	private static bool IsPluginForm(Form form) =>
-		form.GetType().Namespace == "ComicVineScraper.Plugin" || form.GetType().Assembly.IsDynamic;
+		form.GetType().Namespace == "ComicApiPlugin.Plugin" || form.GetType().Assembly.IsDynamic;
 
 	/// <summary>
 	/// The same policy for both plugins: select the best-scoring row of any candidate list, press the form's accept button when it

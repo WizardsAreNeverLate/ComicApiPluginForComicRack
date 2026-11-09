@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using ComicVineScraper.Engine;
+using ComicApiPlugin.Engine;
 
-namespace ComicVineScraper.Fixtures;
+namespace ComicApiPlugin.Fixtures;
 
 /// <summary>
 /// A clock whose Delay advances Now (and Elapsed) instead of waiting, so a test asserts the 1100 ms gap without spending it.

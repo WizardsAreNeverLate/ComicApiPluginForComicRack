@@ -146,7 +146,7 @@ HelpLink    = https://github.com/cbanack/comic-vine-scraper/wiki
   - `comicvinescraper.png`: the hook icon.
   - The arrow images for ComicForm.
   - `packagelogo.jpg`.
-- Build: the Ant `dist` target flattens `src/`, replaces `!DEV!` with the version, and zips everything to `ComicVineScraper-<Version>.crplugin`.
+- Build: the Ant `dist` target flattens `src/`, replaces `!DEV!` with the version, and zips everything to `ComicApiPlugin-<Version>.crplugin`.
 
 ## Launcher and tests
 

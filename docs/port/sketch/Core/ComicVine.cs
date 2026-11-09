@@ -1,7 +1,7 @@
-// ComicVineScraper.Core: the Comic Vine client.
+// ComicApiPlugin.Core: the Comic Vine client.
 // Public surface: IComicVine, ComicVineCatalog, ComicVineHttp, ComicVineException. XML stays internal.
 
-namespace ComicVineScraper.ComicVine;
+namespace ComicApiPlugin.ComicVine;
 
 /// <summary>
 /// What the engine and the forms ask Comic Vine. Domain types only; no URLs to build, no XML, no paging.

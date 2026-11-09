@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ComicVineScraper.Fixtures;
+namespace ComicApiPlugin.Fixtures;
 
 /// <summary>A one-thread message loop, as ComicRack's UI thread is: every continuation posted to it runs on the thread that called Run.</summary>
 internal sealed class SingleThreadContext : SynchronizationContext

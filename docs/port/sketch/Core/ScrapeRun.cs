@@ -1,8 +1,8 @@
-// ComicVineScraper.Core: the scrape loop. Ports scrapeengine.py as an explicit per-book state machine.
+// ComicApiPlugin.Core: the scrape loop. Ports scrapeengine.py as an explicit per-book state machine.
 // Runs on whatever SynchronizationContext calls RunAsync. In the plugin that is ComicRack's UI thread,
 // so IScrapeBook and IScrapeUi calls need no marshalling. Comic Vine I/O awaits; nothing blocks.
 
-namespace ComicVineScraper.Engine;
+namespace ComicApiPlugin.Engine;
 
 public enum BookOutcome { Scraped, Skipped, Delayed, Cancelled }
 

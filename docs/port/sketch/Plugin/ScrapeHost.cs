@@ -1,7 +1,7 @@
 // Threading. Replaces Application.DoEvents, the ComicForm Application.Run thread, Monitor wait/pulse,
 // and utils.invoke. Everything runs on ComicRack's UI thread; only HTTP and hashing leave it.
 
-namespace ComicVineScraper.Plugin;
+namespace ComicApiPlugin.Plugin;
 
 /// <summary>
 /// Runs an async scrape inside the ComicForm's modal loop, so the hook can block (the Editor hook needs that)

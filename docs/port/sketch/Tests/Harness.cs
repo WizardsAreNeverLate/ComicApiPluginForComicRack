@@ -1,9 +1,9 @@
-// ComicVineScraper.Tests (TUnit, net48, x64): Core only, no ComicRack install needed except for the
+// ComicApiPlugin.Tests (TUnit, net48, x64): Core only, no ComicRack install needed except for the
 // adapter round-trip tests, which reference ComicRack.Engine to construct real ComicBook objects.
-// ComicVineScraper.Oracle.Tests: the IronPython 2.7.4 differential tests, separate so they can be skipped
+// ComicApiPlugin.Oracle.Tests: the IronPython 2.7.4 differential tests, separate so they can be skipped
 // on a machine without ComicRack's IronPython.
 
-namespace ComicVineScraper.Tests;
+namespace ComicApiPlugin.Tests;
 
 /// <summary>Answers dialogs from a script and records what the engine asked. Unscripted questions fail the test.</summary>
 public sealed class ScriptedUi : IScrapeUi

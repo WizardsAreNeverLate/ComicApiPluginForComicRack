@@ -7,7 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$solution = Join-Path $PSScriptRoot "ComicVineScraper.sln"
+$solution = Join-Path $PSScriptRoot "ComicApiPlugin.sln"
 
 if (!$ComicRackDir) {
 	Write-Error "Set COMICRACK_DIR, or pass -ComicRackDir, to the output folder of a ComicRack CE build of WizardsAreNeverLate/ComicRackCE branch integration."
@@ -29,7 +29,7 @@ Write-Output "MSBuild: $msbuild"
 Write-Output "ComicRackDir: $ComicRackDir"
 
 # Restore from nuget.org only, so a machine-wide NuGet config with unreachable sources cannot fail the build
-$nugetConfig = Join-Path ([System.IO.Path]::GetTempPath()) "ComicVineScraper.nuget.config"
+$nugetConfig = Join-Path ([System.IO.Path]::GetTempPath()) "ComicApiPlugin.nuget.config"
 @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -61,7 +61,7 @@ if ($SkipTests) {
 
 $env:TESTINGPLATFORM_TELEMETRY_OPTOUT = "1"
 $failed = @()
-foreach ($name in "ComicVineScraper.Tests", "ComicVineScraper.Oracle.Tests") {
+foreach ($name in "ComicApiPlugin.Tests", "ComicApiPlugin.Oracle.Tests") {
 	$exe = Join-Path $PSScriptRoot "tests\$name\bin\$Configuration\net48\$name.exe"
 	if (!(Test-Path $exe)) {
 		Write-Error "The build reported success, but $exe does not exist."

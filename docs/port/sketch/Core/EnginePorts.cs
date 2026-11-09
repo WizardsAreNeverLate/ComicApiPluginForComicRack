@@ -1,8 +1,8 @@
-// ComicVineScraper.Core: what the engine needs from the outside, and what users can answer.
+// ComicApiPlugin.Core: what the engine needs from the outside, and what users can answer.
 // The plugin implements IScrapeBook and IScrapeUi with ComicRack and WinForms.
 // Tests implement them with FakeBook and ScriptedUi (Tests/ScriptedUi.cs).
 
-namespace ComicVineScraper.Engine;
+namespace ComicApiPlugin.Engine;
 
 /// <summary>
 /// One library book. Every member is called on the thread that runs the scrape (ComicRack's UI thread

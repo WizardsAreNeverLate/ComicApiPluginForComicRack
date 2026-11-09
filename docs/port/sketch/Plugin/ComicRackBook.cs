@@ -1,6 +1,6 @@
 // The ComicRack boundary. The only file that reads or writes cYo ComicBook properties.
 
-namespace ComicVineScraper.Plugin;
+namespace ComicApiPlugin.Plugin;
 
 /// <summary>
 /// Adapts one ComicRack book to IScrapeBook. Field-by-field mapping lives here and nowhere else;

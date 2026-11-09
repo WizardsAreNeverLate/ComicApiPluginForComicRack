@@ -8,7 +8,7 @@ The port keeps the plugin's behaviour and replaces Python patterns with .NET one
 
 The port is done when every item below is true:
 
-1. The build produces `ComicVineScraper.crplugin`. The plugin installs in a ComicRackCE build of `feat/dotnet-plugins` and shows the **Comic Vine Scraper** command, including its **Configure** action.
+1. The build produces `ComicApiPlugin.crplugin`. The plugin installs in a ComicRackCE build of `feat/dotnet-plugins` and shows the **Comic Vine Scraper** command, including its **Configure** action.
 2. The Python project's golden tests pass against the C# code:
    - the 286 filename cases in `test_fnameparser.data`
    - the `natural_compare` and `natural_key` cases

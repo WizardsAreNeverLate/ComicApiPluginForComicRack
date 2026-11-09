@@ -4,7 +4,7 @@ Runs the in-app smoke test: ComicRack drives the .NET plugin over recorded Comic
 
 .DESCRIPTION
 Run Build.ps1 first, so the packages are restored. This script then builds the plugin with -p:CvsRecordedResponses=true (into
-src\ComicVineScraper\bin\smoke, never the shipping output) and the probe (tools\smoke\CvsNetSmoke.cs), installs both under
+src\ComicApiPlugin\bin\smoke, never the shipping output) and the probe (tools\smoke\CvsNetSmoke.cs), installs both under
 ComicRack's Scripts folder, starts ComicRack with -ac CvsNetSmoke, and waits for the probe to close it. It never touches the
 real %APPDATA%\Comic Vine Scraper folder: the plugin keeps its settings in the run folder.
 
@@ -24,12 +24,12 @@ if (!$Bin) { throw "Set COMICRACK_DIR, or pass -Bin, to the output folder of a C
 if (Get-Process ComicRack -ErrorAction SilentlyContinue) { Write-Output "BLOCKED: a ComicRack process is already running"; exit 2 }
 
 $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
-foreach ($project in "$Repo\src\ComicVineScraper\ComicVineScraper.csproj", "$here\CvsNetSmoke.csproj") {
+foreach ($project in "$Repo\src\ComicApiPlugin\ComicApiPlugin.csproj", "$here\CvsNetSmoke.csproj") {
 	# The switch only matters to the plugin; the probe ignores it.
 	& $msbuild $project -t:Rebuild -p:Configuration=Release -p:CvsRecordedResponses=true "-p:ComicRackDir=$Bin" -nologo -v:minimal "-clp:ErrorsOnly;Summary" | Out-Null
 	if ($LASTEXITCODE -ne 0) { throw "build failed: $project" }
 }
-$crplugin = "$Repo\src\ComicVineScraper\bin\smoke\Release\net48\ComicVineScraper.crplugin"
+$crplugin = "$Repo\src\ComicApiPlugin\bin\smoke\Release\net48\ComicApiPlugin.crplugin"
 $probeDll = "$here\bin\Release\net48\CvsNetSmoke.dll"
 foreach ($built in $crplugin, $probeDll) {
 	if (!(Test-Path $built)) { throw "the build reported success, but $built does not exist" }
@@ -48,7 +48,7 @@ New-Item -ItemType Directory -Force (Join-Path $run "fixtures"), (Join-Path $run
 Copy-Item "$Repo\tests\fixtures\comicvine\*.txt" (Join-Path $run "fixtures")
 $report = Join-Path $out "report.txt"
 
-$plugin = Join-Path $Bin "Scripts\ComicVineScraperNet"
+$plugin = Join-Path $Bin "Scripts\ComicApiPluginNet"
 $probe = Join-Path $Bin "Scripts\CvsNetSmoke"
 if ((Test-Path $plugin) -or (Test-Path $probe)) { throw "an earlier install is still in Scripts; remove it first" }
 New-Item -ItemType Directory -Force $plugin, $probe | Out-Null

@@ -1,8 +1,8 @@
-// ComicVineScraper.Core: the pure algorithms. Every public method here is an oracle seam: primitive or
+// ComicApiPlugin.Core: the pure algorithms. Every public method here is an oracle seam: primitive or
 // record inputs, deterministic output, no I/O, no clock. Tests call the Python function of the same
 // name under IronPython 2.7.4 with the same inputs and compare.
 
-namespace ComicVineScraper.Text;
+namespace ComicApiPlugin.Text;
 
 /// <summary>Python 2 str() of numbers: 21.0 stays "21.0", 12 significant digits. Used by the parser and DatFile.</summary>
 public static class PyStr

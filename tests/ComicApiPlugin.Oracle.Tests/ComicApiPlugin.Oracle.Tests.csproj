@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<IsPackable>false</IsPackable>
+		<Prefer32Bit>false</Prefer32Bit>
+		<UsesComicRack>true</UsesComicRack>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="TUnit" Version="1.81.10" />
+		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="8.0.1" />
+	</ItemGroup>
+	<ItemGroup>
+		<Reference Include="System.Net.Http" />
+		<Reference Include="System.Drawing" />
+		<Reference Include="System.Xml.Linq" />
+		<Reference Include="IronPython" HintPath="$(ComicRackPath)IronPython.dll" />
+		<Reference Include="IronPython.Modules" HintPath="$(ComicRackPath)IronPython.Modules.dll" />
+		<Reference Include="Microsoft.Scripting" HintPath="$(ComicRackPath)Microsoft.Scripting.dll" />
+		<Reference Include="Microsoft.Dynamic" HintPath="$(ComicRackPath)Microsoft.Dynamic.dll" />
+		<Reference Include="System.Drawing" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="Python\*.py" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+	<ItemGroup>
+		<Reference Include="System.Drawing" />
+		<Reference Include="ComicRack.Plugins" HintPath="$(ComicRackPath)ComicRack.Plugins.dll" />
+		<Reference Include="ComicRack.Engine" HintPath="$(ComicRackPath)ComicRack.Engine.dll" />
+		<Reference Include="cYo.Common" HintPath="$(ComicRackPath)cYo.Common.dll" />
+	</ItemGroup>
+	<ItemGroup>
+		<Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+		<None Include="..\fixtures\comicvine\*.txt" Link="fixtures\comicvine\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="py\*.py" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\ComicApiPlugin.Core\ComicApiPlugin.Core.csproj" />
+		<ProjectReference Include="..\..\src\ComicApiPlugin\ComicApiPlugin.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="python\*.py" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+</Project>

@@ -1,7 +1,7 @@
-// ComicVineScraper.Core: the book as the engine sees it.
+// ComicApiPlugin.Core: the book as the engine sees it.
 // The plugin adapter (Plugin/ComicRackBook.cs) is the only code that converts to and from cYo ComicBook.
 
-namespace ComicVineScraper.Books;
+namespace ComicApiPlugin.Books;
 
 /// <summary>
 /// Every ComicRack property the scraper may write. Replaces Python's "dont_update" strings:

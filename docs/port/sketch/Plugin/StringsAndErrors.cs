@@ -1,7 +1,7 @@
 // i18n and user-facing errors. Core has no user-visible strings: it returns typed results and
 // ComicVineException kinds, and this layer turns them into localized text.
 
-namespace ComicVineScraper.Plugin;
+namespace ComicApiPlugin.Plugin;
 
 /// <summary>
 /// Localize("Script.ComicVineScraper", key, englishDefault). English defaults come from the bundled en.zip

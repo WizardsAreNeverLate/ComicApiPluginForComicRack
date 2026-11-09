@@ -1,7 +1,7 @@
-// ComicVineScraper.Core: Comic Vine domain model.
+// ComicApiPlugin.Core: Comic Vine domain model.
 // No ComicRack, no WinForms, no XML types. Everything here is immutable.
 
-namespace ComicVineScraper.Model;
+namespace ComicApiPlugin.Model;
 
 /// <summary>Comic Vine volume id (the N in 4050-N).</summary>
 public readonly record struct SeriesId(int Value)

@@ -34,7 +34,7 @@ The base URL is `https://comicvine.gamespot.com/api/...`. Every request carries 
   - `cvdb._initialize` throws on an empty key (`cvdb.py:54`).
 - Transport (`utils.py:363-397`):
   - Forces TLS 1.2 and uses `WebRequest`.
-  - User agent: `ComicVineScraper/{ver} (https://github.com/cbanack/comic-vine-scraper/)`. Image requests use `[ComicVineScraper, version {ver}]` instead (`cvdb.py:453`).
+  - User agent: `ComicApiPlugin/{ver} (https://github.com/cbanack/comic-vine-scraper/)`. Image requests use `[ComicApiPlugin, version {ver}]` instead (`cvdb.py:453`).
   - Any status other than 200 throws a WebException.
   - The whole response body is passed through `HtmlDecode` before the XML is parsed.
   - No timeout is set, so the default of 100 s applies.

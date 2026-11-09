@@ -1,6 +1,6 @@
-// ComicVineScraper.Core: the merge rules. The only code that decides what gets written.
+// ComicApiPlugin.Core: the merge rules. The only code that decides what gets written.
 
-namespace ComicVineScraper.Books;
+namespace ComicApiPlugin.Books;
 
 /// <summary>
 /// The complete write for one book: target values plus the fields to write. Built by MergeRules,

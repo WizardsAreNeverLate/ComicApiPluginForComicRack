@@ -44,13 +44,13 @@ function Invoke-Build([string]$project, [string[]]$extra) {
 	& $msbuild $project -restore -t:Rebuild -p:Configuration=Release @extra "-p:ComicRackDir=$Bin" -nologo -v:minimal "-clp:ErrorsOnly;Summary" | Out-Null
 	if ($LASTEXITCODE -ne 0) { throw "build failed: $project" }
 }
-$pluginProject = "$Repo\src\ComicVineScraper\ComicVineScraper.csproj"
+$pluginProject = "$Repo\src\ComicApiPlugin\ComicApiPlugin.csproj"
 Invoke-Build $pluginProject @()
 Invoke-Build $pluginProject @("-p:CvsRecordedResponses=true")
 Invoke-Build "$here\CvsDiffProbe.csproj" @()
-$normalDll = "$Repo\src\ComicVineScraper\bin\Release\net48\ComicVineScraper.dll"
-$crplugin = "$Repo\src\ComicVineScraper\bin\smoke\Release\net48\ComicVineScraper.crplugin"
-$switchDll = "$Repo\src\ComicVineScraper\bin\smoke\Release\net48\ComicVineScraper.dll"
+$normalDll = "$Repo\src\ComicApiPlugin\bin\Release\net48\ComicApiPlugin.dll"
+$crplugin = "$Repo\src\ComicApiPlugin\bin\smoke\Release\net48\ComicApiPlugin.crplugin"
+$switchDll = "$Repo\src\ComicApiPlugin\bin\smoke\Release\net48\ComicApiPlugin.dll"
 $probeDll = "$here\bin\Release\net48\CvsDiffProbe.dll"
 foreach ($built in $normalDll, $switchDll, $crplugin, $probeDll) {
 	if (!(Test-Path $built)) { throw "the build reported success, but $built does not exist" }
@@ -143,9 +143,9 @@ catch {
 	throw
 }
 
-$net = Join-Path $Bin "Scripts\ComicVineScraperNet"
+$net = Join-Path $Bin "Scripts\ComicApiPluginNet"
 $probe = Join-Path $Bin "Scripts\CvsDiffProbe"
-$py = Join-Path $Bin "Scripts\ComicVineScraperPy"
+$py = Join-Path $Bin "Scripts\ComicApiPluginPy"
 if ((Test-Path $net) -or (Test-Path $probe) -or (Test-Path $py)) { throw "an earlier install is still in Scripts; remove it first" }
 
 $failures = @()
