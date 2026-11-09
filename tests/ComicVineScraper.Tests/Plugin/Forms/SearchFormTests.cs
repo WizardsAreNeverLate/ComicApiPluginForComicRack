@@ -145,6 +145,22 @@ public sealed class SearchFormTests
 	}
 
 	[Test]
+	public async Task Ctrl_Skip_stays_skip_forever_when_the_closing_dialog_loses_focus()
+	{
+		using var session = UiSession.Create();
+
+		SearchChoice choice = Ask(session, "Batman", null, form =>
+		{
+			Ui.Activate(form);
+			Ui.KeyDown(Ui.Find<TextBox>(form, "terms"), Keys.ControlKey);
+			Ui.Find<Button>(form, "skip").PerformClick();
+			Ui.Deactivate(form);
+		});
+
+		await Assert.That(choice).IsTypeOf<SearchChoice.SkipForever>();
+	}
+
+	[Test]
 	public async Task Releasing_Ctrl_restores_a_plain_Skip()
 	{
 		using var session = UiSession.Create();

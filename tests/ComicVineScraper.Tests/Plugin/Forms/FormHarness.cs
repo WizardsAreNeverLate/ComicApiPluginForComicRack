@@ -107,6 +107,7 @@ internal static class Ui
 {
 	private const int WmKeyDown = 0x100;
 	private const int WmKeyUp = 0x101;
+	private const int WmActivate = 0x006;
 	private const int WmMouseMove = 0x200;
 	private const int WmLButtonDown = 0x201;
 	private const int WmLButtonUp = 0x202;
@@ -182,6 +183,12 @@ internal static class Ui
 	public static void KeyDown(Control target, Keys key) => SendMessage(target.Handle, WmKeyDown, (IntPtr)key, IntPtr.Zero);
 
 	public static void KeyUp(Control target, Keys key) => SendMessage(target.Handle, WmKeyUp, (IntPtr)key, (IntPtr)unchecked((int)0xC0000001));
+
+	/// <summary>What a form receives when it becomes the active window, as a dialog the user works in is.</summary>
+	public static void Activate(Form form) => SendMessage(form.Handle, WmActivate, (IntPtr)1, IntPtr.Zero);
+
+	/// <summary>What a form receives when another window takes the focus, as happens to a modal dialog while it closes.</summary>
+	public static void Deactivate(Form form) => SendMessage(form.Handle, WmActivate, IntPtr.Zero, IntPtr.Zero);
 
 	public static void MouseMove(Control target, Point at) => SendMessage(target.Handle, WmMouseMove, IntPtr.Zero, Position(at));
 

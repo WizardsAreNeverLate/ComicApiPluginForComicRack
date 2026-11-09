@@ -20,6 +20,7 @@ internal abstract class ScraperForm : Form
 	private Button? skip;
 	private string skipText = "";
 	private bool controlHeld;
+	private bool skippedForever;
 
 	/// <param name="geometryKey">The geometry.dat prefix, such as "searchform", or null for a form that always opens centred.</param>
 	protected ScraperForm(PluginContext ctx, string? geometryKey, bool persistSize = false)
@@ -45,8 +46,11 @@ internal abstract class ScraperForm : Form
 	/// <summary>"Comic Vine Scraper - v1.2.3". Python hard-coded the English name; FinishFormTitle is the same text, localized.</summary>
 	protected string ProductTitle => Strings.Format(TextKeys.FinishFormTitle, typeof(ScraperForm).Assembly.GetName().Version.ToString(3));
 
-	/// <summary>True while the user holds Ctrl over a form with a Skip button, which then reads "- Skip -" and means skip forever.</summary>
-	protected bool SkipForever => controlHeld;
+	/// <summary>
+	/// Whether Skip was clicked while it read "- Skip -" (Ctrl held). Taken at the click, because a closing dialog loses the
+	/// focus before ShowDialog returns, and losing the focus releases Ctrl.
+	/// </summary>
+	protected bool SkipForever => skippedForever;
 
 	/// <summary>
 	/// ShowDialog that a cancelled token closes, the way Python's cancel listeners closed each dialog. The result is Cancel
@@ -79,6 +83,7 @@ internal abstract class ScraperForm : Form
 		skip = button;
 		skipText = Strings[textKey];
 		button.Text = skipText;
+		button.Click += (_, _) => skippedForever = controlHeld;
 	}
 
 	/// <summary>Cut, Copy, and Paste in ComicRack's language, where Windows would show its own.</summary>
