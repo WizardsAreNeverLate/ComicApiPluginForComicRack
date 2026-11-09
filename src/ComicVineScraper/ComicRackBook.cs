@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -99,7 +98,7 @@ internal sealed class ComicRackBook(ComicBook book, IApplication app) : IScrapeB
 	/// Writes in one synchronous pass with no awaits, so a write can only be partial if a ComicRack setter throws.
 	/// A patch whose date bits break DateGate, or a thumbnail for a book with a file, is a planning bug, and is refused before anything is written.
 	/// </summary>
-	public void Apply(BookPatch patch, Bitmap? thumbnail)
+	public bool Apply(BookPatch patch, Bitmap? thumbnail)
 	{
 		if (thumbnail is not null && !string.IsNullOrEmpty(book.FilePath))
 		{
@@ -114,10 +113,7 @@ internal sealed class ComicRackBook(ComicBook book, IApplication app) : IScrapeB
 		{
 			Write(field, patch.Values);
 		}
-		if (thumbnail is not null && !app.SetCustomBookThumbnail(book, thumbnail))
-		{
-			Trace.WriteLine("Comic Vine Scraper: ComicRack did not accept the thumbnail for " + book.FilePath);
-		}
+		return thumbnail is null || app.SetCustomBookThumbnail(book, thumbnail);
 	}
 
 	private void Write(BookFields field, BookValues values)

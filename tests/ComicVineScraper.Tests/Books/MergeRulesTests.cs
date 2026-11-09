@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ComicVineScraper.Books;
 using ComicVineScraper.Config;
@@ -50,6 +51,36 @@ public sealed class MergeRulesTests
 		await Assert.That(patch.Values.IssueKey).IsEqualTo("12345");
 		await Assert.That(patch.Values.SeriesKey).IsEqualTo("796");
 		await Assert.That(patch.Fields).IsEqualTo(BookValuesDiff.AllFields & ~BookFields.Tags);
+	}
+
+	[Test]
+	public async Task Plan_decides_one_line_per_field_and_logs_nothing_itself()
+	{
+		var old = new BookValues { Series = "Batman", Writers = ["Grant Morrison"], Volume = 1990, Published = BookDate.Of(1990, 6, 1), Rating = 3.5f };
+
+		BookPatch patch = MergeRules.Plan(Facts(old), Sample with { Summary = new string('x', 80) + "\nrest", Released = PartialDate.None }, Settings(), Now);
+
+		string[] lines = [.. patch.Decisions.Select(d => d.ToLogLine())];
+		await Assert.That(lines.Length).IsEqualTo(26);
+		await Assert.That(lines[0]).IsEqualTo("-->  Series         : Batman");
+		await Assert.That(lines[1]).IsEqualTo("--> *Issue Number   : 12");
+		await Assert.That(lines[4]).IsEqualTo("--> *Summary        : " + new string('x', 70) + " ...");
+		await Assert.That(lines[5]).IsEqualTo("-->  Release Date   : ");
+		await Assert.That(lines[6]).IsEqualTo("-->  Publish Date   : 1990-6-1");
+		await Assert.That(lines[7]).IsEqualTo("-->  Volume         : 1990");
+		await Assert.That(lines[13]).IsEqualTo("-->  Writers        : Grant Morrison");
+		await Assert.That(lines[21]).IsEqualTo("-->  Rating         : 3.5");
+		await Assert.That(lines[23]).IsEqualTo("--> *Notes          : Scraped metadata from ComicVine [CVDB12345].");
+	}
+
+	[Test]
+	public async Task A_field_that_is_not_written_is_logged_as_skipped_and_is_not_in_the_patch()
+	{
+		BookPatch patch = MergeRules.Plan(Facts(new BookValues { Title = "Mine" }), Sample, Settings(overwrite: false), Now);
+
+		await Assert.That(patch.Decisions.Single(d => d.Label == "Title")).IsEqualTo(new FieldDecision("Title", false, false, "--- skipped ---"));
+		await Assert.That(patch.Decisions.Single(d => d.Label == "Title").ToLogLine()).IsEqualTo("-->  Title          : --- skipped ---");
+		await Assert.That(patch.Fields.HasFlag(BookFields.Title)).IsFalse();
 	}
 
 	[Test]

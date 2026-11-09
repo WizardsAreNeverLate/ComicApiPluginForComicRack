@@ -14,8 +14,8 @@ public interface IScrapeBook
 	/// <summary>A copy of the page with the back cover stripped, or null (fileless, unreadable, out of range). Caller disposes.</summary>
 	Bitmap? GetPage(int index);
 
-	/// <summary>Writes every field in patch.Fields, then sets the thumbnail if one is given. Idempotent.</summary>
-	void Apply(BookPatch patch, Bitmap? thumbnail);
+	/// <summary>Writes every field in patch.Fields, then sets the thumbnail if one is given. Idempotent. False when ComicRack refused the thumbnail.</summary>
+	bool Apply(BookPatch patch, Bitmap? thumbnail);
 }
 
 public sealed record RunSummary(int Scraped, int Skipped, bool Cancelled);

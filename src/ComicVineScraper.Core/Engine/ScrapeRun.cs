@@ -361,6 +361,7 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 		Issue issue;
 		Uri? cover;
 		Bitmap? thumbnail;
+		bool downloadFailed;
 		try
 		{
 			services.Log.Debug("querying comicvine for issue details...");
@@ -368,10 +369,7 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 			cover = services.Covers.Preferred(issue.Id) ?? issue.CoverUrls.FirstOrDefault();
 			Uri? thumbnailUrl = MergeRules.PlanThumbnail(entry.Book.Read(), cover, merge);
 			thumbnail = thumbnailUrl is null ? null : await services.ComicVine.GetImageAsync(thumbnailUrl, ct);
-			if (thumbnailUrl is not null && thumbnail is null)
-			{
-				services.Log.Debug("ERROR: can't download thumbnail: " + thumbnailUrl);
-			}
+			downloadFailed = thumbnailUrl is not null && thumbnail is null;
 		}
 		catch (ComicVineException e) when (step.FastRescrape && e.IsRecoverable)
 		{
@@ -385,7 +383,22 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 			ct.ThrowIfCancellationRequested();
 			BookFacts current = Facts(entry.Facts.Index, entry.Book.Read());
 			Bitmap? install = MergeRules.PlanThumbnail(current.Snapshot, cover, merge) is null ? null : thumbnail;
-			entry.Book.Apply(MergeRules.Plan(current, issue, merge, services.Clock.Now), install);
+			BookPatch patch = MergeRules.Plan(current, issue, merge, services.Clock.Now);
+			// Python logs every field line and the cover line first, and the thumbnail errors last, from PluginBookData.update.
+			services.Log.Debug("setting values for this comic book ('*' = changed):");
+			foreach (FieldDecision decision in patch.Decisions)
+			{
+				services.Log.Debug(decision.ToLogLine());
+			}
+			services.Log.Debug(FieldDecision.CoverArt(cover?.OriginalString).ToLogLine());
+			if (downloadFailed)
+			{
+				services.Log.Debug("ERROR: can't download thumbnail: " + cover);
+			}
+			if (!entry.Book.Apply(patch, install))
+			{
+				services.Log.Debug("ERROR: can't set thumbnail: " + cover);
+			}
 		}
 		if (step.RecordChoice is { } chosen)
 		{
@@ -398,8 +411,11 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 	private Step SkipForever(QueueEntry entry)
 	{
 		BookFacts current = Facts(entry.Facts.Index, entry.Book.Read());
+		foreach (string line in MergeRules.SkipForeverLog(merge))
+		{
+			services.Log.Debug(line);
+		}
 		entry.Book.Apply(MergeRules.PlanSkipForever(current, merge, services.Clock.Now), null);
-		services.Log.Debug("Added the CVDBSKIP flag to this comic book.");
 		return Done(BookOutcome.Skipped);
 	}
 

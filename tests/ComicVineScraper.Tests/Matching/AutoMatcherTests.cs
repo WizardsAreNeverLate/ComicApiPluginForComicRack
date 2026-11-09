@@ -147,7 +147,7 @@ public sealed class AutoMatcherTests
 
 		public Bitmap? GetPage(int index) => index == 0 ? page() : null;
 
-		public void Apply(BookPatch patch, Bitmap? thumbnail) => throw new NotSupportedException();
+		public bool Apply(BookPatch patch, Bitmap? thumbnail) => throw new NotSupportedException();
 	}
 
 	private sealed class FakeComicVine(params SeriesRef[] found) : IComicVine

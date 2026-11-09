@@ -52,5 +52,15 @@ public sealed record BookSnapshot(
 	int PageCount,
 	bool HasCustomThumbnail);  // CustomThumbnailKey is set
 
-/// <summary>One write: every flag in Fields takes its value from Values. Date bits obey DateGate.</summary>
-public sealed record BookPatch(BookValues Values, BookFields Fields);
+/// <summary>
+/// One write: every flag in Fields takes its value from Values. Date bits obey DateGate.
+/// Decisions is what the merge logged per field. It plays no part in equality, because it describes the plan and is not part of the write.
+/// </summary>
+public sealed record BookPatch(BookValues Values, BookFields Fields)
+{
+	public IReadOnlyList<FieldDecision> Decisions { get; init; } = [];
+
+	public bool Equals(BookPatch? other) => other is not null && Values == other.Values && Fields == other.Fields;
+
+	public override int GetHashCode() => (Values, Fields).GetHashCode();
+}

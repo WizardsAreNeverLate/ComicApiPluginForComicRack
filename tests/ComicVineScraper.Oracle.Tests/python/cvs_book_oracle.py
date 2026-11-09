@@ -3,6 +3,7 @@ Entry points for the book oracle tests. Each builds a Python ComicBook the way s
 scraper whose config holds the given settings, and returns plain values.
 '''
 import time
+import utils
 import comicbook
 from comicbook import ComicBook
 from bookdata import BookData
@@ -120,3 +121,34 @@ def strftime_in(locale_name, fmt, values):
 		return 'error ' + repr(e)
 	finally:
 		locale.setlocale(locale.LC_TIME, old)
+
+class _Capture(object):
+	''' Stands in for log's installed logger: concatenates the arguments of each debug call, as log.py does. '''
+	def __init__(self):
+		self.lines = []
+
+	def debug(self, *messages):
+		self.lines.append(''.join(map(utils.sstr, messages)))
+
+	def debug_exc(self, message):
+		self.lines.append('(traceback) ' + message)
+
+def _captured(action):
+	import log
+	capture = _Capture()
+	previous = getattr(log, '__logger')
+	setattr(log, '__logger', capture)
+	try:
+		error = action()
+	except Exception as e:
+		error = 'error ' + repr(e)
+	finally:
+		setattr(log, '__logger', previous)
+	return [error, capture.lines]
+
+def update_logged(crbook, settings, values, now):
+	''' update(), returning [error, debug log lines]. '''
+	return _captured(lambda: (_attached(crbook, settings, now).update(_issue(values)), '')[1])
+
+def skip_forever_logged(crbook, settings, now):
+	return _captured(lambda: (_attached(crbook, settings, now).skip_forever(), '')[1])

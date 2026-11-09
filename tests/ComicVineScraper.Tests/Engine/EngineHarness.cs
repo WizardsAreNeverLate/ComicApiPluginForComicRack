@@ -135,17 +135,18 @@ internal sealed class ScriptedUi : IScrapeUi
 /// <summary>A real ComicRack ComicBook behind the real adapter, recording every patch. GetPage serves a set first page.</summary>
 internal sealed class FakeBook : IScrapeBook
 {
-	private readonly ComicRackBook adapter;
+	private ComicRackBook? adapter;
 
 	public FakeBook(ComicBook book)
 	{
 		Book = book;
-		adapter = new ComicRackBook(book, App);
 	}
+
+	private ComicRackBook Adapter => adapter ??= new ComicRackBook(Book, App);
 
 	public ComicBook Book { get; }
 
-	public FakeApplication App { get; } = new();
+	public FakeApplication App { get; init; } = new();
 
 	public List<BookPatch> Applied { get; } = [];
 
@@ -164,16 +165,16 @@ internal sealed class FakeBook : IScrapeBook
 	public BookSnapshot Read()
 	{
 		Threads.Add(Environment.CurrentManagedThreadId);
-		return adapter.Read();
+		return Adapter.Read();
 	}
 
 	public Bitmap? GetPage(int index) => index == 0 && FirstPage is not null ? new Bitmap(FirstPage) : null;
 
-	public void Apply(BookPatch patch, Bitmap? thumbnail)
+	public bool Apply(BookPatch patch, Bitmap? thumbnail)
 	{
 		Threads.Add(Environment.CurrentManagedThreadId);
 		Applied.Add(patch);
-		adapter.Apply(patch, thumbnail);
+		return Adapter.Apply(patch, thumbnail);
 	}
 }
 
