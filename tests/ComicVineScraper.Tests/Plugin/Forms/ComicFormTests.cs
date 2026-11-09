@@ -217,11 +217,15 @@ public sealed class ComicFormTests
 	public async Task Cancel_ends_the_run_the_form_hosts()
 	{
 		using var session = UiSession.Create();
+		bool openWhenObserved = false;
+		bool closedBeforeWorkEnded = false;
 
 		RunSummary summary = Sta.Run(() =>
 		{
 			return ScrapeHost.Run<RunSummary>(null!, session.Ctx, async (form, ct) =>
 			{
+				bool closed = false;
+				form.FormClosed += (_, _) => closed = true;
 				form.BeginInvoke(new Action(() => Ui.Find<Button>(form, "cancel").PerformClick()));
 				try
 				{
@@ -230,11 +234,17 @@ public sealed class ComicFormTests
 				catch (OperationCanceledException)
 				{
 				}
+				openWhenObserved = form.Visible && !closed;
+				// Work that takes a while to wind down: the form must still be up afterwards.
+				await Task.Delay(200);
+				closedBeforeWorkEnded = closed;
 				return new RunSummary(0, 1, ct.IsCancellationRequested);
 			});
 		});
 
 		await Assert.That(summary.Cancelled).IsTrue();
+		await Assert.That(openWhenObserved).IsTrue();
+		await Assert.That(closedBeforeWorkEnded).IsFalse();
 	}
 
 	[Test]
