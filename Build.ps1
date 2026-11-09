@@ -68,9 +68,15 @@ foreach ($name in "ComicVineScraper.Tests", "ComicVineScraper.Oracle.Tests") {
 		exit 1
 	}
 	Write-Output "Running $name..."
-	& $exe --progress off --minimum-expected-tests 1
+	# Each run's console output is kept, because the next run overwrites TUnit's report and a rare failure is lost with it.
+	$results = Join-Path (Split-Path $exe) "TestResults"
+	New-Item -ItemType Directory -Force $results | Out-Null
+	$console = Join-Path $results ("console-{0:yyyyMMdd-HHmmss}.txt" -f (Get-Date))
+	& $exe --progress off --minimum-expected-tests 1 2>&1 | Tee-Object -FilePath $console
 	if ($LASTEXITCODE -ne 0) {
 		$failed += $name
+		Write-Output "Failed tests in ${name} (output kept in $console):"
+		Select-String -Path $console -Pattern '^\W*failed \S' | ForEach-Object { "  " + $_.Line.Trim() }
 	}
 }
 if ($failed) {
