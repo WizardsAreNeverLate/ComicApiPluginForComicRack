@@ -126,16 +126,32 @@ internal static class Ui
 		bool done = false;
 		timer.Tick += (_, _) =>
 		{
-			// OpenForms spans every thread, and tests run in parallel, so only this thread's forms count.
-			if (!done && Application.OpenForms.OfType<T>().FirstOrDefault(form => !form.InvokeRequired && form.Visible) is { } form)
+			if (!done && Mine<T>() is { } form)
 			{
 				done = true;
 				timer.Stop();
-				act(form);
+				// Posted, so it runs after the form's own Shown handlers, which WinForms posts the same way.
+				form.BeginInvoke(new Action(() => act(form)));
 			}
 		};
 		timer.Start();
 		return timer;
+	}
+
+	/// <summary>
+	/// The first visible T on this thread. OpenForms spans every thread, and tests run in parallel, so other threads' forms
+	/// are skipped, and a list changed under the enumeration is read again on the next tick.
+	/// </summary>
+	private static T? Mine<T>() where T : Form
+	{
+		try
+		{
+			return Application.OpenForms.OfType<T>().FirstOrDefault(form => !form.InvokeRequired && form.Visible && form.IsHandleCreated);
+		}
+		catch (InvalidOperationException)
+		{
+			return null;
+		}
 	}
 
 	public static T Find<T>(Control root, string name) where T : Control =>
