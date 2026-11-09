@@ -4,7 +4,7 @@ Reference for the C# port. Paths are relative to `comic-vine-scraper/src/py/` at
 
 ## Control flow of one scrape run
 
-1. `ComicApiPlugin.py:67` `cvs_scrape(books)` (hook `Books, Editor`) calls `__launch` (:82). `__launch` sets up resources, logging, the `Application.ThreadException` handler, and i18n. It runs `__validate_environment` (:131, requires ComicRack 0.9.165 or later). At the end it shuts down `db`, i18n, and logging.
+1. `ComicVineScraper.py:67` `cvs_scrape(books)` (hook `Books, Editor`) calls `__launch` (:82). `__launch` sets up resources, logging, the `Application.ThreadException` handler, and i18n. It runs `__validate_environment` (:131, requires ComicRack 0.9.165 or later). At the end it shuts down `db`, i18n, and logging.
 2. `scrapeengine.py:116` `scrape` calls `__scrape` (:166):
    - Load the configuration. If there is no API key, show `ConfigForm`.
    - Show `WelcomeForm`, then call `db.initialize`.

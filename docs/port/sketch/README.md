@@ -4,7 +4,7 @@ These files are the design contract for the port. They are reference only and ar
 
 To trace one book from the command to the write-back, read the files in this order:
 
-1. `Plugin/ComicApiPlugin.cs`: the two `[PluginCommand]` entry points, the re-entrancy guard, and error handling at the command boundary.
+1. `Plugin/ComicApiCommands.cs`: the two `[PluginCommand]` entry points, the re-entrancy guard, and error handling at the command boundary.
 2. `Plugin/ScrapeHost.cs`: the modal ComicForm that hosts the async run, and cancellation.
 3. `Plugin/ComicRackBook.cs`: the only code that reads or writes a ComicRack `ComicBook`.
 4. `Core/ScrapeRun.cs`: the run loop and the per-book state machine.
