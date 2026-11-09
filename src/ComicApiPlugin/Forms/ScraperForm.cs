@@ -104,6 +104,11 @@ internal abstract class ScraperForm : Form
 	/// <summary>Where the form goes when geometry.dat has no location for it.</summary>
 	protected virtual void PlaceByDefault() => CenterToParent();
 
+	/// <summary>The form's size when it keeps no size in geometry.dat. Runs after the font scale and before placement.</summary>
+	protected virtual void SizeByDefault()
+	{
+	}
+
 	protected override void OnLoad(EventArgs e)
 	{
 		// Set once the subclass has built its controls. Set in the constructor, the scale ran on an empty form, so above 96 DPI
@@ -203,6 +208,10 @@ internal abstract class ScraperForm : Form
 		if (persistSize && size is { } stored)
 		{
 			Size = stored;
+		}
+		else
+		{
+			SizeByDefault();
 		}
 		if (location is { } at)
 		{

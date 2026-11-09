@@ -138,6 +138,117 @@ public sealed class ConfigFormTests
 	}
 
 	[Test]
+	public async Task The_API_key_is_masked_until_the_eye_button_shows_it()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with { ApiKey = Key });
+
+		(bool Opened, bool AfterOneClick, bool AfterTwoClicks, string Text) seen = Sta.Run(() =>
+		{
+			(bool, bool, bool, string) captured = default;
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				TextBox key = Ui.Find<TextBox>(form, "apiKey");
+				Button eye = Ui.Find<Button>(form, "showKey");
+				bool opened = key.UseSystemPasswordChar;
+				eye.PerformClick();
+				bool once = key.UseSystemPasswordChar;
+				eye.PerformClick();
+				captured = (opened, once, key.UseSystemPasswordChar, key.Text);
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return captured;
+		});
+
+		await Assert.That(seen).IsEqualTo((true, false, true, Key));
+	}
+
+	private readonly record struct Gaps(int CancelRight, int CancelBottom, int AllRight, int ListToAll, int ListBottom, int EyeRight, int KeyToEye);
+
+	[Test]
+	public async Task Resizing_keeps_every_control_at_its_edges_and_the_minimum_is_the_original_layout()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with { ApiKey = Key });
+
+		(Gaps Opened, Gaps Bigger, Gaps Smallest, float Scale, int[] Rights, bool Sizable) seen = Sta.Run(() =>
+		{
+			(Gaps, Gaps, Gaps, float, int[], bool) captured = default;
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				TabControl tabs = Ui.Find<TabControl>(form, "tabs");
+				TabPage vine = tabs.TabPages["comicVineTab"];
+				TabPage details = tabs.TabPages["detailsTab"];
+				Gaps Measure()
+				{
+					tabs.SelectedTab = details;
+					Button all = Ui.Find<Button>(form, "selectAll"), cancel = Ui.Find<Button>(form, "cancel"), eye = Ui.Find<Button>(form, "showKey");
+					CheckedListBox list = Ui.Find<CheckedListBox>(form, "fields");
+					var onDetails = (AllRight: details.ClientSize.Width - all.Right, ListToAll: all.Left - list.Right, ListBottom: details.ClientSize.Height - list.Bottom);
+					tabs.SelectedTab = vine;
+					return new Gaps(form.ClientSize.Width - cancel.Right, form.ClientSize.Height - cancel.Bottom, onDetails.AllRight, onDetails.ListToAll,
+						onDetails.ListBottom, vine.ClientSize.Width - eye.Right, eye.Left - Ui.Find<TextBox>(form, "apiKey").Right);
+				}
+				Gaps opened = Measure();
+				form.Size = new System.Drawing.Size(form.Width + 150, form.Height + 80);
+				Gaps bigger = Measure();
+				form.Size = new System.Drawing.Size(1, 1);
+				Gaps smallest = Measure();
+				int[] rights = [Ui.Find<Button>(form, "selectAll").Right, Ui.Find<Button>(form, "showKey").Right, Ui.Find<Button>(form, "cancel").Right];
+				captured = (opened, bigger, smallest, form.ClientSize.Width / 416f, rights, form.FormBorderStyle == FormBorderStyle.Sizable);
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return captured;
+		});
+
+		await Assert.That(seen.Sizable).IsTrue();
+		await Assert.That(seen.Bigger).IsEqualTo(seen.Opened);
+		await Assert.That(seen.Smallest).IsEqualTo(seen.Opened);
+		int[] designRights = [380, 349, 405];
+		for (int i = 0; i < designRights.Length; i++)
+		{
+			await Assert.That(Math.Abs(seen.Rights[i] - designRights[i] * seen.Scale)).IsLessThanOrEqualTo(2f);
+		}
+	}
+
+	[Test]
+	public async Task The_dialog_opens_wider_than_its_minimum_and_reopens_at_the_size_it_was_left()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with { ApiKey = Key });
+
+		(int FirstWidth, int MinimumWidth, System.Drawing.Size Left, System.Drawing.Size Reopened) seen = Sta.Run(() =>
+		{
+			(int, int, System.Drawing.Size) first = default;
+			using (Ui.WhenOpen<ConfigForm>(form =>
+			{
+				int width = form.Width;
+				form.Size = new System.Drawing.Size(form.Width + 120, form.Height + 60);
+				first = (width, form.MinimumSize.Width, form.Size);
+				form.Close();
+			}))
+			{
+				ConfigForm.Show(null, session.Ctx);
+			}
+			System.Drawing.Size reopened = default;
+			using (Ui.WhenOpen<ConfigForm>(form =>
+			{
+				reopened = form.Size;
+				form.Close();
+			}))
+			{
+				ConfigForm.Show(null, session.Ctx);
+			}
+			return (first.Item1, first.Item2, first.Item3, reopened);
+		});
+
+		await Assert.That(seen.FirstWidth).IsGreaterThan(seen.MinimumWidth);
+		await Assert.That(seen.Reopened).IsEqualTo(seen.Left);
+	}
+
+	[Test]
 	[Arguments(true, "detailsTab")]
 	[Arguments(false, "comicVineTab")]
 	public async Task The_form_opens_on_Details_with_a_key_and_on_Comic_Vine_without_one(bool hasKey, string expected)
