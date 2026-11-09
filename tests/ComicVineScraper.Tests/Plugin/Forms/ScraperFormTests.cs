@@ -193,6 +193,33 @@ public sealed class ScraperFormTests
 		await Assert.That(result).IsEqualTo(DialogResult.Cancel);
 	}
 
+	[Test]
+	public async Task ComicRacks_theme_is_applied_to_the_form()
+	{
+		using var session = UiSession.Create();
+		var theme = new RecordingTheme();
+		PluginContext themed = session.Ctx with { Theme = theme };
+
+		Sta.Run(() =>
+		{
+			using var form = new ProbeForm(themed);
+			Ui.WhenShown(form, form.Close);
+			form.ShowModal(null, CancellationToken.None);
+		});
+
+		await Assert.That(theme.Applied).IsEquivalentTo(["ProbeForm"]);
+	}
+
+	private sealed class RecordingTheme : cYo.Projects.ComicRack.Plugins.Theme.IThemePlugin
+	{
+		public System.Collections.Generic.List<string> Applied { get; } = [];
+		public void ApplyTheme(Control control) => Applied.Add(control.GetType().Name);
+		public cYo.Common.Windows.Forms.Theme.UIComponent UIComponent => throw new NotSupportedException();
+		public cYo.Common.Windows.Forms.Theme.Themes CurrentTheme => throw new NotSupportedException();
+		public bool IsDarkModeEnabled => false;
+		public ToolStripRenderer ToolStripRenderer => throw new NotSupportedException();
+	}
+
 	private sealed class ProbeForm : ScraperForm
 	{
 		public ProbeForm(PluginContext ctx) : base(ctx, "probeform")
