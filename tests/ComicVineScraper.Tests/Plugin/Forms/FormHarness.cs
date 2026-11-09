@@ -142,7 +142,7 @@ internal static class Ui
 	/// The first visible T on this thread. OpenForms spans every thread, and tests run in parallel, so other threads' forms
 	/// are skipped, and a list changed under the enumeration is read again on the next tick.
 	/// </summary>
-	private static T? Mine<T>() where T : Form
+	public static T? Mine<T>() where T : Form
 	{
 		try
 		{
