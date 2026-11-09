@@ -122,12 +122,38 @@ public sealed class WinFormsScrapeUiTests
 				captured = (Ui.Find<Label>(prompt, "message").Text, prompt.Text);
 				Ui.Find<Button>(prompt, "ok").PerformClick();
 			});
-			ui.ShowNoIssues(Batman);
+			ui.ShowNoIssues(Batman, CancellationToken.None);
 			return Task.FromResult(captured);
 		});
 
 		await Assert.That(seen.Text).StartsWith("You selected 'Batman'.");
 		await Assert.That(seen.Title).IsEqualTo("Series has No Issues");
+	}
+
+	[Test]
+	public async Task Cancelling_the_run_closes_the_no_issues_warning()
+	{
+		bool leftOpen = Hosted((ui, _, ct) =>
+		{
+			using var run = CancellationTokenSource.CreateLinkedTokenSource(ct);
+			bool open = false;
+			using var fallback = new System.Windows.Forms.Timer { Interval = 3000 };
+			using IDisposable driver = Ui.WhenOpen<PromptDialog>(prompt =>
+			{
+				run.Cancel();
+				fallback.Tick += (_, _) =>
+				{
+					fallback.Stop();
+					open = prompt.Visible;
+					Ui.Find<Button>(prompt, "ok").PerformClick();
+				};
+				fallback.Start();
+			});
+			ui.ShowNoIssues(Batman, run.Token);
+			return Task.FromResult(open);
+		});
+
+		await Assert.That(leftOpen).IsFalse();
 	}
 
 	[Test]

@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ComicVineScraper.Books;
 using ComicVineScraper.Config;
@@ -306,6 +307,25 @@ public sealed class ScrapeRunTests
 
 		await Assert.That(world.Ui.Asked).IsEquivalentTo(new[] { "no-issues:9997", "search:Batman|" }, CollectionOrdering.Matching);
 		await Assert.That(world.StepsOf("Batman.cbz")).IsEquivalentTo(new[] { Begin, FindIssue, Search, Done }, CollectionOrdering.Matching);
+	}
+
+	[Test]
+	public async Task The_no_issues_warning_gets_the_runs_token_and_a_cancel_there_ends_the_run()
+	{
+		using var world = new EngineWorld();
+		using var run = new CancellationTokenSource();
+		bool warningSawCancel = false;
+		world.Ui.WhileNoIssuesOpen = ct =>
+		{
+			run.Cancel();
+			warningSawCancel = ct.IsCancellationRequested;
+		};
+
+		RunSummary summary = await world.RunAsync(run.Token, FakeBook.File(@"C:\Comics\Batman.cbz", b => b.SetCustomValue("comicvine_volume", "9997")));
+
+		await Assert.That(warningSawCancel).IsTrue();
+		await Assert.That(summary).IsEqualTo(new RunSummary(0, 1, Cancelled: true));
+		await Assert.That(world.Ui.Asked).IsEquivalentTo(new[] { "no-issues:9997" }, CollectionOrdering.Matching);
 	}
 
 	[Test]

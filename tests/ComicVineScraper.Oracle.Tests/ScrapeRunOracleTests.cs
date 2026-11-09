@@ -348,7 +348,7 @@ public sealed class ScrapeRunOracleTests
 			});
 		}
 
-		public void ShowNoIssues(SeriesRef series) => events.Add("noissues");
+		public void ShowNoIssues(SeriesRef series, CancellationToken ct) => events.Add("noissues");
 
 		public IQueryProgress BeginQuery(QueryKind kind) => new NoProgress();
 

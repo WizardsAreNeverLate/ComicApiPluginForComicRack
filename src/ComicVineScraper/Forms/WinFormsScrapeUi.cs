@@ -26,8 +26,8 @@ internal sealed class WinFormsScrapeUi(ComicForm host, PluginContext ctx, IComic
 	public Task<IssueChoice> ChooseIssueAsync(IssueQuestion question, CoverPreferences covers, CancellationToken ct) =>
 		Task.FromResult(IssueForm.Ask(host, ctx, comicVine, config, question, covers, ct));
 
-	public void ShowNoIssues(SeriesRef series) => PromptDialog.Show(
-		host, ctx, ctx.Strings.Format(TextKeys.NoIssuesAvailableText, series.Name), ctx.Strings[TextKeys.NoIssuesAvailableTitle], MessageBoxIcon.Warning, PromptButtons.Ok);
+	public void ShowNoIssues(SeriesRef series, CancellationToken ct) => PromptDialog.Show(
+		host, ctx, ctx.Strings.Format(TextKeys.NoIssuesAvailableText, series.Name), ctx.Strings[TextKeys.NoIssuesAvailableTitle], MessageBoxIcon.Warning, PromptButtons.Ok, ct);
 
 	public IQueryProgress BeginQuery(QueryKind kind) => new QueryProgressWindow(host, ctx, kind);
 }

@@ -95,7 +95,14 @@ internal sealed class ScriptedUi : IScrapeUi
 		return Task.FromResult(Next(issues, "issue")(question, ct));
 	}
 
-	public void ShowNoIssues(SeriesRef series) => Asked.Add("no-issues:" + series.Id);
+	/// <summary>Runs while the no-issues warning is open, with the token the warning was given.</summary>
+	public Action<CancellationToken>? WhileNoIssuesOpen { get; set; }
+
+	public void ShowNoIssues(SeriesRef series, CancellationToken ct)
+	{
+		Asked.Add("no-issues:" + series.Id);
+		WhileNoIssuesOpen?.Invoke(ct);
+	}
 
 	public IQueryProgress BeginQuery(QueryKind kind)
 	{

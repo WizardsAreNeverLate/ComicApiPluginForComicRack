@@ -22,8 +22,8 @@ public interface IScrapeUi
 
 	Task<IssueChoice> ChooseIssueAsync(IssueQuestion question, CoverPreferences covers, CancellationToken ct);
 
-	/// <summary>The "no issues available in {series}" warning; the engine then goes back to the series list.</summary>
-	void ShowNoIssues(SeriesRef series);
+	/// <summary>The "no issues available in {series}" warning; the engine then goes back to the series list. A cancelled ct closes it.</summary>
+	void ShowNoIssues(SeriesRef series, CancellationToken ct);
 
 	/// <summary>ProgressBarForm for one query. Shown on the first report below 100%, closed on Dispose.</summary>
 	IQueryProgress BeginQuery(QueryKind kind);

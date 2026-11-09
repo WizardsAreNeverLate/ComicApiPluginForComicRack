@@ -67,11 +67,13 @@ internal sealed class PromptDialog : ScraperForm
 		Controls.Add(layout);
 	}
 
-	/// <summary>Shows the prompt modal to owner. Closing it any other way reads as OK, or as No for a yes/no prompt.</summary>
-	public static DialogResult Show(IWin32Window? owner, PluginContext ctx, string text, string caption, MessageBoxIcon icon, PromptButtons buttons)
+	/// <summary>
+	/// Shows the prompt modal to owner. Closing it any other way, or cancelling ct, reads as OK, or as No for a yes/no prompt.
+	/// </summary>
+	public static DialogResult Show(IWin32Window? owner, PluginContext ctx, string text, string caption, MessageBoxIcon icon, PromptButtons buttons, CancellationToken ct = default)
 	{
 		using var dialog = new PromptDialog(ctx, text, caption, icon, buttons);
-		DialogResult result = dialog.ShowModal(owner, CancellationToken.None);
+		DialogResult result = dialog.ShowModal(owner, ct);
 		return buttons == PromptButtons.Ok ? DialogResult.OK : result == DialogResult.Yes ? DialogResult.Yes : DialogResult.No;
 	}
 

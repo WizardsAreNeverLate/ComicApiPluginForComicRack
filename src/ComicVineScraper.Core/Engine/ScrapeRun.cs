@@ -338,7 +338,7 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 			if (series.Issues.Count == 0)
 			{
 				services.Log.Debug("   ...no issues in this series; user must go back");
-				services.Ui.ShowNoIssues(series.Ref);
+				services.Ui.ShowNoIssues(series.Ref, ct);
 				return new IssueChoice.Back();
 			}
 		}
