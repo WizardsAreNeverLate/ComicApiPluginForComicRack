@@ -1,0 +1,95 @@
+name: Build and test
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore: [ '**.md' ]
+  pull_request:
+    paths-ignore: [ '**.md' ]
+  workflow_dispatch:
+    inputs:
+      comicrack_ref:
+        description: ComicRack CE branch, tag, or commit to build against (needs .NET plugin support)
+        default: feat/dotnet-plugins
+
+permissions:
+  contents: read
+
+env:
+  # The plugin compiles against a ComicRack CE build that can load .NET plugins. Upstream does not have that yet.
+  COMICRACK_REPO: jafin/ComicRackCE
+  COMICRACK_REF: ${{ inputs.comicrack_ref || 'feat/dotnet-plugins' }}
+  # The oracle tests run the original Python plugin under IronPython. This is the commit the port was compared against.
+  PYTHON_PLUGIN_REPO: cbanack/comic-vine-scraper
+  PYTHON_PLUGIN_SHA: a4c100bcaa031881f009a28acd398b6a19d35c3d
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Checkout ComicRack CE
+      uses: actions/checkout@v7
+      with:
+        repository: ${{ env.COMICRACK_REPO }}
+        ref: ${{ env.COMICRACK_REF }}
+        path: _deps/ComicRackCE
+        submodules: recursive
+
+    - name: Checkout the original Python plugin
+      uses: actions/checkout@v7
+      with:
+        repository: ${{ env.PYTHON_PLUGIN_REPO }}
+        ref: ${{ env.PYTHON_PLUGIN_SHA }}
+        path: _deps/comic-vine-scraper
+
+    - name: setup-msbuild
+      uses: microsoft/setup-msbuild@v3
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v4
+
+    - name: ComicRack CE commit
+      id: comicrack
+      shell: pwsh
+      run: "\"sha=$(git -C _deps/ComicRackCE rev-parse HEAD)\" >> $env:GITHUB_OUTPUT"
+
+    - name: Cache the ComicRack CE build
+      id: comicrack-cache
+      uses: actions/cache@v4
+      with:
+        path: _deps/ComicRackCE/ComicRack/bin/Release/net48
+        key: comicrack-${{ steps.comicrack.outputs.sha }}
+
+    - name: Build ComicRack CE
+      if: steps.comicrack-cache.outputs.cache-hit != 'true'
+      working-directory: _deps/ComicRackCE
+      run: |
+        nuget restore ComicRack.sln
+        msbuild ComicRack\ComicRack.csproj -t:Rebuild -p:Configuration=Release -p:Platform=AnyCPU -m -nologo -v:minimal
+
+    - name: Build and test
+      shell: pwsh
+      env:
+        COMICRACK_DIR: ${{ github.workspace }}\_deps\ComicRackCE\ComicRack\bin\Release\net48
+        CVS_PYTHON_SRC: ${{ github.workspace }}\_deps\comic-vine-scraper\src
+      run: ./Build.ps1 -Configuration Release
+
+    - name: Upload the plugin package
+      uses: actions/upload-artifact@v4
+      with:
+        name: ComicVineScraper.crplugin
+        path: src/ComicVineScraper/bin/Release/net48/ComicVineScraper.crplugin
+        if-no-files-found: error
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: tests/*/bin/Release/net48/TestResults/
+        if-no-files-found: ignore

@@ -1,5 +1,7 @@
 # Comic Vine Scraper .NET
 
+[![Build and test](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/actions/workflows/build.yml/badge.svg)](https://github.com/WizardsAreNeverLate/ComicApiPluginForComicRack/actions/workflows/build.yml)
+
 A ComicRack plugin that scrapes comic book details and covers from [Comic Vine](https://comicvine.gamespot.com/) into your library.
 
 This is a native C# (.NET Framework 4.8) port of Cory Banack's [Comic Vine Scraper](https://github.com/cbanack/comic-vine-scraper), version 1.0.102. **It is not a Python plugin.** It is a compiled .NET assembly, and it contains no IronPython code.
@@ -45,6 +47,13 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 ```
 
 The package is written to `src\ComicVineScraper\bin\<Configuration>\net48\ComicVineScraper.crplugin`.
+
+The CI workflow (`.github/workflows/build.yml`) runs in this order:
+
+1. It builds ComicRack CE from `jafin/ComicRackCE@feat/dotnet-plugins`, cached by commit.
+2. It checks out the original Python plugin for the oracle tests.
+3. It runs `Build.ps1 -Configuration Release`.
+4. It uploads the `.crplugin` as an artifact.
 
 Use `Build.ps1` rather than `dotnet build`. The projects contain binary `.resx` resources, which `dotnet build` can't compile for .NET Framework.
 
