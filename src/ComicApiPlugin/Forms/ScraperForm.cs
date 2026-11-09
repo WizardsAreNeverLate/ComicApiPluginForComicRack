@@ -28,8 +28,6 @@ internal abstract class ScraperForm : Form
 		Ctx = ctx;
 		this.geometryKey = geometryKey;
 		this.persistSize = persistSize;
-		AutoScaleDimensions = new SizeF(6F, 13F);
-		AutoScaleMode = AutoScaleMode.Font;
 		FormBorderStyle = FormBorderStyle.FixedSingle;
 		MinimizeBox = false;
 		MaximizeBox = false;
@@ -108,6 +106,10 @@ internal abstract class ScraperForm : Form
 
 	protected override void OnLoad(EventArgs e)
 	{
+		// Set once the subclass has built its controls. Set in the constructor, the scale ran on an empty form, so above 96 DPI
+		// (ComicRack is DPI-aware) the text grew and the controls kept their 96 DPI sizes, clipping button labels.
+		AutoScaleDimensions = new SizeF(6F, 13F);
+		AutoScaleMode = AutoScaleMode.Font;
 		base.OnLoad(e);
 		Ctx.CurrentTheme()?.ApplyTheme(this);
 		RestoreGeometry();
