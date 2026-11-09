@@ -27,7 +27,9 @@ internal sealed class FakeApplication : IApplication
 		return Accepts;
 	}
 
-	public string ProductVersion => "0.0.0-test";
+	public Func<string> Version { get; set; } = () => "0.0.0-test";
+
+	public string ProductVersion => Version();
 	public void Restart() => throw new NotSupportedException();
 	public void SynchronizeDevices() => throw new NotSupportedException();
 	public void ScanFolders() => throw new NotSupportedException();

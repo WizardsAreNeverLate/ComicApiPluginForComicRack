@@ -53,7 +53,8 @@ public sealed class ComicVineScraperPlugin
 		}
 		running = true;
 		PluginContext ctx = Context;
-		Configuration? config = null;
+		// Python built its Configuration before loading it, so the summary default (on) holds when the load itself fails.
+		Configuration config = new() { Advanced = AdvancedSettings.Parse(null) };
 		var summary = new RunSummary(0, books.Length, Cancelled: false);
 		try
 		{
@@ -96,7 +97,7 @@ public sealed class ComicVineScraperPlugin
 		finally
 		{
 			// Python's finally: the summary follows every run, including one that stopped early or failed.
-			if (config?.SummaryDialog == true)
+			if (config.SummaryDialog)
 			{
 				Guarded(ctx, () => FinishForm.Show(env.MainWindow, ctx, summary));
 			}

@@ -136,6 +136,29 @@ public sealed class PluginTests
 	}
 
 	[Test]
+	public async Task A_run_that_fails_before_the_settings_load_still_shows_the_error_and_the_summary()
+	{
+		// Python built its Configuration before loading it, so the summary default held when the load failed. SettingsStore.Load
+		// swallows every bad file the tests can write, so the failure comes from the call that precedes the load in the same try.
+		using var world = new PluginWorld();
+		world.ProductVersion = () => throw new InvalidOperationException("no version");
+		string scraped = "", skipped = "";
+		world.Script
+			.On<PromptDialog>(prompt => Ui.Find<Button>(prompt, "no").PerformClick())
+			.On<FinishForm>(form =>
+			{
+				(scraped, skipped) = (Ui.Find<Label>(form, "scraped").Text, Ui.Find<Label>(form, "skipped").Text);
+				Ui.Find<Button>(form, "ok").PerformClick();
+			});
+
+		world.Run(plugin => plugin.Scrape([new ComicBook { Series = "Batman", Number = "497" }]));
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "PromptDialog", "FinishForm" }, CollectionOrdering.Matching);
+		await Assert.That(scraped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(skipped).IsEqualTo(world.Strings[TextKeys.FinishFormSkippedSingle]);
+	}
+
+	[Test]
 	public async Task Configure_opens_the_settings_dialog_over_the_same_store_and_log_as_the_scrape()
 	{
 		using var world = new PluginWorld();
@@ -230,6 +253,12 @@ public sealed class PluginTests
 
 		public bool MainEnabledAfter { get; private set; }
 
+		/// <summary>What ComicRack reports as its version. Throwing from it fails the run before the settings load.</summary>
+		public Func<string> ProductVersion
+		{
+			set => env.Fake.Version = value;
+		}
+
 		public Strings Strings => Plugin.Context.Strings;
 
 		public IReadOnlyList<string> Log => Plugin.Context.Log.Snapshot();
@@ -282,7 +311,8 @@ public sealed class PluginTests
 	{
 		public Form? Main { get; set; }
 		public IWin32Window MainWindow => Main!;
-		public IApplication App { get; } = new FakeApplication { Pages = (_, _) => null };
+		public FakeApplication Fake { get; } = new() { Pages = (_, _) => null };
+		public IApplication App => Fake;
 		public IEnumerable<string> LibraryPaths => [];
 		public IOpenBooksManager OpenBooks => null!;
 		public IBrowser Browser => null!;
