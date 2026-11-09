@@ -12,12 +12,12 @@ using cYo.Projects.ComicRack.Plugins;
 namespace ComicApiPlugin.Plugin;
 
 /// <summary>ComicRack creates one instance per process and calls both commands on the UI thread.</summary>
-public sealed class ComicApiPlugin
+public sealed class ComicApiCommands
 {
 	// Not the Python plugin's "comic-vine-scraper", so both can be installed for the end-to-end comparison.
 	private const string Key = "comic-api-net";
 
-	private static readonly string Version = typeof(ComicApiPlugin).Assembly.GetName().Version.ToString(3);
+	private static readonly string Version = typeof(ComicApiCommands).Assembly.GetName().Version.ToString(3);
 	private static readonly string UserAgent = $"ComicApiPlugin/{Version} (https://github.com/cbanack/comic-vine-scraper/)";
 
 	private readonly IPluginEnvironment env;
@@ -27,11 +27,11 @@ public sealed class ComicApiPlugin
 	private string? httpKey;
 	private bool running;
 
-	public ComicApiPlugin(IPluginEnvironment env) : this(env, PluginPorts.FromProcess())
+	public ComicApiCommands(IPluginEnvironment env) : this(env, PluginPorts.FromProcess())
 	{
 	}
 
-	internal ComicApiPlugin(IPluginEnvironment env, PluginPorts ports)
+	internal ComicApiCommands(IPluginEnvironment env, PluginPorts ports)
 	{
 		this.env = env;
 		this.ports = ports;

@@ -3,7 +3,7 @@
 
 namespace ComicApiPlugin.Plugin;
 
-public sealed class ComicApiPlugin(IPluginEnvironment env)
+public sealed class ComicApiCommands(IPluginEnvironment env)
 {
     // Same key as the Python script's "#@Key comic-vine-scraper": the ConfigScript pairs with the Books
     // command, and comic-vine-scraper.xml in the language zips names it. If both plugins are installed,
