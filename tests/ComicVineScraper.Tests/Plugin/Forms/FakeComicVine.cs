@@ -25,6 +25,8 @@ internal sealed class FakeComicVine : IComicVine
 	public Dictionary<(SeriesId, string), IssueRef> IssuesByNumber { get; } = [];
 	public Dictionary<IssueId, IReadOnlyList<Uri>> CoversByIssue { get; } = [];
 
+	public bool LookupsFail { get; set; }
+
 	public static Uri Url(string colour) => new("https://img/" + colour + ".png");
 
 	public static Color ColourOf(Uri url) => Color.FromName(url.Segments.Last().Replace(".png", ""));
@@ -56,6 +58,10 @@ internal sealed class FakeComicVine : IComicVine
 	public Task<IssueRef?> FindIssueAsync(SeriesId series, string issueNumber, CancellationToken ct)
 	{
 		IssueLookups.Enqueue((series, issueNumber));
+		if (LookupsFail)
+		{
+			throw new ComicVineException(ComicVineError.Network, "https://comicvine.gamespot.com/api/issues/", null, null);
+		}
 		return Task.FromResult(IssuesByNumber.TryGetValue((series, issueNumber), out IssueRef? found) ? found : null);
 	}
 

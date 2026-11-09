@@ -153,6 +153,23 @@ public sealed class IssueCoverPanelTests
 	}
 
 	[Test]
+	public async Task A_failed_issue_lookup_shows_the_series_art_instead_of_the_previous_cover()
+	{
+		var comicVine = new FakeComicVine { LookupsFail = true };
+
+		string label = WithPanel(comicVine, true, "5", panel =>
+		{
+			panel.ShowIssue(Issue6);
+			Ui.PumpUntil(() => Showing(panel, "Green"));
+			panel.ShowSeries(Batman);
+			Ui.PumpUntil(() => Showing(panel, "Navy"));
+			return Label(panel);
+		});
+
+		await Assert.That(label).IsEqualTo("Series Art");
+	}
+
+	[Test]
 	public async Task The_preferred_cover_is_the_alternate_on_show_and_none_for_the_first_cover()
 	{
 		var comicVine = new FakeComicVine();
