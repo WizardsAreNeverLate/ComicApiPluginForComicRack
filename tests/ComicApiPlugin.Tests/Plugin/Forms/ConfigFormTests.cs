@@ -151,6 +151,7 @@ public sealed class ConfigFormTests
 				TextBox key = Ui.Find<TextBox>(form, "apiKey");
 				Button eye = Ui.Find<Button>(form, "showKey");
 				bool opened = key.UseSystemPasswordChar;
+				Ui.Find<TabControl>(form, "tabs").SelectedTab = (TabPage)key.Parent;
 				eye.PerformClick();
 				bool once = key.UseSystemPasswordChar;
 				eye.PerformClick();
