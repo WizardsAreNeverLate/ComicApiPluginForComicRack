@@ -137,6 +137,27 @@ public sealed class ScrapeRunLoopTests
 	}
 
 	[Test]
+	[Arguments("<html><body>maintenance</body></html>")]
+	[Arguments("<response><status_code>1</status_code><number_of_total_results>1</number_of_total_results><results><id>abc</id></results></response>")]
+	[Arguments("<response><status_code>1</status_code><number_of_total_results>1</number_of_total_results></response>")]
+	[Arguments("<response><status_code>1</status_code><number_of_total_results>1</number_of_total_results><results><id>999999999999999999999</id></results></response>")]
+	public async Task A_cvinfo_series_that_cannot_be_parsed_falls_back_to_a_search_and_is_logged(string body)
+	{
+		using var world = new EngineWorld();
+		world.Respond(Synthetic.Api + "volume/4050-796/?api_key=REDACTED&client=cvscraper&format=xml&field_list=name,start_year,publisher,image,count_of_issues,id", body);
+		string folder = Path.Combine(world.Folder, "Batman");
+		Directory.CreateDirectory(folder);
+		File.WriteAllText(Path.Combine(folder, "cvinfo.txt"), "https://comicvine.gamespot.com/batman/4050-796/\r\n");
+		world.Ui.Series(new SeriesChoice.Skip());
+
+		RunSummary summary = await world.RunAsync(FakeBook.File(Path.Combine(folder, "Batman 497.cbz")));
+
+		await Assert.That(summary).IsEqualTo(new RunSummary(0, 1, false));
+		await Assert.That(world.StepsOf("Batman 497.cbz")).IsEquivalentTo(new[] { Begin, Search, ChooseSeries, Done }, CollectionOrdering.Matching);
+		await Assert.That(world.Log.Snapshot()).Contains("bad cvinfo file: the series named in it could not be read.");
+	}
+
+	[Test]
 	public async Task A_fast_rescrape_that_hits_a_network_error_is_retried_as_a_normal_scrape_at_the_end()
 	{
 		using var world = new EngineWorld();

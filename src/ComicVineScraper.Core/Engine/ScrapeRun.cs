@@ -179,11 +179,17 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 			// Python's sparse SeriesRef(series_key, None, -1, '', -1, None); no request is made.
 			seriesCache[key] = new ResolvedSeries(new SeriesRef(stored, "Series " + stored, null, "", 0, null));
 		}
-		if (!seriesCache.ContainsKey(key) && ComicVineUrl.FindCvInfo(facts.Snapshot.FilePath) is { } target
-			&& await services.ComicVine.ResolveSeriesAsync(target, ct) is { } magic)
+		if (!seriesCache.ContainsKey(key) && ComicVineUrl.FindCvInfo(facts.Snapshot.FilePath) is { } target)
 		{
-			services.Log.Debug($"a 'magic' file identified this book's series as: '{magic.Name}'");
-			seriesCache[key] = new ResolvedSeries(magic);
+			if (await services.ComicVine.ResolveSeriesAsync(target, ct) is { } magic)
+			{
+				services.Log.Debug($"a 'magic' file identified this book's series as: '{magic.Name}'");
+				seriesCache[key] = new ResolvedSeries(magic);
+			}
+			else
+			{
+				services.Log.Debug("bad cvinfo file: the series named in it could not be read.");
+			}
 		}
 		if (!seriesCache.ContainsKey(key) && policy.Auto)
 		{
