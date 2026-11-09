@@ -402,7 +402,7 @@ public sealed class Probe(IPluginEnvironment env)
 			Press(form, accept);
 			return;
 		}
-		Record(type, "default");
+		Record("other", "default");
 		Press(form, accept ?? form.CancelButton as Button);
 	}
 
