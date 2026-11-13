@@ -20,9 +20,9 @@ namespace CvsNetSmoke;
 /// save from two forms through the shared log. Writes report.txt and the renders to CVS_NET_SMOKE_OUT, then closes ComicRack.
 /// The report carries one ASSERT line for the claim that the forms share one log; run-smoke.ps1 adds the claim about the user's settings.
 /// </summary>
-public sealed class Probe(IPluginEnvironment env)
+public sealed class Probe : DotNetPlugin, IStartup
 {
-	private const string Key = "comic-api-net";
+	private const string PluginKey = "comic-api-net";
 	private const string ApiKey = "0123456789abcdef0123456789abcdef01234567";
 	private readonly Report report = new(Path.Combine(Environment.GetEnvironmentVariable("CVS_NET_SMOKE_OUT")!, "report.txt"));
 	private readonly HashSet<Form> handled = [];
@@ -30,10 +30,15 @@ public sealed class Probe(IPluginEnvironment env)
 	private Form main = null!;
 	private int renders;
 
-	[PluginCommand(PluginHook.Startup, Name = "CvsNet Smoke")]
-	public void Start()
+	public override string Key { get; set; } = "cvsnet-smoke";
+
+	public override string Name { get; set; } = "CvsNet Smoke";
+
+	void IStartup.Execute() => Start();
+
+	private void Start()
 	{
-		main = (Form)env.MainWindow;
+		main = (Form)ComicRack.MainWindow;
 		var timer = new System.Windows.Forms.Timer { Interval = 50 };
 		timer.Tick += (_, _) => Drive();
 		try
@@ -58,7 +63,7 @@ public sealed class Probe(IPluginEnvironment env)
 		Type su = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("cYo.Projects.ComicRack.Viewer.ScriptUtility")).First(t => t != null);
 		var engine = (PluginEngine)su.GetProperty("Scripts")!.GetValue(null, null)!;
 		MethodInfo createBookCode = su.GetMethod("CreateBookCode")!;
-		Command scrape = engine.GetAllCommands().Single(c => c.Key == Key && c.IsHook("Books"));
+		Command scrape = engine.GetAllCommands().Single(c => c.Key == PluginKey && c.IsHook("Books"));
 		report.Add($"command key={scrape.Key} hook={scrape.Hook} configure={scrape.Configure?.Hook}");
 		report.Add("main.IsWindowEnabled before=" + IsWindowEnabled(main.Handle));
 

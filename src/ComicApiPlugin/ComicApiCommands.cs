@@ -11,23 +11,24 @@ using cYo.Projects.ComicRack.Plugins;
 
 namespace ComicApiPlugin.Plugin;
 
-/// <summary>ComicRack creates one instance per process and calls both commands on the UI thread.</summary>
-public sealed class ComicApiCommands
+/// <summary>
+/// ComicRack creates one instance per process and calls every hook on the UI thread. The Books and Editor hooks both scrape,
+/// and the Configure action opens the settings dialog.
+/// </summary>
+public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 {
-	// Not the Python plugin's "comic-vine-scraper", so both can be installed for the end-to-end comparison.
-	private const string Key = "comic-api-net";
-
 	private static readonly string Version = typeof(ComicApiCommands).Assembly.GetName().Version.ToString(3);
 	private static readonly string UserAgent = $"ComicApiPlugin/{Version} (https://github.com/cbanack/comic-vine-scraper/)";
 
-	private readonly IPluginEnvironment env;
 	private readonly PluginPorts ports;
+	private IPluginEnvironment env;
 	private PluginContext? context;
 	private ComicVineHttp? http;
 	private string? httpKey;
 	private bool running;
 
-	public ComicApiCommands(IPluginEnvironment env) : this(env, PluginPorts.FromProcess())
+	/// <summary>ComicRack's constructor. ComicRack passes the environment to <see cref="OnLoad"/>.</summary>
+	public ComicApiCommands() : this(null!, PluginPorts.FromProcess())
 	{
 	}
 
@@ -37,6 +38,24 @@ public sealed class ComicApiCommands
 		this.ports = ports;
 	}
 
+	// Not the Python plugin's "comic-vine-scraper", so both can be installed for the end-to-end comparison.
+	public override string Key { get; set; } = "comic-api-net";
+
+	public override string Name { get; set; } = "Comic API Plugin";
+
+	public override string Image { get; set; } = "comicvinescraper.png";
+
+	protected override void OnLoad()
+	{
+		env = ComicRack;
+	}
+
+	void IBooks.Execute(ComicBook[] books) => Scrape(books);
+
+	void IEditor.Execute(ComicBook[] books) => Scrape(books);
+
+	void IConfig.Execute() => Configure();
+
 	/// <summary>One store and one log for the plugin's lifetime, so two commands never write the settings over each other.</summary>
 	internal PluginContext Context => context ??= PluginContext.Open(env, ports.SettingsFolder, ports.Clock);
 
@@ -44,7 +63,6 @@ public sealed class ComicApiCommands
 	/// scrapeengine.py's scrape. Blocks until the run ends, as both hooks require: the Editor hook passes a copy of the book
 	/// and reads it back the moment this returns. A second call while a run is in progress returns at once.
 	/// </summary>
-	[PluginCommand(PluginHook.Books | PluginHook.Editor, Key = Key, Name = "Comic API Plugin", Image = "comicvinescraper.png", Configure = nameof(Configure))]
 	public void Scrape(ComicBook[] books)
 	{
 		if (running)

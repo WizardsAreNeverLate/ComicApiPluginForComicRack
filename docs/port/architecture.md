@@ -9,7 +9,7 @@ The design came from two independent sketches, one by an Opus model and one by a
 The port must behave like the Python plugin, except for the bug fixes listed in `deviations.md`. Four facts from ComicRackCE constrain the design:
 
 - ComicRack runs a `Books` command synchronously on the UI thread. It sets an undo marker before the call (`ComicRack/ScriptUtility.cs:95-113`). The `Editor` command receives a copy of the book, and ComicRack reads that copy back as soon as the command returns (`ComicRack/Dialogs/ComicBookDialog.cs:1126-1143`). The command must therefore not return until the scrape is complete. If it returns early, the undo group misses the writes and the book dialog loses the result.
-- ComicRack creates one instance per plugin class, with `IPluginEnvironment`. A `ConfigScript` method with the same `Key` becomes the **Configure** action of the scrape command.
+- ComicRack creates one instance of each `DotNetPlugin` class and passes `IPluginEnvironment` to its `OnLoad`. The class gets one command for each hook interface it implements, all with the class's `Key`. `IConfig` becomes the **Configure** action of those commands.
 - The Python write-back downloads the thumbnail in the middle of writing the fields. If the download fails, the book is left half-written.
 - `settings.dat`, `advanced.dat`, `series.dat`, `geometry.dat`, the `Script.ComicVineScraper` localization key, and the `CVDBn` tags are formats shared with the Python plugin. They must not change.
 
@@ -18,18 +18,27 @@ The port must behave like the Python plugin, except for the bug fixes listed in 
 The plugin class is the only caller of the engine:
 
 ```csharp
-[PluginCommand("Books,Editor", Key = "comic-vine-scraper", Name = "Comic Vine Scraper", Image = "comicvinescraper.png")]
-public void Scrape(ComicBook[] books)
+public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 {
-	var config = store.Load();
-	RunSummary summary = ScrapeHost.Run(env.MainWindow, ctx, (host, ct) =>
-		new ScrapeRun(Services(host, config), config)
-			.RunAsync(books.Select(b => new ComicRackBook(b, env.App)).ToList(), ct));
-	if (config.SummaryDialog) FinishDialog.Show(env.MainWindow, ctx, summary);
-}
+	public override string Key { get; set; } = "comic-api-net";
 
-[PluginCommand("ConfigScript", Key = "comic-vine-scraper")]
-public void Configure() => ConfigDialog.Show(env.MainWindow, ctx, store);
+	void IBooks.Execute(ComicBook[] books) => Scrape(books);
+
+	void IEditor.Execute(ComicBook[] books) => Scrape(books);
+
+	void IConfig.Execute() => Configure();
+
+	public void Scrape(ComicBook[] books)
+	{
+		var config = store.Load();
+		RunSummary summary = ScrapeHost.Run(env.MainWindow, ctx, (host, ct) =>
+			new ScrapeRun(Services(host, config), config)
+				.RunAsync(books.Select(b => new ComicRackBook(b, env.App)).ToList(), ct));
+		if (config.SummaryDialog) FinishDialog.Show(env.MainWindow, ctx, summary);
+	}
+
+	public void Configure() => ConfigDialog.Show(env.MainWindow, ctx, store);
+}
 ```
 
 A test drives the same engine with no UI. It uses scripted dialog answers and recorded Comic Vine responses:

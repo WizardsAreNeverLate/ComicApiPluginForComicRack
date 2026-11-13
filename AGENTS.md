@@ -17,7 +17,7 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 
 - Use `Build.ps1`, not `dotnet build`, for the plugin and test projects. They carry binary `.resx` resources that `dotnet build` cannot compile for .NET Framework.
 - `src/ComicApiPlugin.Core` has no ComicRack dependency and no `.resx`. `dotnet build src/ComicApiPlugin.Core/ComicApiPlugin.Core.csproj` works directly and is the fastest way to check a Core-only change compiles.
-- Everything else (`src/ComicApiPlugin`, both test projects, `tools/smoke`, `tools/differential`) needs `ComicRackDir`/`COMICRACK_DIR` pointed at a ComicRack CE build of `WizardsAreNeverLate/ComicRackCE@integration` (branch includes `feat/dotnet-plugins`). Without it, `Directory.Build.targets` fails the build with a clear error rather than a missing-reference error.
+- Everything else (`src/ComicApiPlugin`, both test projects, `tools/smoke`, `tools/differential`) needs `ComicRackDir`/`COMICRACK_DIR` pointed at a ComicRack CE build of `WizardsAreNeverLate/ComicRackCE@integration` (branch includes upstream's `feature/dotnet-plugin`, the `DotNetPlugin` API this plugin is built on). Without it, `Directory.Build.targets` fails the build with a clear error rather than a missing-reference error.
 
 ## Tests
 

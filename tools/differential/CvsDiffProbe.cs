@@ -19,7 +19,7 @@ namespace CvsDiffProbe;
 /// mode against the live Comic Vine API, then writes every field either plugin can write to snapshot.tsv. Dialogs that still
 /// appear are answered by one policy for both plugins and logged. Closes ComicRack through MainForm.MenuClose when done.
 /// </summary>
-public sealed class Probe(IPluginEnvironment env)
+public sealed class Probe : DotNetPlugin, IStartup
 {
 	private const string PythonKey = "comic-vine-scraper";
 	private const string NetKey = "comic-api-net";
@@ -55,10 +55,15 @@ public sealed class Probe(IPluginEnvironment env)
 		}
 	}
 
-	[PluginCommand(PluginHook.Startup, Name = "CvsDiff Probe")]
-	public void Start()
+	public override string Key { get; set; } = "cvsdiff-probe";
+
+	public override string Name { get; set; } = "CvsDiff Probe";
+
+	void IStartup.Execute() => Start();
+
+	private void Start()
 	{
-		main = (Form)env.MainWindow;
+		main = (Form)ComicRack.MainWindow;
 		var timer = new System.Windows.Forms.Timer { Interval = 100 };
 		timer.Tick += (_, _) => Drive();
 		try
@@ -134,7 +139,7 @@ public sealed class Probe(IPluginEnvironment env)
 			}
 			ComicBook book = baseline[i];
 			System.Drawing.Bitmap? page = null;
-			var worker = new System.Threading.Thread(() => page = env.App.GetComicPage(book, 0));
+			var worker = new System.Threading.Thread(() => page = ComicRack.App.GetComicPage(book, 0));
 			worker.Start();
 			bool returned = worker.Join(TimeSpan.FromSeconds(30));
 			report.Add($"PREFLIGHT {Path.GetFileName(books[i].File)}: pages={book.PageCount} GetComicPage(0) {(returned ? (page is null ? "returned null" : $"returned {page.Width}x{page.Height}") : "did not return in 30 s")}");
