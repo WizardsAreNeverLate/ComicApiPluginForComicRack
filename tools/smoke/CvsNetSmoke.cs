@@ -92,13 +92,22 @@ public sealed class Probe : DotNetPlugin, IStartup
 	private void Drive()
 	{
 		List<Form> open;
+		List<Form> news;
 		try
 		{
 			open = [.. Application.OpenForms.Cast<Form>().Where(f => f.Visible && f.IsHandleCreated && f.GetType().Namespace == "ComicApiPlugin.Plugin")];
+			news = [.. Application.OpenForms.Cast<Form>().Where(f => f.Visible && f.GetType().Name == "NewsDialog")];
 		}
 		catch (InvalidOperationException)
 		{
 			return;
+		}
+		// A fresh configuration has unread news, so ComicRack opens its news dialog modally when the download finishes. If that lands on
+		// top of a plugin dialog, the plugin dialog is disabled and PerformClick does nothing, so the run would wait until it is killed.
+		foreach (Form form in news)
+		{
+			report.Add("closed ComicRack's news dialog");
+			form.Close();
 		}
 		foreach (Form form in open)
 		{
