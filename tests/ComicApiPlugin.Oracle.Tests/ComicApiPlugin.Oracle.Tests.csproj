@@ -8,6 +8,9 @@
 	<ItemGroup>
 		<PackageReference Include="TUnit" Version="1.81.10" />
 		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="8.0.1" />
+		<!-- ComicRack.Plugins references Roslyn, which needs these versions; TUnit alone would pull older ones. -->
+		<PackageReference Include="System.Collections.Immutable" Version="10.0.1" />
+		<PackageReference Include="System.Reflection.Metadata" Version="10.0.1" />
 	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="System.Net.Http" />
