@@ -13,6 +13,7 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 ./Build.ps1            # build, then run both test suites
 ./Build.ps1 -Rebuild
 ./Build.ps1 -SkipTests
+./BuildNoTests.ps1     # same as -SkipTests
 ```
 
 - Use `Build.ps1`, not `dotnet build`, for the plugin and test projects. They carry binary `.resx` resources that `dotnet build` cannot compile for .NET Framework.
