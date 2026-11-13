@@ -81,6 +81,27 @@ public sealed class WelcomeFormTests
 	}
 
 	[Test]
+	public async Task The_start_button_reads_Query_API_and_the_message_names_it()
+	{
+		using var session = UiSession.Create();
+
+		(string Button, string Message) seen = Sta.Run(() =>
+		{
+			(string, string) captured = ("", "");
+			using IDisposable driver = Ui.WhenOpen<WelcomeForm>(form =>
+			{
+				captured = (Ui.Find<Button>(form, "start").Text, Ui.Find<Label>(form, "message").Text);
+				form.Close();
+			});
+			WelcomeForm.Show(null, session.Ctx, 3);
+			return captured;
+		});
+
+		await Assert.That(seen.Button).IsEqualTo("Query API");
+		await Assert.That(seen.Message).EndsWith("Click 'Query API' to begin.");
+	}
+
+	[Test]
 	[Arguments("start", true)]
 	[Arguments("cancel", false)]
 	public async Task Start_begins_the_scrape_and_Cancel_does_not(string button, bool expected)
