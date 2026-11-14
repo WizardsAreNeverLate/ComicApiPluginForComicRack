@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using ComicApiPlugin.Books;
 using ComicApiPlugin.Engine;
 using ComicApiPlugin.VerseDb;
+using cYo.Projects.ComicRack.Engine.IO.Provider;
 
 namespace ComicApiPlugin.Plugin;
 
@@ -123,7 +124,8 @@ internal sealed class CoverMatchForm : ScraperForm
 	{
 		try
 		{
-			byte[] bytes = await verseDb.GetImageAsync(url, ct);
+			// VerseDB serves every cover as WebP, which GDI+ cannot read; ComicRack's libwebp converts it and returns other formats unchanged.
+			byte[] bytes = WebpImage.ConvertToJpeg(await verseDb.GetImageAsync(url, ct));
 			using var image = new Bitmap(new MemoryStream(bytes));
 			// A copy, because GDI+ reads a stream-backed bitmap lazily.
 			return new Bitmap(image);
