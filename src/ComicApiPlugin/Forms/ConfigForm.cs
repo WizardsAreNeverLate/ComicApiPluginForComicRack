@@ -28,12 +28,13 @@ internal sealed class ConfigForm : ScraperForm
 	private readonly Button ok;
 	private readonly TabControl tabs = new() { Name = "tabs", Location = new Point(10, 15), Size = new Size(395, 302), TabIndex = 3 };
 	private readonly TabPage comicVineTab;
+	private readonly TabPage verseDbTab;
 	private readonly TabPage providersTab;
 	private readonly TabPage detailsTab;
 	private readonly TextBox apiKey = new() { Name = "apiKey", Location = new Point(34, 135), Size = new Size(287, 20), UseSystemPasswordChar = true };
 	private readonly Button showKey = new() { Name = "showKey", AccessibleName = "Show or hide the API key", Location = new Point(325, 134), Size = new Size(24, 22), UseVisualStyleBackColor = true };
-	private readonly TextBox verseDbKey = new() { Name = "verseDbKey", Location = new Point(34, 170), Size = new Size(287, 20), UseSystemPasswordChar = true };
-	private readonly Button showVerseDbKey = new() { Name = "showVerseDbKey", AccessibleName = "Show or hide the VerseDB token", Location = new Point(325, 169), Size = new Size(24, 22), UseVisualStyleBackColor = true };
+	private readonly TextBox verseDbKey = new() { Name = "verseDbKey", Location = new Point(34, 135), Size = new Size(287, 20), UseSystemPasswordChar = true };
+	private readonly Button showVerseDbKey = new() { Name = "showVerseDbKey", AccessibleName = "Show or hide the VerseDB token", Location = new Point(325, 134), Size = new Size(24, 22), UseVisualStyleBackColor = true };
 	private readonly CheckedListBox providers = new()
 	{
 		Name = "providers",
@@ -97,11 +98,13 @@ internal sealed class ConfigForm : ScraperForm
 		preserveThumbs.TextAlign = ContentAlignment.TopLeft;
 
 		comicVineTab = BuildComicVineTab();
+		verseDbTab = BuildVerseDbTab();
 		providersTab = BuildProvidersTab();
 		detailsTab = BuildDetailsTab();
 		tabs.TabPages.AddRange(
 		[
 			comicVineTab,
+			verseDbTab,
 			providersTab,
 			detailsTab,
 			Tab("behaviourTab", TextKeys.ConfigFormBehaviourTab,
@@ -283,21 +286,26 @@ internal sealed class ConfigForm : ScraperForm
 		up.Click += (_, _) => MoveProvider(-1);
 		Button down = Pin(MakeButton("providerDown", TextKeys.ConfigFormProviderDown, new Point(292, 84), 60, 0), TopRight);
 		down.Click += (_, _) => MoveProvider(1);
+		var order = new Label { Name = "providersText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 15), Size = new Size(315, 34), Text = Strings[TextKeys.ConfigFormProvidersText] };
+		return Tab("providersTab", TextKeys.ConfigFormProvidersTab, Pin(order, AcrossTop), Pin(providers, AcrossTop), up, down);
+	}
+
+	private TabPage BuildVerseDbTab()
+	{
 		var link = new LinkLabel
 		{
 			Name = "verseDbRegister",
 			UseMnemonic = false,
 			AutoSize = false,
-			Location = new Point(34, 200),
+			Location = new Point(34, 170),
 			Size = new Size(315, 34),
 			Text = Strings[TextKeys.ConfigFormVerseDbClickHere],
 		};
 		link.LinkClicked += (_, _) => Process.Start(VerseDbTokenPage);
 		verseDbKey.ContextMenuStrip = EditMenu(verseDbKey);
 		WireEye(showVerseDbKey, verseDbKey);
-		var order = new Label { Name = "providersText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 15), Size = new Size(315, 34), Text = Strings[TextKeys.ConfigFormProvidersText] };
-		var token = new Label { Name = "verseDbText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 125), Size = new Size(315, 40), Text = Strings[TextKeys.ConfigFormVerseDbText] };
-		return Tab("providersTab", TextKeys.ConfigFormProvidersTab, Pin(order, AcrossTop), Pin(providers, AcrossTop), up, down, Pin(token, AcrossTop), Pin(verseDbKey, AcrossTop), Pin(showVerseDbKey, TopRight), Pin(link, AcrossTop));
+		var text = new Label { Name = "verseDbText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 80), Size = new Size(315, 54), Text = Strings[TextKeys.ConfigFormVerseDbText] };
+		return Tab("verseDbTab", TextKeys.ConfigFormVerseDbName, Pin(text, AcrossTop), Pin(verseDbKey, AcrossTop), Pin(showVerseDbKey, TopRight), Pin(link, AcrossTop));
 	}
 
 	private sealed record ProviderItem(ProviderKind Kind, string Name)

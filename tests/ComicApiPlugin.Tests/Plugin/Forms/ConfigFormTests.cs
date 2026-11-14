@@ -613,25 +613,25 @@ public sealed class ConfigFormTests
 	{
 		using var session = UiSession.Create();
 
-		(bool Masked, bool Shown, bool Hidden) seen = Sta.Run(() =>
+		(string Tab, string Title, bool Masked, bool Shown, bool Hidden) seen = Sta.Run(() =>
 		{
-			(bool, bool, bool) result = default;
+			(string, string, bool, bool, bool) result = default;
 			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
 			{
-				ShowProvidersTab(form);
 				TextBox token = Ui.Find<TextBox>(form, "verseDbKey");
+				Ui.Find<TabControl>(form, "tabs").SelectedTab = (TabPage)token.Parent;
 				Button eye = Ui.Find<Button>(form, "showVerseDbKey");
 				bool masked = token.UseSystemPasswordChar;
 				eye.PerformClick();
 				bool shown = !token.UseSystemPasswordChar;
 				eye.PerformClick();
-				result = (masked, shown, token.UseSystemPasswordChar);
+				result = (token.Parent.Name, token.Parent.Text, masked, shown, token.UseSystemPasswordChar);
 				form.Close();
 			});
 			ConfigForm.Show(null, session.Ctx);
 			return result;
 		});
 
-		await Assert.That(seen).IsEqualTo((true, true, true));
+		await Assert.That(seen).IsEqualTo(("verseDbTab", "VerseDB", true, true, true));
 	}
 }
