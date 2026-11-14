@@ -3,6 +3,7 @@
 		<OutputType>Library</OutputType>
 		<RootNamespace>ComicApiPlugin.Plugin</RootNamespace>
 		<UsesComicRack>true</UsesComicRack>
+		<ComicRackPluginDir Condition="'$(ComicRackPluginDir)' == ''">$(COMICRACK_PLUGIN_DIR)</ComicRackPluginDir>
 	</PropertyGroup>
 	<!-- The in-app smoke test's recorded-response switch (Smoke/RecordedResponses.cs). Never set for a build you ship. -->
 	<PropertyGroup Condition="'$(CvsRecordedResponses)' == 'true'">
@@ -52,5 +53,16 @@
 		<Copy SourceFiles="@(CrPluginContent)" DestinationFolder="$(CrPluginStaging)" />
 		<ZipDirectory SourceDirectory="$(CrPluginStaging)" DestinationFile="$(CrPluginPath)" Overwrite="true" />
 		<Message Importance="high" Text="$(MSBuildProjectName) -> $([System.IO.Path]::GetFullPath('$(CrPluginPath)'))" />
+	</Target>
+	<!--
+		Set COMICRACK_PLUGIN_DIR (or -p:ComicRackPluginDir=) to an installed copy of this plugin, such as
+		%APPDATA%\cYo\ComicRack Community Edition\Scripts\Comic API Plugin, and every build unpacks the .crplugin there:
+		the DLLs, Package.ini, the images and the language zips, as ComicRack installs them. The PDBs go too, for line
+		numbers in stack traces. Close ComicRack first, because it locks the DLLs. The recorded-response build never deploys.
+	-->
+	<Target Name="DeployCrPlugin" AfterTargets="PackCrPlugin" Condition="'$(ComicRackPluginDir)' != '' and '$(CvsRecordedResponses)' != 'true'">
+		<Unzip SourceFiles="$(OutDir)ComicApiPlugin.crplugin" DestinationFolder="$(ComicRackPluginDir)" OverwriteReadOnlyFiles="true" />
+		<Copy SourceFiles="$(OutDir)ComicApiPlugin.pdb;$(OutDir)ComicApiPlugin.Core.pdb" DestinationFolder="$(ComicRackPluginDir)" />
+		<Message Importance="high" Text="$(MSBuildProjectName) deployed to $(ComicRackPluginDir)" />
 	</Target>
 </Project>
