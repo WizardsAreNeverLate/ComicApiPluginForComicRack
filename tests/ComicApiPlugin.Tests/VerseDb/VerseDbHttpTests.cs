@@ -27,7 +27,8 @@ public sealed class VerseDbHttpTests
 		await Assert.That(request.Headers.Authorization!.ToString()).IsEqualTo("Bearer " + VerseDbFixtures.Token);
 		await Assert.That(request.Content!.Headers.ContentType!.MediaType).IsEqualTo("multipart/form-data");
 		string text = Encoding.ASCII.GetString(body!);
-		await Assert.That(text).Contains("name=image");
+		await Assert.That(text).Contains("Content-Disposition: form-data; name=\"image\"; filename=\"cover.jpg\"\r\n");
+		await Assert.That(text).DoesNotContain("filename*");
 		await Assert.That(text).Contains("JPEGBYTES");
 	}
 

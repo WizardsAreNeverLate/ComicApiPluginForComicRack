@@ -41,7 +41,10 @@ public sealed class VerseDbHttp : IVerseDb, IDisposable
 	{
 		using var file = new ByteArrayContent(image);
 		file.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
-		using var form = new MultipartFormDataContent { { file, "image", "cover.jpg" } };
+		// VerseDB answers 404 unless name and filename are quoted and filename* is absent. Add(content, name, fileName)
+		// writes them unquoted and adds filename*, so the header is set by hand, as curl writes it.
+		file.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = "\"image\"", FileName = "\"cover.jpg\"" };
+		using var form = new MultipartFormDataContent { file };
 		using var request = ApiRequest(HttpMethod.Post, "/api/v1/lookup/cover");
 		request.Content = form;
 		return VerseDbJson.ParseCoverLookup(await SendAsync(request, ct).ConfigureAwait(false));
