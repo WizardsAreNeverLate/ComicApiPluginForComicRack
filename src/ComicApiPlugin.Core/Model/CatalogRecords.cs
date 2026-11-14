@@ -15,10 +15,8 @@ public sealed record SeriesRef(
 /// <summary>One row of a series' issue list.</summary>
 public sealed record IssueRef(IssueId Id, string IssueNumber, string Title, Uri? ThumbUrl);
 
-/// <summary>Full issue details, already cleaned: summary stripped, roles mapped, lists free of blanks and ',' ';'.</summary>
-public sealed record Issue(
-	IssueId Id,
-	SeriesId SeriesId,
+/// <summary>What a scrape writes into a book's fields, whichever provider it came from: everything about an issue except its identity and covers.</summary>
+public sealed record IssueMetadata(
 	string SeriesName,
 	int? VolumeYear,
 	string IssueNumber,
@@ -40,9 +38,40 @@ public sealed record Issue(
 	IReadOnlyList<string> CoverArtists,
 	IReadOnlyList<string> Editors,
 	string Webpage,        // only when it starts with http
-	float? Rating,         // only when slow data was requested; 0..5
-	IReadOnlyList<Uri> CoverUrls); // preference order small, medium, large, super, thumb; then alternates
+	float? Rating);        // only when slow data was requested; 0..5
 
+/// <summary>Full Comic Vine issue details, already cleaned: summary stripped, roles mapped, lists free of blanks and ',' ';'.</summary>
+public sealed record Issue(
+	IssueId Id,
+	SeriesId SeriesId,
+	string SeriesName,
+	int? VolumeYear,
+	string IssueNumber,
+	string Title,
+	string Summary,
+	string Publisher,
+	string Imprint,
+	PartialDate Published,
+	PartialDate Released,
+	IReadOnlyList<string> Crossovers,
+	IReadOnlyList<string> Characters,
+	IReadOnlyList<string> Teams,
+	IReadOnlyList<string> Locations,
+	IReadOnlyList<string> Writers,
+	IReadOnlyList<string> Pencillers,
+	IReadOnlyList<string> Inkers,
+	IReadOnlyList<string> Colorists,
+	IReadOnlyList<string> Letterers,
+	IReadOnlyList<string> CoverArtists,
+	IReadOnlyList<string> Editors,
+	string Webpage,
+	float? Rating,
+	IReadOnlyList<Uri> CoverUrls) // preference order small, medium, large, super, thumb; then alternates
+{
+	public IssueMetadata Metadata => new(
+		SeriesName, VolumeYear, IssueNumber, Title, Summary, Publisher, Imprint, Published, Released, Crossovers, Characters, Teams, Locations,
+		Writers, Pencillers, Inkers, Colorists, Letterers, CoverArtists, Editors, Webpage, Rating);
+}
 /// <summary>What a cvinfo file or a Comic Vine URL names. Parsed by ComicVineUrl.TryParse (phase 3b).</summary>
 public abstract record ComicVineTarget
 {
