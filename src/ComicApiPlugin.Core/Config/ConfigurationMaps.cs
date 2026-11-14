@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using ComicApiPlugin.Books;
 
 namespace ComicApiPlugin.Config;
@@ -6,6 +8,11 @@ namespace ComicApiPlugin.Config;
 public sealed partial record Configuration
 {
 	private const string ApiKeyKey = "apiKey";
+	// New keys, unknown to the Python plugin, which ignores them. DatFile drops a value containing ':', so a token with one is not saved.
+	private const string VerseDbApiKeyKey = "verseDbApiKey";
+	private const string ProviderOrderKey = "providerOrder";
+	private const string ComicVineEnabledKey = "comicVineEnabled";
+	private const string VerseDbEnabledKey = "verseDbEnabled";
 	private const string OverwriteExistingKey = "overwriteExisting";
 	private const string IgnoreBlanksKey = "ignoreBlanks";
 	private const string ConvertImprintsKey = "convertImprints";
@@ -38,6 +45,8 @@ public sealed partial record Configuration
 		return config with
 		{
 			ApiKey = settings.TryGetValue(ApiKeyKey, out DatValue? key) ? key.ToFileText() : config.ApiKey,
+			VerseDbApiKey = settings.TryGetValue(VerseDbApiKeyKey, out DatValue? verseKey) ? verseKey.ToFileText() : config.VerseDbApiKey,
+			Providers = ReadProviders(settings),
 			Update = update,
 			OverwriteExisting = Flag(settings, OverwriteExistingKey, config.OverwriteExisting),
 			IgnoreBlanks = Flag(settings, IgnoreBlanksKey, config.IgnoreBlanks),
@@ -56,6 +65,10 @@ public sealed partial record Configuration
 		var map = new Dictionary<string, DatValue>
 		{
 			[ApiKeyKey] = new DatValue.Text(ApiKey),
+			[VerseDbApiKeyKey] = new DatValue.Text(VerseDbApiKey),
+			[ProviderOrderKey] = new DatValue.Text(string.Join(",", Providers.Select(p => p.Kind))),
+			[ComicVineEnabledKey] = new DatValue.Bool(IsEnabled(ProviderKind.ComicVine)),
+			[VerseDbEnabledKey] = new DatValue.Bool(IsEnabled(ProviderKind.VerseDb)),
 			[OverwriteExistingKey] = new DatValue.Bool(OverwriteExisting),
 			[IgnoreBlanksKey] = new DatValue.Bool(IgnoreBlanks),
 			[ConvertImprintsKey] = new DatValue.Bool(ConvertImprints),
@@ -73,6 +86,20 @@ public sealed partial record Configuration
 			map[row.SettingsKey] = new DatValue.Bool((Update & row.Controls) == row.Controls);
 		}
 		return map;
+	}
+
+	private bool IsEnabled(ProviderKind kind) => Providers.Any(p => p.Kind == kind && p.Enabled);
+
+	private static ProviderList ReadProviders(IReadOnlyDictionary<string, DatValue> settings)
+	{
+		bool comicVine = Flag(settings, ComicVineEnabledKey, true);
+		bool verseDb = Flag(settings, VerseDbEnabledKey, true);
+		IEnumerable<ProviderSetting> ordered = settings.TryGetValue(ProviderOrderKey, out DatValue? order)
+			? order.ToFileText().Split(',').Select(name => Enum.TryParse(name.Trim(), true, out ProviderKind kind) && Enum.IsDefined(typeof(ProviderKind), kind)
+				? new ProviderSetting(kind, kind == ProviderKind.ComicVine ? comicVine : verseDb)
+				: null).OfType<ProviderSetting>()
+			: [];
+		return ProviderTable.Normalize(ordered.Concat([new ProviderSetting(ProviderKind.ComicVine, comicVine), new ProviderSetting(ProviderKind.VerseDb, verseDb)]));
 	}
 
 	private static BookFields With(BookFields update, BookFields bits, IReadOnlyDictionary<string, DatValue> settings, string key) =>

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using ComicApiPlugin.Books;
 
@@ -12,6 +14,11 @@ namespace ComicApiPlugin.Config;
 public sealed partial record Configuration
 {
 	public string ApiKey { get; init; } = "";
+
+	public string VerseDbApiKey { get; init; } = "";
+
+	/// <summary>In priority order, first is highest. Always holds every ProviderKind once: assign through ProviderTable.Normalize.</summary>
+	public ProviderList Providers { get; init; } = ProviderTable.Default;
 
 	/// <summary>The fields the user switched on: the 21 FieldTable rows, plus Tags (updateTags) and Notes (updateNotes). Rating comes from Advanced.ScrapeRating.</summary>
 	public BookFields Update { get; init; } = FieldTable.All | BookFields.Notes;
@@ -36,6 +43,8 @@ public sealed partial record Configuration
 	private bool PrintMembers(StringBuilder builder)
 	{
 		builder.Append("ApiKey = ").Append(ApiKey.Length == 0 ? "<none>" : "<redacted>");
+		builder.Append(", VerseDbApiKey = ").Append(VerseDbApiKey.Length == 0 ? "<none>" : "<redacted>");
+		builder.Append(", Providers = ").Append(string.Join(",", Providers.Select(p => p.Kind + (p.Enabled ? "" : "(off)"))));
 		builder.Append(", Update = ").Append(Update);
 		builder.Append(", OverwriteExisting = ").Append(OverwriteExisting);
 		builder.Append(", IgnoreBlanks = ").Append(IgnoreBlanks);
@@ -48,6 +57,12 @@ public sealed partial record Configuration
 		builder.Append(", Advanced = ").Append(Advanced);
 		return true;
 	}
+
+	public string KeyOf(ProviderKind kind) => kind == ProviderKind.ComicVine ? ApiKey : VerseDbApiKey;
+
+	/// <summary>Actions the user can run, in priority order: the provider is enabled and its key is not blank.</summary>
+	public IReadOnlyList<ScrapeAction> AvailableActions() =>
+		[.. Providers.Where(p => p.Enabled && KeyOf(p.Kind).Trim().Length > 0).Select(p => ProviderTable.ActionOf(p.Kind))];
 
 	public TimeSpan ScrapeDelay => TimeSpan.FromSeconds(Advanced.ScrapeDelaySeconds);
 	public bool ConfirmIssue => Choose == ChooseMode.ConfirmIssue;
