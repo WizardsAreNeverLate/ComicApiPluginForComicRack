@@ -33,7 +33,7 @@ function Write-Entry($zip, [string]$name, [string]$text) {
 }
 
 function Set-Text([string]$xml, [string]$key, [string]$value, [string]$file) {
-	$pattern = '<Text Key="' + $key + '" Text="[^"]*" Comment="[^"]*"'
+	$pattern = '<Text Key="' + $key + '" Text="[^"]*"\s+Comment="[^"]*"'
 	if (-not [regex]::IsMatch($xml, $pattern)) { throw "$file has no $key text" }
 	return [regex]::Replace($xml, $pattern, "<Text Key=`"$key`" Text=`"$value`" Comment=`"$value`"")
 }
@@ -57,6 +57,8 @@ $verseDbTexts = [ordered]@{
 	ConfigFormVerseDbName = "VerseDB"
 	ConfigFormVerseDbText = "VerseDB cover search needs an API token. Paste yours in the space below."
 	ConfigFormVerseDbClickHere = "Click here to create a VerseDB API token"
+	LogWindowClose = "Close"
+	ConfigFormShowSummaryCB = "Show the activity log while scraping"
 }
 
 function Add-Text([string]$xml, [string]$key, [string]$value) {

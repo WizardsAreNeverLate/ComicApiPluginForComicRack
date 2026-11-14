@@ -1,6 +1,7 @@
 using ComicApiPlugin.Config;
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ComicApiPlugin.Engine;
@@ -8,31 +9,70 @@ using ComicApiPlugin.Plugin;
 
 namespace ComicApiPlugin.Tests.Plugin.Forms;
 
-public sealed class FinishFormTests
+public sealed class LogWindowTests
 {
 	[Test]
-	[Arguments(1, 3, "Scraped details for 1 comic book.", "Skipped 3 comic books.")]
-	[Arguments(12, 1, "Scraped details for 12 comic books.", "Skipped 1 comic book.")]
-	[Arguments(0, 0, "Scraped details for 0 comic books.", "Skipped 0 comic books.")]
-	public async Task The_summary_counts_scraped_and_skipped_books(int scraped, int skipped, string scrapedText, string skippedText)
+	public async Task It_starts_with_this_runs_lines_and_shows_each_new_line_as_it_is_written()
+	{
+		using var session = UiSession.Create();
+		session.Log.Debug("from an earlier run");
+		int firstLine = session.Log.Snapshot().Count;
+		session.Log.Debug("this run, before the window opened");
+
+		(string Text, string Title) seen = Sta.Run(() =>
+		{
+			LogWindow window = LogWindow.ShowOrReuse(null, null, session.Ctx, firstLine);
+			session.Log.Debug("written while it is open");
+			(string, string) result = (Ui.Find<TextBox>(window, "log").Text, window.Text);
+			window.Close();
+			return result;
+		});
+
+		await Assert.That(seen.Text).IsEqualTo("this run, before the window opened\r\nwritten while it is open\r\n");
+		await Assert.That(seen.Title).IsEqualTo("Comic API Plugin");
+	}
+
+	[Test]
+	public async Task An_open_window_is_reused_and_a_closed_one_is_replaced()
 	{
 		using var session = UiSession.Create();
 
-		(string Scraped, string Skipped, string Title) seen = Sta.Run(() =>
+		(bool Reused, bool ClosedDisposed, bool Replaced) seen = Sta.Run(() =>
 		{
-			(string, string, string) captured = ("", "", "");
-			using IDisposable driver = Ui.WhenOpen<FinishForm>(form =>
-			{
-				captured = (Ui.Find<Label>(form, "scraped").Text, Ui.Find<Label>(form, "skipped").Text, form.Text);
-				Ui.Find<Button>(form, "ok").PerformClick();
-			});
-			FinishForm.Show(null, session.Ctx, new RunSummary(scraped, skipped, Cancelled: false));
-			return captured;
+			LogWindow first = LogWindow.ShowOrReuse(null, null, session.Ctx, 0);
+			LogWindow again = LogWindow.ShowOrReuse(first, null, session.Ctx, 0);
+			Ui.Find<Button>(first, "close").PerformClick();
+			LogWindow third = LogWindow.ShowOrReuse(again, null, session.Ctx, 0);
+			(bool, bool, bool) result = (ReferenceEquals(first, again), first.IsDisposed, !ReferenceEquals(third, first));
+			third.Close();
+			return result;
 		});
 
-		await Assert.That(seen.Scraped).IsEqualTo(scrapedText);
-		await Assert.That(seen.Skipped).IsEqualTo(skippedText);
-		await Assert.That(seen.Title).IsEqualTo("Comic API Plugin");
+		await Assert.That(seen).IsEqualTo((true, true, true));
+	}
+
+	[Test]
+	public async Task It_stays_enabled_and_closable_while_a_modal_dialog_is_open()
+	{
+		using var session = UiSession.Create();
+
+		(bool EnabledUnderModal, bool ClosedUnderModal, bool ModalStillOpen) seen = Sta.Run(() =>
+		{
+			LogWindow window = LogWindow.ShowOrReuse(null, null, session.Ctx, 0);
+			(bool, bool, bool) result = default;
+			using var modal = new Form { ShowInTaskbar = false };
+			Ui.WhenShown(modal, () =>
+			{
+				bool enabled = IsWindowEnabled(window.Handle);
+				Ui.Find<Button>(window, "close").PerformClick();
+				result = (enabled, window.IsDisposed, modal.Visible);
+				modal.Close();
+			});
+			modal.ShowDialog();
+			return result;
+		});
+
+		await Assert.That(seen).IsEqualTo((true, true, true));
 	}
 
 	[Test]
@@ -42,19 +82,19 @@ public sealed class FinishFormTests
 
 		string[] unlocalized = Sta.Run(() =>
 		{
-			string[] found = [];
-			using IDisposable driver = Ui.WhenOpen<FinishForm>(form =>
-			{
-				found = [.. Ui.UnlocalizedTexts(form)];
-				Ui.Render(form, "FinishForm");
-				form.Close();
-			});
-			FinishForm.Show(null, session.Ctx, new RunSummary(4, 2, Cancelled: false));
+			LogWindow window = LogWindow.ShowOrReuse(null, null, session.Ctx, session.Log.Snapshot().Count);
+			string[] found = [.. Ui.UnlocalizedTexts(window)];
+			Ui.Render(window, "LogWindow");
+			window.Close();
 			return found;
 		});
 
 		await Assert.That(unlocalized).IsEmpty();
 	}
+
+	[DllImport("user32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool IsWindowEnabled(IntPtr window);
 }
 
 public sealed class WelcomeFormTests

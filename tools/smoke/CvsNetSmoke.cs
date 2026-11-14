@@ -81,7 +81,7 @@ public sealed class Probe : DotNetPlugin, IStartup
 		report.Add("dialogs seen: " + string.Join(", ", seen));
 		if (!sharedLogChecked)
 		{
-			Check("forms share one log", false, "the FinishForm never saved its log, so there was nothing to compare");
+			Check("forms share one log", false, "the log window never saved its log, so there was nothing to compare");
 		}
 	}
 
@@ -159,11 +159,10 @@ public sealed class Probe : DotNetPlugin, IStartup
 				report.Add($"  for '{scraping}': {grid.Rows.Count} candidates, picked {row.Cells["name"].Value} ({id}), comicForm.IsWindowEnabled={IsWindowEnabled(comic.Handle)}");
 				Find<Button>(form, "ok").PerformClick();
 				break;
-			case "FinishForm":
-				report.Add("  finish: " + Find<Label>(form, "scraped").Text + " / " + Find<Label>(form, "skipped").Text);
-				SaveLog(form, "log-from-finishform.txt");
+			case "LogWindow":
+				Check("log window usable during run", IsWindowEnabled(form.Handle), "the log window must stay enabled while the run's ComicForm is modal");
+				SaveLog(form, "log-from-logwindow.txt");
 				CheckSharedLog();
-				Find<Button>(form, "ok").PerformClick();
 				break;
 			default:
 				report.Add("  unexpected dialog; closing it: " + string.Join(" | ", Descendants(form).Where(c => c is Label).Select(c => c.Text)));
@@ -224,17 +223,17 @@ public sealed class Probe : DotNetPlugin, IStartup
 	}
 
 	/// <summary>
-	/// The ConfigForm saved its log, then the FinishForm saved its own. One shared log means the second file holds the first form's
+	/// The ConfigForm saved its log, then the log window saved its own. One shared log means the second file holds the first form's
 	/// lines, including the line the first save wrote about itself, in order before the second save's own line.
 	/// </summary>
 	private void CheckSharedLog()
 	{
 		sharedLogChecked = true;
 		string first = ReadLog("log-from-configform.txt");
-		string second = ReadLog("log-from-finishform.txt");
+		string second = ReadLog("log-from-logwindow.txt");
 		const string opened = "opened the settings dialog.";
 		const string firstSave = "wrote debug logfile: log-from-configform.txt";
-		const string secondSave = "wrote debug logfile: log-from-finishform.txt";
+		const string secondSave = "wrote debug logfile: log-from-logwindow.txt";
 		bool ok = first.Contains(opened) && first.Contains(firstSave) && second.Contains(opened) && second.Contains(firstSave)
 			&& second.Contains(secondSave) && second.IndexOf(firstSave, StringComparison.Ordinal) < second.IndexOf(secondSave, StringComparison.Ordinal);
 		Check("forms share one log", ok, $"first file {first.Length} chars, second file {second.Length} chars; the second must hold '{opened}' and '{firstSave}' before '{secondSave}'");

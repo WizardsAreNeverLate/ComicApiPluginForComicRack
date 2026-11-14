@@ -28,6 +28,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 	private string? httpKey;
 	private VerseDbHttp? verseDb;
 	private string? verseDbToken;
+	private LogWindow? logWindow;
 	private bool running;
 
 	/// <summary>ComicRack's constructor. ComicRack passes the environment to <see cref="OnLoad"/>.</summary>
@@ -77,6 +78,8 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 		// Python built its Configuration before loading it, so the summary default (on) holds when the load itself fails.
 		Configuration config = new() { Advanced = AdvancedSettings.Parse(null) };
 		var summary = new RunSummary(0, books.Length, Cancelled: false);
+		int firstLine = ctx.Log.Snapshot().Count;
+		bool logShown = false;
 		running = true;
 		try
 		{
@@ -111,6 +114,11 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 				}
 				action = chosen;
 			}
+			if (config.SummaryDialog)
+			{
+				ShowLog(ctx, firstLine);
+				logShown = true;
+			}
 			summary = action == ScrapeAction.VerseDbCoverSearch ? RunCoverSearch(ctx, config, books) : Run(ctx, config, books);
 		}
 		catch (ScrapeFailedException failure)
@@ -133,10 +141,18 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 		{
 			try
 			{
-				// Python's finally: the summary follows every run, including one that stopped early or failed.
+				// Python's finally: the summary follows every run, including one that stopped early or failed. It goes into the log
+				// window, which opens here only if the run ended before opening it; one the user closed during the run stays closed.
 				if (config.SummaryDialog)
 				{
-					Guarded(ctx, () => FinishForm.Show(env.MainWindow, ctx, summary));
+					Guarded(ctx, () =>
+					{
+						LogSummary(ctx, summary);
+						if (!logShown)
+						{
+							ShowLog(ctx, firstLine);
+						}
+					});
 				}
 			}
 			finally
@@ -146,6 +162,17 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 			}
 			(env.MainWindow as Form)?.Activate();
 		}
+	}
+
+	/// <summary>The window still open from an earlier run is reused; otherwise a new one opens with this run's lines so far.</summary>
+	private void ShowLog(PluginContext ctx, int firstLine) => logWindow = LogWindow.ShowOrReuse(logWindow, env.MainWindow, ctx, firstLine);
+
+	private static void LogSummary(PluginContext ctx, RunSummary summary)
+	{
+		Strings strings = ctx.Strings;
+		ctx.Log.Debug("");
+		ctx.Log.Debug(summary.Scraped == 1 ? strings[TextKeys.FinishFormScrapedSingle] : strings.Format(TextKeys.FinishFormScrapedPlural, summary.Scraped));
+		ctx.Log.Debug(summary.Skipped == 1 ? strings[TextKeys.FinishFormSkippedSingle] : strings.Format(TextKeys.FinishFormSkippedPlural, summary.Skipped));
 	}
 
 	/// <summary>The Configure action: the settings dialog, which saves on OK.</summary>

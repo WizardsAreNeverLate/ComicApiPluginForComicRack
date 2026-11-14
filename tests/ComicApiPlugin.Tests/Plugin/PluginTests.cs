@@ -39,7 +39,7 @@ public sealed class PluginTests
 		ComicBook late = new() { Series = "Late", Number = "1" };
 		bool mainEnabledDuringRun = true;
 		bool secondScrapeReturnedAtOnce = false;
-		string welcome = "", scraped = "", skipped = "";
+		string welcome = "";
 
 		world.Script
 			.On<ConfigForm>(form =>
@@ -60,16 +60,11 @@ public sealed class PluginTests
 				secondScrapeReturnedAtOnce = watch.ElapsedMilliseconds < 1000;
 				PickSeries(form);
 			})
-			.On<SeriesForm>(PickSeries)
-			.On<FinishForm>(form =>
-			{
-				(scraped, skipped) = (Ui.Find<Label>(form, "scraped").Text, Ui.Find<Label>(form, "skipped").Text);
-				Ui.Find<Button>(form, "ok").PerformClick();
-			});
+			.On<SeriesForm>(PickSeries);
 
 		world.Run(plugin => plugin.Scrape([batman497, batman1]));
 
-		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "WelcomeForm", "SeriesForm", "SeriesForm", "FinishForm" }, CollectionOrdering.Matching);
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "WelcomeForm", "SeriesForm", "SeriesForm" }, CollectionOrdering.Matching);
 		await Assert.That(batman497.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
 		await Assert.That(batman497.GetCustomValue("comicvine_volume")).IsEqualTo("796");
 		await Assert.That(batman497.Notes).Contains("[CVDB37566]");
@@ -80,8 +75,8 @@ public sealed class PluginTests
 		await Assert.That(mainEnabledDuringRun).IsFalse();
 		await Assert.That(world.MainEnabledAfter).IsTrue();
 		await Assert.That(welcome).IsEqualTo(world.Strings.Format(TextKeys.WelcomeFormTextPlural, 2));
-		await Assert.That(scraped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 2));
-		await Assert.That(skipped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormSkippedPlural, 0));
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 2));
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormSkippedPlural, 0));
 		await Assert.That(new SettingsStore(world.Folder, new ManualClock()).Load().ApiKey).IsEqualTo(EngineWorld.ApiKey);
 		await Assert.That(world.Plugin.Context.Settings.LoadChosenSeries().Contains(new SeriesId(796))).IsTrue();
 		await Assert.That(world.Plugin.Context.Settings.LoadChosenSeries().Contains(new SeriesId(91273))).IsTrue();
@@ -98,15 +93,15 @@ public sealed class PluginTests
 		using var world = new PluginWorld();
 		ComicBook book = new() { Series = "Batman", Number = "497" };
 		world.Script
-			.On<ConfigForm>(form => Ui.Find<Button>(form, "cancel").PerformClick())
-			.On<FinishForm>(form => Ui.Find<Button>(form, "ok").PerformClick());
+			.On<ConfigForm>(form => Ui.Find<Button>(form, "cancel").PerformClick());
 
 		world.Run(plugin => plugin.Scrape([book]));
 
-		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "FinishForm" }, CollectionOrdering.Matching);
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm" }, CollectionOrdering.Matching);
 		await Assert.That(world.Requested).IsEmpty();
 		await Assert.That(book.GetCustomValue("comicvine_issue")).IsNull();
 		await Assert.That(world.Log).Contains("Still no provider available.  Aborting.");
+		await Assert.That(world.LogWindowText).Contains(world.Strings[TextKeys.FinishFormSkippedSingle]);
 	}
 
 	[Test]
@@ -115,25 +110,20 @@ public sealed class PluginTests
 		using var world = new PluginWorld(Override(Issue37566, "invalid-key.txt"));
 		world.SaveSettings(new Configuration { ApiKey = EngineWorld.ApiKey, Advanced = AdvancedSettings.Parse(null) });
 		ComicBook known = new() { Series = "Batman", Number = "497", Tags = "CVDB37566" };
-		string error = "", scraped = "";
+		string error = "";
 		world.Script
 			.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick())
 			.On<PromptDialog>(prompt =>
 			{
 				error = prompt.Text;
 				Ui.Find<Button>(prompt, "ok").PerformClick();
-			})
-			.On<FinishForm>(form =>
-			{
-				scraped = Ui.Find<Label>(form, "scraped").Text;
-				Ui.Find<Button>(form, "ok").PerformClick();
 			});
 
 		world.Run(plugin => plugin.Scrape([known]));
 
-		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm", "PromptDialog", "FinishForm" }, CollectionOrdering.Matching);
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm", "PromptDialog" }, CollectionOrdering.Matching);
 		await Assert.That(error).IsEqualTo("Cannot Access Online Database");
-		await Assert.That(scraped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
 		await Assert.That(world.Log.Count(line => line.StartsWith("Caught ComicVineException", StringComparison.Ordinal))).IsEqualTo(1);
 		await Assert.That(world.Log.Any(line => line.Contains(EngineWorld.ApiKey))).IsFalse();
 		await Assert.That(known.GetCustomValue("comicvine_issue")).IsNull();
@@ -146,20 +136,14 @@ public sealed class PluginTests
 		// swallows every bad file the tests can write, so the failure comes from the call that precedes the load in the same try.
 		using var world = new PluginWorld();
 		world.ProductVersion = () => throw new InvalidOperationException("no version");
-		string scraped = "", skipped = "";
 		world.Script
-			.On<PromptDialog>(prompt => Ui.Find<Button>(prompt, "no").PerformClick())
-			.On<FinishForm>(form =>
-			{
-				(scraped, skipped) = (Ui.Find<Label>(form, "scraped").Text, Ui.Find<Label>(form, "skipped").Text);
-				Ui.Find<Button>(form, "ok").PerformClick();
-			});
+			.On<PromptDialog>(prompt => Ui.Find<Button>(prompt, "no").PerformClick());
 
 		world.Run(plugin => plugin.Scrape([new ComicBook { Series = "Batman", Number = "497" }]));
 
-		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "PromptDialog", "FinishForm" }, CollectionOrdering.Matching);
-		await Assert.That(scraped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
-		await Assert.That(skipped).IsEqualTo(world.Strings[TextKeys.FinishFormSkippedSingle]);
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "PromptDialog" }, CollectionOrdering.Matching);
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(world.LogWindowText).Contains(world.Strings[TextKeys.FinishFormSkippedSingle]);
 	}
 
 	[Test]
@@ -169,8 +153,7 @@ public sealed class PluginTests
 		string good = LanguagePack.Folder;
 		world.CommandPath = Path.Combine(world.Folder, "no-such-pack");
 		world.Script
-			.On<ConfigForm>(form => Ui.Find<Button>(form, "cancel").PerformClick())
-			.On<FinishForm>(form => Ui.Find<Button>(form, "ok").PerformClick());
+			.On<ConfigForm>(form => Ui.Find<Button>(form, "cancel").PerformClick());
 		var firstFailure = new List<Exception>();
 		var secondFailure = new List<Exception>();
 
@@ -185,25 +168,19 @@ public sealed class PluginTests
 
 		await Assert.That(firstFailure.Count).IsEqualTo(1);
 		await Assert.That(secondFailure.Count).IsEqualTo(1);
-		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "FinishForm" }, CollectionOrdering.Matching);
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm" }, CollectionOrdering.Matching);
 	}
 
 	[Test]
 	public async Task An_empty_selection_logs_the_header_and_still_shows_the_summary_as_Python_did()
 	{
 		using var world = new PluginWorld();
-		string scraped = "", skipped = "";
-		world.Script.On<FinishForm>(form =>
-		{
-			(scraped, skipped) = (Ui.Find<Label>(form, "scraped").Text, Ui.Find<Label>(form, "skipped").Text);
-			Ui.Find<Button>(form, "ok").PerformClick();
-		});
 
 		world.Run(plugin => plugin.Scrape([]));
 
-		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "FinishForm" }, CollectionOrdering.Matching);
-		await Assert.That(scraped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
-		await Assert.That(skipped).IsEqualTo(world.Strings.Format(TextKeys.FinishFormSkippedPlural, 0));
+		await Assert.That(world.Script.Seen).IsEmpty();
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormSkippedPlural, 0));
 		await Assert.That(world.Requested).IsEmpty();
 		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
 		await Assert.That(world.Log.Any(line => line.StartsWith("CV Scraper Version:", StringComparison.Ordinal))).IsTrue();
@@ -215,7 +192,6 @@ public sealed class PluginTests
 		using var world = new PluginWorld();
 		world.Script
 			.On<ConfigForm>(form => Ui.Find<Button>(form, "cancel").PerformClick())
-			.On<FinishForm>(form => Ui.Find<Button>(form, "ok").PerformClick())
 			.On<ConfigForm>(form =>
 			{
 				Ui.Find<TextBox>(form, "apiKey").Text = EngineWorld.ApiKey;
@@ -228,7 +204,7 @@ public sealed class PluginTests
 			plugin.Configure();
 		});
 
-		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "FinishForm", "ConfigForm" }, CollectionOrdering.Matching);
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "ConfigForm" }, CollectionOrdering.Matching);
 		await Assert.That(world.Log).Contains("No provider has an API key and is enabled.  Showing config dialog.");
 		await Assert.That(world.Log.Count(line => line == "opened the settings dialog.")).IsEqualTo(2);
 		await Assert.That(world.Plugin.Context.Settings.Load().ApiKey).IsEqualTo(EngineWorld.ApiKey);
@@ -257,6 +233,68 @@ public sealed class PluginTests
 
 		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm", "ConfigForm", "SeriesForm" }, CollectionOrdering.Matching);
 		await Assert.That(book.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
+		await Assert.That(world.LogWindowText).IsNull();
+	}
+
+	[Test]
+	public async Task The_log_window_shows_the_run_as_it_goes_and_the_next_run_reuses_it_while_it_is_open()
+	{
+		using var world = new PluginWorld();
+		world.SaveSettings(QuietConfiguration(EngineWorld.ApiKey) with { SummaryDialog = true });
+		string duringRun = "";
+		LogWindow? afterFirst = null, afterSecond = null;
+		world.Script
+			.On<SeriesForm>(form =>
+			{
+				duringRun = LogText(Ui.Mine<LogWindow>()!);
+				PickSeries(form);
+			})
+			.On<SeriesForm>(PickSeries);
+
+		world.Run(plugin =>
+		{
+			plugin.Scrape([new ComicBook { Series = "Batman", Number = "497" }]);
+			afterFirst = Ui.Mine<LogWindow>();
+			plugin.Scrape([new ComicBook { Series = "Batman", Number = "1", Volume = 2016 }]);
+			afterSecond = Ui.Mine<LogWindow>();
+		});
+
+		await Assert.That(duringRun).Contains("CV Scraper Version:");
+		await Assert.That(duringRun).DoesNotContain(world.Strings[TextKeys.FinishFormScrapedSingle]);
+		await Assert.That(afterFirst).IsNotNull();
+		await Assert.That(afterSecond).IsSameReferenceAs(afterFirst);
+		await Assert.That(world.LogWindowText!.Split('\n').Count(line => line.TrimEnd() == world.Strings[TextKeys.FinishFormScrapedSingle])).IsEqualTo(2);
+	}
+
+	[Test]
+	public async Task A_log_window_closed_during_a_run_stays_closed_and_the_next_run_opens_a_new_one()
+	{
+		using var world = new PluginWorld();
+		world.SaveSettings(QuietConfiguration(EngineWorld.ApiKey) with { SummaryDialog = true });
+		LogWindow? closed = null, afterFirst = null, afterSecond = null;
+		ComicBook first = new() { Series = "Batman", Number = "497" };
+		world.Script
+			.On<SeriesForm>(form =>
+			{
+				closed = Ui.Mine<LogWindow>()!;
+				Ui.Find<Button>(closed, "close").PerformClick();
+				PickSeries(form);
+			})
+			.On<SeriesForm>(PickSeries);
+
+		world.Run(plugin =>
+		{
+			plugin.Scrape([first]);
+			afterFirst = Ui.Mine<LogWindow>();
+			plugin.Scrape([new ComicBook { Series = "Batman", Number = "1", Volume = 2016 }]);
+			afterSecond = Ui.Mine<LogWindow>();
+		});
+
+		await Assert.That(closed!.IsDisposed).IsTrue();
+		await Assert.That(first.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
+		await Assert.That(afterFirst).IsNull();
+		await Assert.That(afterSecond).IsNotNull();
+		await Assert.That(afterSecond).IsNotSameReferenceAs(closed);
 	}
 
 	[Test]
@@ -312,6 +350,8 @@ public sealed class PluginTests
 	private static Configuration QuietConfiguration(string apiKey) =>
 		new() { ApiKey = apiKey, SummaryDialog = false, Advanced = AdvancedSettings.Parse("WELCOME_DIALOG = False") };
 
+	private static string LogText(LogWindow window) => Ui.Find<TextBox>(window, "log").Text;
+
 	private static void PickSeries(SeriesForm form)
 	{
 		string book = Ui.Find<Label>(Ui.Mine<ComicForm>()!, "scraping").Text;
@@ -357,6 +397,9 @@ public sealed class PluginTests
 
 		public bool MainEnabledAfter { get; private set; }
 
+		/// <summary>What the log window showed when the commands returned, or null when none was open.</summary>
+		public string? LogWindowText { get; private set; }
+
 		/// <summary>What ComicRack reports as its version. Throwing from it fails the run before the settings load.</summary>
 		public Func<string> ProductVersion
 		{
@@ -392,6 +435,7 @@ public sealed class PluginTests
 			using IDisposable driver = Script.Start();
 			commands(Plugin);
 			MainEnabledAfter = IsWindowEnabled(main.Handle);
+			LogWindowText = Ui.Mine<LogWindow>() is { } window ? LogText(window) : null;
 		});
 
 		public void Dispose()
@@ -469,7 +513,7 @@ public sealed class PluginTests
 internal sealed class DialogScript
 {
 	// The test's main window is a plain Form; the ComicForm and the progress window are the run's own windows, not dialogs.
-	private static readonly HashSet<string> Ignored = ["Form", "ComicForm", "ProgressBarForm"];
+	private static readonly HashSet<string> Ignored = ["Form", "ComicForm", "ProgressBarForm", "LogWindow"];
 
 	private readonly Queue<(Type Type, Action<Form> Act)> steps = new();
 	private readonly HashSet<Form> handled = [];

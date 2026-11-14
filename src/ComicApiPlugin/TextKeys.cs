@@ -140,4 +140,5 @@ public static class TextKeys
 	public const string ConfigFormVerseDbName = nameof(ConfigFormVerseDbName);
 	public const string ConfigFormVerseDbText = nameof(ConfigFormVerseDbText);
 	public const string ConfigFormVerseDbClickHere = nameof(ConfigFormVerseDbClickHere);
+	public const string LogWindowClose = nameof(LogWindowClose);
 }
