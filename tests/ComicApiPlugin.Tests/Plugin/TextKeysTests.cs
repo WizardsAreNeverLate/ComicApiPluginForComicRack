@@ -20,7 +20,7 @@ public sealed class TextKeysTests
 		string[] declared = typeof(TextKeys).GetFields(BindingFlags.Public | BindingFlags.Static).Select(f => (string)f.GetRawConstantValue()!).ToArray();
 
 		await Assert.That(declared.OrderBy(k => k, StringComparer.Ordinal)).IsEquivalentTo(Keys("en.zip").OrderBy(k => k, StringComparer.Ordinal));
-		await Assert.That(declared.Length).IsEqualTo(120);
+		await Assert.That(declared.Length).IsEqualTo(137);
 	}
 
 	[Test]

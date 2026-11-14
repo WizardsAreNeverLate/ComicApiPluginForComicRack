@@ -106,7 +106,7 @@ public sealed class PluginTests
 		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "FinishForm" }, CollectionOrdering.Matching);
 		await Assert.That(world.Requested).IsEmpty();
 		await Assert.That(book.GetCustomValue("comicvine_issue")).IsNull();
-		await Assert.That(world.Log).Contains("API key still not available.  Aborting.");
+		await Assert.That(world.Log).Contains("Still no provider available.  Aborting.");
 	}
 
 	[Test]
@@ -229,7 +229,7 @@ public sealed class PluginTests
 		});
 
 		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm", "FinishForm", "ConfigForm" }, CollectionOrdering.Matching);
-		await Assert.That(world.Log).Contains("API key not available.  Showing config dialog.");
+		await Assert.That(world.Log).Contains("No provider has an API key and is enabled.  Showing config dialog.");
 		await Assert.That(world.Log.Count(line => line == "opened the settings dialog.")).IsEqualTo(2);
 		await Assert.That(world.Plugin.Context.Settings.Load().ApiKey).IsEqualTo(EngineWorld.ApiKey);
 	}

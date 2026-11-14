@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Windows.Forms;
 using ComicApiPlugin.Diagnostics;
+using ComicApiPlugin.VerseDb;
 
 namespace ComicApiPlugin.Plugin;
 
@@ -11,7 +12,13 @@ internal static class ErrorDialogs
 {
 	public static void Show(IWin32Window? owner, PluginContext ctx, Exception error)
 	{
+		if (error is VerseDbException verseDb)
+		{
+			PromptDialog.Show(owner, ctx, ctx.Strings.Format(TextKeys.VerseDbErrorText, verseDb.Message), ctx.Strings[TextKeys.VerseDbErrorTitle], MessageBoxIcon.Warning, PromptButtons.Ok);
+			return;
+		}
 		ErrorPrompt prompt = ErrorPrompt.For(error);
+
 		string text = prompt.DatabaseName is { } database ? ctx.Strings.Format(prompt.TextKey, database) : ctx.Strings[prompt.TextKey];
 		string caption = ctx.Strings[prompt.TitleKey];
 		if (!prompt.OffersLogSave)

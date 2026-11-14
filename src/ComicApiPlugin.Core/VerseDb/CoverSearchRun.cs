@@ -65,6 +65,7 @@ public sealed class CoverSearchRun(IVerseDb verseDb, ICoverSearchUi ui, IClock c
 		int scraped = 0;
 		try
 		{
+			log.Debug(config.ToString());
 			foreach ((IScrapeBook book, int index) in books.Select((book, index) => (book, index)))
 			{
 				ct.ThrowIfCancellationRequested();

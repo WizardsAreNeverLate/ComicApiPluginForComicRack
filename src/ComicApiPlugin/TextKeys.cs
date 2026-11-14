@@ -123,4 +123,21 @@ public static class TextKeys
 	public const string WelcomeFormStart = nameof(WelcomeFormStart);
 	public const string WelcomeFormCancel = nameof(WelcomeFormCancel);
 	public const string WelcomeFormSettings = nameof(WelcomeFormSettings);
+	public const string WelcomeFormCoverSearch = nameof(WelcomeFormCoverSearch);
+	public const string CoverMatchFormTitle = nameof(CoverMatchFormTitle);
+	public const string CoverMatchFormChooseText = nameof(CoverMatchFormChooseText);
+	public const string CoverMatchFormYourCover = nameof(CoverMatchFormYourCover);
+	public const string CoverMatchFormDateCol = nameof(CoverMatchFormDateCol);
+	public const string CoverMatchFormSelect = nameof(CoverMatchFormSelect);
+	public const string CoverSearchNoMatchesText = nameof(CoverSearchNoMatchesText);
+	public const string CoverSearchRateLimited = nameof(CoverSearchRateLimited);
+	public const string VerseDbErrorTitle = nameof(VerseDbErrorTitle);
+	public const string VerseDbErrorText = nameof(VerseDbErrorText);
+	public const string ConfigFormProvidersTab = nameof(ConfigFormProvidersTab);
+	public const string ConfigFormProvidersText = nameof(ConfigFormProvidersText);
+	public const string ConfigFormProviderUp = nameof(ConfigFormProviderUp);
+	public const string ConfigFormProviderDown = nameof(ConfigFormProviderDown);
+	public const string ConfigFormVerseDbName = nameof(ConfigFormVerseDbName);
+	public const string ConfigFormVerseDbText = nameof(ConfigFormVerseDbText);
+	public const string ConfigFormVerseDbClickHere = nameof(ConfigFormVerseDbClickHere);
 }

@@ -429,7 +429,7 @@ public sealed class ConfigFormTests
 		using var session = UiSession.Create();
 		session.Settings.Save(Defaults with { ApiKey = Key });
 
-		bool started = Sta.Run(() =>
+		ScrapeAction? started = Sta.Run(() =>
 		{
 			WelcomeForm? welcome = null;
 			using IDisposable settings = Ui.WhenOpen<ConfigForm>(form =>
@@ -446,7 +446,7 @@ public sealed class ConfigFormTests
 			return WelcomeForm.Show(null, session.Ctx, 2);
 		});
 
-		await Assert.That(started).IsTrue();
+		await Assert.That(started).IsEqualTo(ScrapeAction.ComicVineQuery);
 		await Assert.That(session.Settings.Load().SummaryDialog).IsFalse();
 	}
 
@@ -499,5 +499,139 @@ public sealed class ConfigFormTests
 		{
 			await Assert.That(menu.SequenceEqual(["Cut", "Copy", "Paste"])).IsTrue();
 		}
+	}
+
+	private static void ShowProvidersTab(Form form) => Ui.Find<TabControl>(form, "tabs").SelectedTab = Ui.Find<TabPage>(form, "providersTab");
+
+	[Test]
+	public async Task OK_needs_an_enabled_provider_that_has_a_key()
+	{
+		using var session = UiSession.Create();
+
+		(bool Empty, bool OnlyVerseDb, bool VerseDbOff, bool BothOffComicVineKeyless) enabled = Sta.Run(() =>
+		{
+			(bool, bool, bool, bool) seen = default;
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				Button ok = Ui.Find<Button>(form, "ok");
+				CheckedListBox providers = Ui.Find<CheckedListBox>(form, "providers");
+				bool empty = ok.Enabled;
+				Ui.Find<TextBox>(form, "verseDbKey").Text = "token";
+				bool onlyVerseDb = ok.Enabled;
+				providers.SetItemChecked(1, false);
+				bool verseDbOff = ok.Enabled;
+				Ui.Find<TextBox>(form, "apiKey").Text = Key;
+				providers.SetItemChecked(0, false);
+				seen = (empty, onlyVerseDb, verseDbOff, ok.Enabled);
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return seen;
+		});
+
+		await Assert.That(enabled).IsEqualTo((false, true, false, false));
+	}
+
+	[Test]
+	public async Task Down_and_Up_reorder_the_providers_and_OK_saves_the_order_and_the_token()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with { ApiKey = Key, VerseDbApiKey = "token" });
+
+		Configuration? returned = Sta.Run(() =>
+		{
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				ShowProvidersTab(form);
+				CheckedListBox providers = Ui.Find<CheckedListBox>(form, "providers");
+				providers.SelectedIndex = 0;
+				Ui.Find<Button>(form, "providerDown").PerformClick();
+				providers.SetItemChecked(0, false);
+				Ui.Find<Button>(form, "ok").PerformClick();
+			});
+			return ConfigForm.Show(null, session.Ctx);
+		});
+
+		await Assert.That(returned!.Providers[0]).IsEqualTo(new ProviderSetting(ProviderKind.VerseDb, false));
+		await Assert.That(returned.Providers[1]).IsEqualTo(new ProviderSetting(ProviderKind.ComicVine, true));
+		await Assert.That(session.Settings.Load().Providers).IsEqualTo(returned.Providers);
+		await Assert.That(session.Settings.Load().VerseDbApiKey).IsEqualTo("token");
+	}
+
+	[Test]
+	public async Task Up_on_the_first_provider_changes_nothing()
+	{
+		using var session = UiSession.Create();
+
+		string[] order = Sta.Run(() =>
+		{
+			string[] seen = [];
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				ShowProvidersTab(form);
+				CheckedListBox providers = Ui.Find<CheckedListBox>(form, "providers");
+				providers.SelectedIndex = 0;
+				Ui.Find<Button>(form, "providerUp").PerformClick();
+				seen = [.. providers.Items.Cast<object>().Select(item => item.ToString()!)];
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return seen;
+		});
+
+		await Assert.That(order.SequenceEqual(["Comic Vine", "VerseDB"])).IsTrue();
+	}
+
+	[Test]
+	public async Task Restore_Defaults_resets_the_provider_order_and_keeps_both_keys()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with
+		{
+			ApiKey = Key,
+			VerseDbApiKey = "token",
+			Providers = ProviderTable.Normalize([new ProviderSetting(ProviderKind.VerseDb, false), new ProviderSetting(ProviderKind.ComicVine, true)]),
+		});
+
+		Configuration? returned = Sta.Run(() =>
+		{
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				Ui.Find<Button>(form, "restore").PerformClick();
+				Ui.Find<Button>(form, "ok").PerformClick();
+			});
+			return ConfigForm.Show(null, session.Ctx);
+		});
+
+		await Assert.That(returned!.Providers).IsEqualTo(ProviderTable.Default);
+		await Assert.That(returned.ApiKey).IsEqualTo(Key);
+		await Assert.That(returned.VerseDbApiKey).IsEqualTo("token");
+	}
+
+	[Test]
+	public async Task The_VerseDB_token_is_masked_until_the_eye_button_shows_it()
+	{
+		using var session = UiSession.Create();
+
+		(bool Masked, bool Shown, bool Hidden) seen = Sta.Run(() =>
+		{
+			(bool, bool, bool) result = default;
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				ShowProvidersTab(form);
+				TextBox token = Ui.Find<TextBox>(form, "verseDbKey");
+				Button eye = Ui.Find<Button>(form, "showVerseDbKey");
+				bool masked = token.UseSystemPasswordChar;
+				eye.PerformClick();
+				bool shown = !token.UseSystemPasswordChar;
+				eye.PerformClick();
+				result = (masked, shown, token.UseSystemPasswordChar);
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return result;
+		});
+
+		await Assert.That(seen).IsEqualTo((true, true, true));
 	}
 }

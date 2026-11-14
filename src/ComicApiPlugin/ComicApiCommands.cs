@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Config;
 using ComicApiPlugin.Engine;
+using ComicApiPlugin.VerseDb;
 using cYo.Projects.ComicRack.Engine;
 using cYo.Projects.ComicRack.Plugins;
 
@@ -25,6 +26,8 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 	private PluginContext? context;
 	private ComicVineHttp? http;
 	private string? httpKey;
+	private VerseDbHttp? verseDb;
+	private string? verseDbToken;
 	private bool running;
 
 	/// <summary>ComicRack's constructor. ComicRack passes the environment to <see cref="OnLoad"/>.</summary>
@@ -85,32 +88,39 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 				return;
 			}
 			config = ctx.Settings.Load();
-			if (string.IsNullOrWhiteSpace(config.ApiKey))
+			if (config.AvailableActions().Count == 0)
 			{
-				ctx.Log.Debug("API key not available.  Showing config dialog.");
+				ctx.Log.Debug("No provider has an API key and is enabled.  Showing config dialog.");
 				ConfigForm.Show(env.MainWindow, ctx);
 				config = ctx.Settings.Load();
-				if (string.IsNullOrWhiteSpace(config.ApiKey))
+				if (config.AvailableActions().Count == 0)
 				{
-					ctx.Log.Debug("API key still not available.  Aborting.");
+					ctx.Log.Debug("Still no provider available.  Aborting.");
 					return;
 				}
 			}
+			ScrapeAction action = config.AvailableActions()[0];
 			if (config.Advanced.WelcomeDialog)
 			{
-				bool start = WelcomeForm.Show(env.MainWindow, ctx, books.Length);
+				ScrapeAction? picked = WelcomeForm.Show(env.MainWindow, ctx, books.Length);
 				config = ctx.Settings.Load();
-				if (!start)
+				if (picked is not { } chosen)
 				{
 					ctx.Log.Debug("Cancelled!");
 					return;
 				}
+				action = chosen;
 			}
-			summary = Run(ctx, config, books);
+			summary = action == ScrapeAction.VerseDbCoverSearch ? RunCoverSearch(ctx, config, books) : Run(ctx, config, books);
 		}
 		catch (ScrapeFailedException failure)
 		{
 			// The engine logged the cause.
+			summary = failure.Summary;
+			ErrorDialogs.Show(env.MainWindow, ctx, failure.InnerException!);
+		}
+		catch (CoverSearchFailedException failure)
+		{
 			summary = failure.Summary;
 			ErrorDialogs.Show(env.MainWindow, ctx, failure.InnerException!);
 		}
@@ -154,6 +164,26 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 			var services = new ScrapeServices(catalog, new WinFormsScrapeUi(form, ctx, catalog, config), ports.Clock, ctx.Log, ctx.Settings.LoadChosenSeries(), new CoverPreferences());
 			return new ScrapeRun(services, config).RunAsync(targets, ct);
 		});
+	}
+
+	private RunSummary RunCoverSearch(PluginContext ctx, Configuration config, ComicBook[] books)
+	{
+		VerseDbHttp api = VerseDb(config.VerseDbApiKey);
+		List<IScrapeBook> targets = [.. books.Select(book => new ComicRackBook(book, env.App))];
+		return ScrapeHost.Run(env.MainWindow, ctx, (form, ct) =>
+			new CoverSearchRun(api, new WinFormsCoverSearchUi(form, ctx, api), ports.Clock, ctx.Log, config).RunAsync(targets, ct));
+	}
+
+	/// <summary>One HttpClient for the plugin's lifetime, replaced only when the user changes the token.</summary>
+	private VerseDbHttp VerseDb(string token)
+	{
+		if (verseDb is null || verseDbToken != token)
+		{
+			verseDb?.Dispose();
+			verseDb = new VerseDbHttp(ports.Handler(), token, UserAgent);
+			verseDbToken = token;
+		}
+		return verseDb;
 	}
 
 	/// <summary>One HttpClient and one throttle for the plugin's lifetime, replaced only when the user changes the key.</summary>
