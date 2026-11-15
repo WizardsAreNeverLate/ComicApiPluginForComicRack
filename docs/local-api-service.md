@@ -393,10 +393,14 @@ So the service is a zip, and the plugin unpacks it outside `Scripts`:
 
 - **Location:** `%LOCALAPPDATA%\ComicApiPlugin\service\<content id>\`. The content id is the first 8 bytes of the SHA-256
   of `service.zip`, so each build of the service gets its own folder.
-- **Atomic:** the plugin unpacks to a temporary `.partial` folder, then renames it. A folder with the final name is always
-  complete. If two starts unpack at the same time, one wins and the other deletes its copy.
+- **Atomic:** the plugin unpacks to a temporary `.partial` folder, writes the marker file `.complete` into it last, then
+  renames it. Only a folder with the marker is whole. If two starts unpack at the same time, one wins and the other
+  deletes its copy. A folder with the final name but without the marker is unpacked again, unless a service runs from it.
 - **Clean-up:** after a successful unpack, the plugin deletes the folders of earlier versions and partial folders that a
-  crash left. It skips a folder that is still in use.
+  crash left. It deletes the marker first, so a folder that is only partly deleted is not whole. It skips a folder that
+  a service runs from (Windows refuses to open its exe for writing), because another ComicRack install with a different
+  plugin version can share `%LOCALAPPDATA%`. It skips a partial folder younger than 10 minutes, because another
+  ComicRack can still be unpacking into it.
 - **Cost:** the first start after an update unpacks a zip of 28 MB to approximately 72 MB, which takes approximately
   one second. Later starts use the existing folder.
 

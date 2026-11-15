@@ -1,3 +1,5 @@
+using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -28,22 +30,65 @@ public sealed class ServicePackageTests
 	}
 
 	[Test]
-	public async Task A_second_unpack_keeps_the_folder_and_removes_other_versions_and_leftovers()
+	public async Task A_second_unpack_keeps_the_folder_and_removes_other_versions_and_partial_folders_older_than_ten_minutes()
 	{
 		string root = BuiltService.NewFolder("root");
 		string exe = ServicePackage.Unpack(BuiltService.Zip, root);
-		string marker = Path.Combine(Path.GetDirectoryName(exe)!, "written-after-the-first-unpack.txt");
-		File.WriteAllText(marker, "");
+		string written = Path.Combine(Path.GetDirectoryName(exe)!, "written-after-the-first-unpack.txt");
+		File.WriteAllText(written, "");
 		string older = Path.Combine(root, "0123456789abcdef");
-		string leftover = Path.Combine(root, "fedcba9876543210.partial");
+		string leftover = Path.Combine(root, "fedcba9876543210.0a1b.partial");
+		string extracting = Path.Combine(root, "fedcba9876543210.2c3d.partial");
 		Directory.CreateDirectory(older);
 		File.WriteAllText(Path.Combine(older, "ComicApiPlugin.Service.exe"), "");
 		Directory.CreateDirectory(leftover);
+		Directory.SetCreationTimeUtc(leftover, DateTime.UtcNow.AddMinutes(-11));
+		Directory.CreateDirectory(extracting);
 
 		string again = ServicePackage.Unpack(BuiltService.Zip, root);
 
 		await Assert.That(again).IsEqualTo(exe);
-		await Assert.That(File.Exists(marker)).IsTrue();
-		await Assert.That(Directory.GetDirectories(root)).IsEquivalentTo([Path.GetDirectoryName(exe)!]);
+		await Assert.That(File.Exists(written)).IsTrue();
+		await Assert.That(Directory.GetDirectories(root)).IsEquivalentTo([Path.GetDirectoryName(exe)!, extracting]);
+	}
+
+	[Test]
+	public async Task A_folder_that_an_interrupted_unpack_left_under_the_final_name_is_unpacked_again()
+	{
+		string name = Path.GetFileName(Path.GetDirectoryName(ServicePackage.Unpack(BuiltService.Zip, BuiltService.NewFolder("root")))!);
+		string root = BuiltService.NewFolder("root");
+		string interrupted = Path.Combine(root, name);
+		Directory.CreateDirectory(interrupted);
+		File.WriteAllText(Path.Combine(interrupted, "ComicApiPlugin.Service.exe"), "");
+
+		string exe = ServicePackage.Unpack(BuiltService.Zip, root);
+
+		await Assert.That(exe).IsEqualTo(Path.Combine(interrupted, "ComicApiPlugin.Service.exe"));
+		await Assert.That(new FileInfo(exe).Length).IsGreaterThan(0);
+		await Assert.That(File.Exists(Path.Combine(interrupted, "ComicApiPlugin.Service.deps.json"))).IsTrue();
+	}
+
+	[Test]
+	public async Task Another_versions_folder_whose_service_is_running_keeps_every_file()
+	{
+		string root = BuiltService.NewFolder("root");
+		string running = Path.Combine(root, "0123456789abcdef");
+		Directory.CreateDirectory(running);
+		string exe = Path.Combine(running, "ComicApiPlugin.Service.exe");
+		File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), exe);
+		File.WriteAllText(Path.Combine(running, "ComicApiPlugin.Service.runtimeconfig.json"), "{}");
+		using Process service = Process.Start(new ProcessStartInfo(exe, "/c ping -n 30 127.0.0.1 >nul") { UseShellExecute = false, CreateNoWindow = true })!;
+		try
+		{
+			ServicePackage.Unpack(BuiltService.Zip, root);
+
+			await Assert.That(File.Exists(Path.Combine(running, "ComicApiPlugin.Service.runtimeconfig.json"))).IsTrue();
+			await Assert.That(File.Exists(exe)).IsTrue();
+		}
+		finally
+		{
+			service.Kill();
+			service.WaitForExit();
+		}
 	}
 }
