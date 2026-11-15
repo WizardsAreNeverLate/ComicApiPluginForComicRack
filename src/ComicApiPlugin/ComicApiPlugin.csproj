@@ -47,7 +47,7 @@
 	</ItemGroup>
 	<!--
 		Every build lays the plugin out as ComicRack installs it in artifacts\<Configuration>\Comic API Plugin\ at the repo root:
-		the DLLs, Package.ini, the images and the language zips, plus the PDBs for line numbers in stack traces. Copy that folder
+		the DLLs (OpenCvSharp's too), Package.ini, the images and the language zips, plus the PDBs for line numbers in stack traces. Copy that folder
 		into ComicRack's Scripts folder to install the build. The .crplugin in $(OutDir) is zipped from the same files, without the
 		PDBs. The recorded-response build stages under obj, so it never touches artifacts.
 	-->
@@ -59,6 +59,8 @@
 		</PropertyGroup>
 		<ItemGroup>
 			<CrPluginContent Include="$(TargetPath);$(OutDir)ComicApiPlugin.Core.dll;Package\Package.ini;Package\Images\*;Package\Languages\*.zip" />
+			<!-- The OpenCV binding and its native library, 64-bit. OpenCvNative loads OpenCvSharpExtern.dll from beside OpenCvSharp.dll. System.Memory, Buffers and Unsafe come with ComicRack, and opencv_videoio_ffmpeg (video decoding) is not needed to read covers. -->
+			<CrPluginContent Include="$(OutDir)OpenCvSharp.dll;$(OutDir)dll\x64\OpenCvSharpExtern.dll" />
 		</ItemGroup>
 		<RemoveDir Directories="$(CrPluginStaging)" />
 		<Copy SourceFiles="@(CrPluginContent)" DestinationFolder="$(CrPluginStaging)" />
