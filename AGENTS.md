@@ -10,25 +10,25 @@ A .NET Framework 4.8 ComicRack plugin, `ComicApiPlugin`, that is a native C# por
 
 ```powershell
 $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
-./Build.ps1            # build, then run both test suites
+./Build.ps1            # build, then run the three test suites
 ./Build.ps1 -Rebuild
 ./Build.ps1 -SkipTests
 ./BuildNoTests.ps1     # same as -SkipTests
 ```
 
 - Every build lays the installed plugin out in `artifacts\<Configuration>\Comic API Plugin\`: the DLLs, `Package.ini`, images, language zips and `service.zip` (the local API service), plus the PDBs. Copy that folder into `%APPDATA%\cYo\ComicRack Community Edition\Scripts\` to install the build, or set `COMICRACK_PLUGIN_DIR` to the installed plugin folder and every build copies it there. Close ComicRack first, because it locks the DLLs. Copying only `bin\` leaves the language zips stale, and the plugin then fails on any new text key with `unrecognized i18n key`.
-- Use `Build.ps1`, not `dotnet build`, for the plugin and its test projects. They carry binary `.resx` resources that `dotnet build` cannot compile for .NET Framework. `Build.ps1` builds the whole solution with Visual Studio's MSBuild, the .NET 11 projects included, so the machine needs the .NET 11 SDK.
+- Use `Build.ps1`, not `dotnet build`, for the plugin and its test projects. They carry binary `.resx` resources that `dotnet build` cannot compile for .NET Framework. `Build.ps1` builds the whole solution with Visual Studio's MSBuild, the .NET 11 projects included, so the machine needs the .NET 11 SDK and Visual Studio 2026 or its Build Tools (MSBuild 18 or later, which reads net11.0 projects). `Build.ps1 -Configuration Release` is what CI runs.
 - `src/ComicApiPlugin.Core` has no ComicRack dependency and no `.resx`. `dotnet build src/ComicApiPlugin.Core/ComicApiPlugin.Core.csproj` works directly and is the fastest way to check a Core-only change compiles. Core builds for net48 and net11.0-windows, so a change must compile for both.
 - `src/ComicApiPlugin.Service` (the local API service, .NET 11) and `tests/ComicApiPlugin.Service.Tests` have no ComicRack dependency either, and `dotnet build` works for them. The plugin build publishes the service and packs it as `service.zip`. Do not ship the service as loose DLLs under the plugin folder: ComicRack installs a package flat and scans every DLL under Scripts (`docs/port/architecture.md`, "Local API service").
 - OpenCV is only in the service. Do not reference OpenCvSharp from Core, the plugin, or a net48 test project: the plugin package must hold no OpenCV DLL. A test of the real cover comparison goes in `tests/ComicApiPlugin.Service.Tests`. The plugin compares covers through `ServiceCoverComparer`.
-- Everything else (`src/ComicApiPlugin`, both test projects, `tools/smoke`, `tools/differential`) needs `ComicRackDir`/`COMICRACK_DIR` pointed at a ComicRack CE build of `WizardsAreNeverLate/ComicRackCE@integration` (branch includes upstream's `feature/dotnet-plugin`, the `DotNetPlugin` API this plugin is built on). Without it, `Directory.Build.targets` fails the build with a clear error rather than a missing-reference error.
+- Everything else (`src/ComicApiPlugin`, the two net48 test projects, `tools/smoke`, `tools/differential`) needs `ComicRackDir`/`COMICRACK_DIR` pointed at a ComicRack CE build of `WizardsAreNeverLate/ComicRackCE@integration` (branch includes upstream's `feature/dotnet-plugin`, the `DotNetPlugin` API this plugin is built on). Without it, `Directory.Build.targets` fails the build with a clear error rather than a missing-reference error.
 
 ## Tests
 
 - `tests/ComicApiPlugin.Tests`: TUnit unit tests against recorded Comic Vine responses. The plugin tests start the packaged service (`service.zip` in `artifacts\`) against a fake Comic Vine, so build with `Build.ps1` before you run them. `docs/local-api-service.md` ("Test architecture") has the design.
 - `tests/ComicApiPlugin.Oracle.Tests`: runs the original Python modules under IronPython, in-process, and compares results against the C# port.
-- `tests/ComicApiPlugin.Service.Tests`: TUnit tests on .NET 11 that start the built service exe as a process. `ServiceHostTests` in `ComicApiPlugin.Tests` start the packaged service from the plugin side.
-- `tools/smoke`, `tools/differential`: in-app checks that start ComicRack itself. Not part of the normal test loop.
+- `tests/ComicApiPlugin.Service.Tests`: TUnit tests on .NET 11 that start the built service exe as a process, against the fake providers in `tests/Shared` (`FakeComicVineServer`, `FakeVerseDbServer`). A test never replaces the route to the providers. It replaces the provider the service calls. `ServiceHostTests` in `ComicApiPlugin.Tests` start the packaged service from the plugin side.
+- `tools/smoke`, `tools/differential`: in-app checks that start ComicRack itself. Not part of the normal test loop. Run `Build.ps1` first, close ComicRack, then `./tools/smoke/run-smoke.ps1`. The smoke run uses a switch build (`-p:CvsRecordedResponses=true`) whose plugin starts a fake Comic Vine that doubles as the fake VerseDB, so no request leaves the machine. `docs/local-api-service.md` ("In-app runs") has the details and the differential command.
 
 **Never invoke a Python interpreter directly** (`python`, `python3`, `py`, `ipy`). A hook blocks it, and it would hang on stdin even without the hook — this machine's `python3` is the Windows Store stub, not a real interpreter. To check or compare Python behaviour, write an oracle test that calls `Oracle.Call` (see `tests/ComicApiPlugin.Oracle.Tests/Oracle.cs`); IronPython 2.7.4 runs inside the test process, loaded from ComicRack CE's own `IronPython.dll`.
 
