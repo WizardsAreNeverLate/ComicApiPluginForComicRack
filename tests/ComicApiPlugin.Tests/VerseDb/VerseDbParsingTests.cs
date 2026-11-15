@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using ComicApiPlugin.Model;
+using ComicApiPlugin.Fixtures;
 using ComicApiPlugin.VerseDb;
 
 namespace ComicApiPlugin.Tests.VerseDb;

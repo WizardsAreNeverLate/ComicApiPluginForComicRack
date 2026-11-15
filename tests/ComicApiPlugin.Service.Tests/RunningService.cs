@@ -36,7 +36,8 @@ internal sealed class RunningService : IDisposable
 	public List<string> StandardOutput { get; } = [];
 
 	/// <param name="comicVineBaseUrl">Where the service sends its Comic Vine requests, or null for Comic Vine itself.</param>
-	public static Process Launch(string? token, int? parentPid, string logFolder, string? comicVineBaseUrl = null)
+	/// <param name="verseDbBaseUrl">Where the service sends its VerseDB API requests, or null for VerseDB itself.</param>
+	public static Process Launch(string? token, int? parentPid, string logFolder, string? comicVineBaseUrl = null, string? verseDbBaseUrl = null)
 	{
 		var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "ComicApiPlugin.Service.exe"))
 		{
@@ -62,13 +63,18 @@ internal sealed class RunningService : IDisposable
 		{
 			start.Environment[ServiceProtocol.ComicVineBaseUrlVariable] = comicVineBaseUrl;
 		}
+		start.Environment.Remove(ServiceProtocol.VerseDbBaseUrlVariable);
+		if (verseDbBaseUrl is not null)
+		{
+			start.Environment[ServiceProtocol.VerseDbBaseUrlVariable] = verseDbBaseUrl;
+		}
 		return Process.Start(start)!;
 	}
 
-	public static async Task<RunningService> StartAsync(int? parentPid = null, string? comicVineBaseUrl = null)
+	public static async Task<RunningService> StartAsync(int? parentPid = null, string? comicVineBaseUrl = null, string? verseDbBaseUrl = null)
 	{
 		string logFolder = NewLogFolder();
-		var service = new RunningService(Launch(Token, parentPid, logFolder, comicVineBaseUrl), logFolder);
+		var service = new RunningService(Launch(Token, parentPid, logFolder, comicVineBaseUrl, verseDbBaseUrl), logFolder);
 		try
 		{
 			Task<string?> ready = service.ReadUntilReadyAsync();
@@ -105,6 +111,15 @@ internal sealed class RunningService : IDisposable
 	{
 		Task exit = Process.WaitForExitAsync();
 		return await Task.WhenAny(exit, Task.Delay(limit)) == exit;
+	}
+
+	/// <summary>Stops the service, so its log file is complete, and returns the log.</summary>
+	public async Task<string> StopAndReadLogAsync()
+	{
+		using HttpClient client = Client();
+		using HttpResponseMessage shutdown = await client.PostAsync(ServiceProtocol.ShutdownPath, null);
+		await ExitsWithinAsync(TimeSpan.FromSeconds(10));
+		return ReadLogs();
 	}
 
 	/// <summary>The log files hold the whole run only once the service has exited.</summary>

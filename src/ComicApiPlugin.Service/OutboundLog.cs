@@ -9,7 +9,7 @@ namespace ComicApiPlugin.Service;
 
 /// <summary>
 /// Logs every call the service makes to a provider: one line with the provider, the method, the host and path, the
-/// status and the time. It never logs the query string, which holds the Comic Vine API key, or a header.
+/// status and the time. It never logs the query string, which holds the Comic Vine API key, or a header, which holds the VerseDB token.
 /// </summary>
 internal sealed class OutboundLog(string provider, HttpMessageHandler inner) : DelegatingHandler(inner)
 {

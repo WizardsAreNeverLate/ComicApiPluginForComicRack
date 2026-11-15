@@ -7,7 +7,8 @@ namespace ComicApiPlugin.Service;
 /// <summary>What one launch was given. The token comes from the environment only.</summary>
 /// <param name="ParentPid">The process whose exit stops the service, or null when it runs on its own.</param>
 /// <param name="ComicVineBaseUrl">Where the Comic Vine API answers, or null for comicvine.gamespot.com. Only a test names one.</param>
-internal sealed record ServiceOptions(int? ParentPid, string LogFolder, string Token, string? ComicVineBaseUrl)
+/// <param name="VerseDbBaseUrl">Where the VerseDB API answers, or null for versedb.com. Only a test names one.</param>
+internal sealed record ServiceOptions(int? ParentPid, string LogFolder, string Token, string? ComicVineBaseUrl, Uri? VerseDbBaseUrl)
 {
 	public static string DefaultLogFolder =>
 		Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComicApiPlugin", "logs");
@@ -50,6 +51,11 @@ internal sealed record ServiceOptions(int? ParentPid, string LogFolder, string T
 		{
 			throw new ArgumentException($"The environment variable {ServiceProtocol.ComicVineBaseUrlVariable} needs an http or https URL that ends with a slash.");
 		}
-		return new ServiceOptions(parentPid, logFolder, token, comicVine);
+		Uri? verseDb = null;
+		if (environment(ServiceProtocol.VerseDbBaseUrlVariable) is { Length: > 0 } verseDbUrl && !(Uri.TryCreate(verseDbUrl, UriKind.Absolute, out verseDb) && verseDb.Scheme is "http" or "https"))
+		{
+			throw new ArgumentException($"The environment variable {ServiceProtocol.VerseDbBaseUrlVariable} needs an http or https URL.");
+		}
+		return new ServiceOptions(parentPid, logFolder, token, comicVine, verseDb);
 	}
 }

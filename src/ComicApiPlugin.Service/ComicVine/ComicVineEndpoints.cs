@@ -3,7 +3,6 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -24,8 +23,6 @@ namespace ComicApiPlugin.Service.ComicVine;
 /// </summary>
 internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 {
-	private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
-
 	public void Map(IEndpointRouteBuilder app)
 	{
 		app.MapPost(ServiceProtocol.ComicVineSearchPath, (HttpContext context) => Answer<SearchRequestDto>(context, (catalog, request) =>
@@ -41,17 +38,17 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 		{
 			string number = WireJson.Need(request.IssueNumber, "issueNumber");
 			IssueRef? found = await catalog.FindIssueAsync(new SeriesId(request.Series), number, context.RequestAborted);
-			await WriteJson(context, StatusCodes.Status200OK, new FindIssueResponseDto { Issue = found is null ? null : ComicVineWire.ToDto(found) });
+			await EndpointIo.WriteJson(context, StatusCodes.Status200OK, new FindIssueResponseDto { Issue = found is null ? null : ComicVineWire.ToDto(found) });
 		}));
 		app.MapPost(ServiceProtocol.ComicVineIssuePath, (HttpContext context) => Answer<IssueRequestDto>(context, async (catalog, request) =>
 		{
 			Issue issue = await catalog.GetIssueAsync(new IssueId(request.Issue), request.IncludeRating, context.RequestAborted);
-			await WriteJson(context, StatusCodes.Status200OK, ComicVineWire.ToDto(issue));
+			await EndpointIo.WriteJson(context, StatusCodes.Status200OK, ComicVineWire.ToDto(issue));
 		}));
 		app.MapPost(ServiceProtocol.ComicVineResolveSeriesPath, (HttpContext context) => Answer<ResolveSeriesRequestDto>(context, async (catalog, request) =>
 		{
 			SeriesRef? series = await catalog.ResolveSeriesAsync(ComicVineWire.ToDomain(request), context.RequestAborted);
-			await WriteJson(context, StatusCodes.Status200OK, new ResolveSeriesResponseDto { Series = series is null ? null : ComicVineWire.ToDto(series) });
+			await EndpointIo.WriteJson(context, StatusCodes.Status200OK, new ResolveSeriesResponseDto { Series = series is null ? null : ComicVineWire.ToDto(series) });
 		}));
 		app.MapPost(ServiceProtocol.ComicVineImagePath, (HttpContext context) => Answer<ImageRequestDto>(context, async (catalog, request) =>
 		{
@@ -82,22 +79,21 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 	{
 		try
 		{
-			string apiKey = Header(context, ServiceProtocol.ComicVineKeyHeader);
-			string runId = Header(context, ServiceProtocol.RunIdHeader);
+			string apiKey = EndpointIo.Header(context, ServiceProtocol.ComicVineKeyHeader);
+			string runId = EndpointIo.Header(context, ServiceProtocol.RunIdHeader);
 			RunScope.Current = runId;
-			using var reader = new StreamReader(context.Request.Body, Utf8);
-			TRequest request = WireJson.FromJson<TRequest>(await reader.ReadToEndAsync(context.RequestAborted));
+			TRequest request = await EndpointIo.ReadJson<TRequest>(context);
 			ComicVineCatalog catalog = sessions.Catalog(apiKey, runId, WireJson.Need(request.Settings, "settings"));
 			await answer(catalog, request);
 		}
 		catch (WireFormatException error)
 		{
-			await WriteJson(context, StatusCodes.Status400BadRequest, new ErrorResponseDto { Message = error.Message });
+			await EndpointIo.WriteJson(context, StatusCodes.Status400BadRequest, new ErrorResponseDto { Message = error.Message });
 		}
 		catch (ComicVineException error)
 		{
 			Log.Warning("Comic Vine request failed ({Kind:l}, status {ApiStatus}): {Url:l} (run {RunId:l})", error.Error.ToString(), error.ApiStatus, error.Url, RunScope.Current);
-			await WriteJson(context, StatusOf(error.Error), new ErrorResponseDto { ComicVine = ComicVineWire.ToDto(error) });
+			await EndpointIo.WriteJson(context, StatusOf(error.Error), new ErrorResponseDto { ComicVine = ComicVineWire.ToDto(error) });
 		}
 		catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
 		{
@@ -160,19 +156,9 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 		{
 			context.Response.ContentType = ComicVineWire.LinesContentType;
 		}
-		await context.Response.WriteAsync(WireJson.ToJson(line) + "\n", Utf8, context.RequestAborted);
+		await context.Response.WriteAsync(WireJson.ToJson(line) + "\n", EndpointIo.Utf8, context.RequestAborted);
 		await context.Response.Body.FlushAsync(context.RequestAborted);
 	}
-
-	private static async Task WriteJson<T>(HttpContext context, int status, T body) where T : class
-	{
-		context.Response.StatusCode = status;
-		context.Response.ContentType = WireJson.ContentType;
-		await context.Response.WriteAsync(WireJson.ToJson(body), Utf8, context.RequestAborted);
-	}
-
-	private static string Header(HttpContext context, string name) =>
-		context.Request.Headers[name].ToString() is { Length: > 0 } value ? value : throw new WireFormatException($"The header {name} is required.");
 
 	private sealed class ChannelProgress(ChannelWriter<QueryProgress> writer) : IProgress<QueryProgress>
 	{

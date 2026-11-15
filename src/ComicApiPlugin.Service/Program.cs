@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Engine;
 using ComicApiPlugin.Service.ComicVine;
+using ComicApiPlugin.Service.VerseDb;
+using ComicApiPlugin.VerseDb;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -28,7 +30,7 @@ internal static class Program
 
 	private static readonly string Version = typeof(Program).Assembly.GetName().Version!.ToString(3);
 
-	// The plugin sent this user agent to Comic Vine before the calls moved here.
+	// The plugin sent this user agent to Comic Vine and to VerseDB before the calls moved here.
 	private static readonly string UserAgent = $"ComicApiPlugin/{Version} (https://github.com/cbanack/comic-vine-scraper/)";
 
 	public static async Task<int> Main(string[] args)
@@ -124,6 +126,10 @@ internal static class Program
 		var comicVine = new ComicVineSessions(apiKey => ConnectComicVine(apiKey, options.ComicVineBaseUrl), TimeProvider.System);
 		app.Lifetime.ApplicationStopped.Register(comicVine.Dispose);
 		new ComicVineEndpoints(comicVine).Map(app);
+
+		var verseDb = new VerseDbClients(token => new VerseDbHttp(new OutboundLog("VerseDB", new HttpClientHandler()), token, UserAgent, options.VerseDbBaseUrl));
+		app.Lifetime.ApplicationStopped.Register(verseDb.Dispose);
+		new VerseDbEndpoints(verseDb).Map(app);
 		return app;
 	}
 

@@ -89,12 +89,7 @@ internal sealed class ComicVineWorld : IDisposable
 	}
 
 	/// <summary>Stops the service, so its log file is complete, and returns the log.</summary>
-	public async Task<string> StopAndReadLogAsync()
-	{
-		using HttpResponseMessage shutdown = await Client.PostAsync(ServiceProtocol.ShutdownPath, null);
-		await Service.ExitsWithinAsync(TimeSpan.FromSeconds(10));
-		return Service.ReadLogs();
-	}
+	public Task<string> StopAndReadLogAsync() => Service.StopAndReadLogAsync();
 
 	public void Dispose()
 	{
