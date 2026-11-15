@@ -24,15 +24,16 @@ public sealed class VerseDbHttp : IVerseDb, IDisposable
 	private readonly HttpClient client;
 	private readonly string token;
 
-	/// <param name="handler">HttpClientHandler in the plugin; a scripted handler in tests. Disposed with this object.</param>
-	public VerseDbHttp(HttpMessageHandler handler, string token, string userAgent)
+	/// <param name="handler">HttpClientHandler in production; a scripted handler in tests. Disposed with this object.</param>
+	/// <param name="baseUri">Where the VerseDB API answers; only a test names one.</param>
+	public VerseDbHttp(HttpMessageHandler handler, string token, string userAgent, Uri? baseUri = null)
 	{
 		if (string.IsNullOrWhiteSpace(token))
 		{
 			throw new ArgumentException("A VerseDB API token is required.", nameof(token));
 		}
 		this.token = token.Trim();
-		client = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout, BaseAddress = BaseUri };
+		client = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout, BaseAddress = baseUri ?? BaseUri };
 		client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", userAgent);
 		client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json");
 	}

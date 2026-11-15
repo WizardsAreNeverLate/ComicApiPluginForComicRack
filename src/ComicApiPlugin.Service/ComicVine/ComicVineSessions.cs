@@ -23,7 +23,7 @@ internal sealed class ComicVineSessions(Func<string, ComicVineHttp> connect, Tim
 	/// <exception cref="WireFormatException">The settings lack a member.</exception>
 	public ComicVineCatalog Catalog(string apiKey, string runId, SearchSettingsDto settings)
 	{
-		var key = new RunKey(apiKey, runId, ComicVineWire.ToJson(settings));
+		var key = new RunKey(apiKey, runId, WireJson.ToJson(settings));
 		DateTimeOffset now = time.GetUtcNow();
 		lock (gate)
 		{

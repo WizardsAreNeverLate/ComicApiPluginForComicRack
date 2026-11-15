@@ -271,6 +271,14 @@ public sealed class ErrorResponseDto
 	[DataMember(Name = "comicVine")]
 	public ComicVineErrorDto? ComicVine { get; set; }
 
+	/// <summary>Set when VerseDB failed the request.</summary>
+	[DataMember(Name = "verseDb", EmitDefaultValue = false)]
+	public VerseDbErrorDto? VerseDb { get; set; }
+
+	/// <summary>Set when the service cannot load the OpenCV library, so it cannot compare covers. The text says why.</summary>
+	[DataMember(Name = "openCvUnavailable", EmitDefaultValue = false)]
+	public string? OpenCvUnavailable { get; set; }
+
 	/// <summary>Set when the service rejected the request itself.</summary>
 	[DataMember(Name = "message")]
 	public string? Message { get; set; }

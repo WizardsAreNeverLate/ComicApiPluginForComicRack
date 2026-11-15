@@ -31,11 +31,11 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 
 	public Task<IReadOnlyList<SeriesRef>> SearchSeriesAsync(string terms, IProgress<QueryProgress>? progress, CancellationToken ct) =>
 		CallAsync<SearchRequestDto, IReadOnlyList<SeriesRef>>(ServiceProtocol.ComicVineSearchPath, new SearchRequestDto { Settings = settings, Terms = terms },
-			async response => [.. ComicVineWire.Need((await LastLineAsync(response, progress).ConfigureAwait(false)).Series, "series").Select(ComicVineWire.ToDomain)], ct);
+			async response => [.. WireJson.Need((await LastLineAsync(response, progress).ConfigureAwait(false)).Series, "series").Select(ComicVineWire.ToDomain)], ct);
 
 	public Task<IReadOnlyList<IssueRef>> GetIssuesAsync(SeriesId series, IProgress<QueryProgress>? progress, CancellationToken ct) =>
 		CallAsync<IssuesRequestDto, IReadOnlyList<IssueRef>>(ServiceProtocol.ComicVineIssuesPath, new IssuesRequestDto { Settings = settings, Series = series.Value },
-			async response => [.. ComicVineWire.Need((await LastLineAsync(response, progress).ConfigureAwait(false)).Issues, "issues").Select(ComicVineWire.ToDomain)], ct);
+			async response => [.. WireJson.Need((await LastLineAsync(response, progress).ConfigureAwait(false)).Issues, "issues").Select(ComicVineWire.ToDomain)], ct);
 
 	public Task<IssueRef?> FindIssueAsync(SeriesId series, string issueNumber, CancellationToken ct) =>
 		CallAsync(ServiceProtocol.ComicVineFindIssuePath, new FindIssueRequestDto { Settings = settings, Series = series.Value, IssueNumber = issueNumber },
@@ -88,7 +88,7 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 			HttpClient client = await service.ConnectAsync(ct).ConfigureAwait(false);
 			using var request = new HttpRequestMessage(HttpMethod.Post, path)
 			{
-				Content = new StringContent(ComicVineWire.ToJson(body), Utf8, ComicVineWire.JsonContentType),
+				Content = new StringContent(WireJson.ToJson(body), Utf8, WireJson.ContentType),
 			};
 			request.Headers.TryAddWithoutValidation(ServiceProtocol.ComicVineKeyHeader, apiKey);
 			request.Headers.TryAddWithoutValidation(ServiceProtocol.RunIdHeader, runId);
@@ -127,7 +127,7 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 	private static async Task<Exception> FailureAsync(string path, HttpResponseMessage response)
 	{
 		string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-		ErrorResponseDto? error = body.Length > 0 ? ComicVineWire.FromJson<ErrorResponseDto>(body) : null;
+		ErrorResponseDto? error = body.Length > 0 ? WireJson.FromJson<ErrorResponseDto>(body) : null;
 		return error?.ComicVine is { } comicVine
 			? ComicVineWire.ToDomain(comicVine)
 			: new ServiceUnavailableException($"The local API service answered {path} with HTTP {(int)response.StatusCode}" + (error?.Message is { } message ? ": " + message : "."));
@@ -139,7 +139,7 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 		using var reader = new StreamReader(await response.Content.ReadAsStreamAsync().ConfigureAwait(false), Utf8);
 		while (await reader.ReadLineAsync().ConfigureAwait(false) is { } text)
 		{
-			StreamLineDto line = ComicVineWire.FromJson<StreamLineDto>(text);
+			StreamLineDto line = WireJson.FromJson<StreamLineDto>(text);
 			if (line.Progress is { } report)
 			{
 				progress?.Report(ComicVineWire.ToDomain(report));
@@ -157,7 +157,7 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 	}
 
 	private static async Task<T> JsonAsync<T>(HttpResponseMessage response) where T : class =>
-		ComicVineWire.FromJson<T>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+		WireJson.FromJson<T>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
 
 	private static ComicVineException Unavailable(string path, ServiceUnavailableException cause) =>
 		new(ComicVineError.ServiceUnavailable, "local API service " + path, null, cause);

@@ -30,7 +30,7 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 	{
 		app.MapPost(ServiceProtocol.ComicVineSearchPath, (HttpContext context) => Answer<SearchRequestDto>(context, (catalog, request) =>
 		{
-			string terms = ComicVineWire.Need(request.Terms, "terms");
+			string terms = WireJson.Need(request.Terms, "terms");
 			return Stream(context, (progress, ct) => catalog.SearchSeriesAsync(terms, progress, ct),
 				found => new StreamLineDto { Series = [.. found.Select(ComicVineWire.ToDto)] });
 		}));
@@ -39,7 +39,7 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 				found => new StreamLineDto { Issues = [.. found.Select(ComicVineWire.ToDto)] })));
 		app.MapPost(ServiceProtocol.ComicVineFindIssuePath, (HttpContext context) => Answer<FindIssueRequestDto>(context, async (catalog, request) =>
 		{
-			string number = ComicVineWire.Need(request.IssueNumber, "issueNumber");
+			string number = WireJson.Need(request.IssueNumber, "issueNumber");
 			IssueRef? found = await catalog.FindIssueAsync(new SeriesId(request.Series), number, context.RequestAborted);
 			await WriteJson(context, StatusCodes.Status200OK, new FindIssueResponseDto { Issue = found is null ? null : ComicVineWire.ToDto(found) });
 		}));
@@ -55,7 +55,7 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 		}));
 		app.MapPost(ServiceProtocol.ComicVineImagePath, (HttpContext context) => Answer<ImageRequestDto>(context, async (catalog, request) =>
 		{
-			Uri url = ComicVineWire.Url(ComicVineWire.Need(request.Url, "url"), "url");
+			Uri url = WireJson.Url(WireJson.Need(request.Url, "url"), "url");
 			using Bitmap? image = await catalog.GetImageAsync(url, context.RequestAborted);
 			if (image is null)
 			{
@@ -86,8 +86,8 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 			string runId = Header(context, ServiceProtocol.RunIdHeader);
 			RunScope.Current = runId;
 			using var reader = new StreamReader(context.Request.Body, Utf8);
-			TRequest request = ComicVineWire.FromJson<TRequest>(await reader.ReadToEndAsync(context.RequestAborted));
-			ComicVineCatalog catalog = sessions.Catalog(apiKey, runId, ComicVineWire.Need(request.Settings, "settings"));
+			TRequest request = WireJson.FromJson<TRequest>(await reader.ReadToEndAsync(context.RequestAborted));
+			ComicVineCatalog catalog = sessions.Catalog(apiKey, runId, WireJson.Need(request.Settings, "settings"));
 			await answer(catalog, request);
 		}
 		catch (WireFormatException error)
@@ -160,15 +160,15 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 		{
 			context.Response.ContentType = ComicVineWire.LinesContentType;
 		}
-		await context.Response.WriteAsync(ComicVineWire.ToJson(line) + "\n", Utf8, context.RequestAborted);
+		await context.Response.WriteAsync(WireJson.ToJson(line) + "\n", Utf8, context.RequestAborted);
 		await context.Response.Body.FlushAsync(context.RequestAborted);
 	}
 
 	private static async Task WriteJson<T>(HttpContext context, int status, T body) where T : class
 	{
 		context.Response.StatusCode = status;
-		context.Response.ContentType = ComicVineWire.JsonContentType;
-		await context.Response.WriteAsync(ComicVineWire.ToJson(body), Utf8, context.RequestAborted);
+		context.Response.ContentType = WireJson.ContentType;
+		await context.Response.WriteAsync(WireJson.ToJson(body), Utf8, context.RequestAborted);
 	}
 
 	private static string Header(HttpContext context, string name) =>
