@@ -32,7 +32,6 @@ internal static class AdvancedParser
 	private static readonly Regex Imprint = Key("IMPRINT");
 	private static readonly Regex ScrapeDelay = Key("SCRAPE_DELAY");
 	private static readonly Regex MaxSearchResults = Key("MAX_SEARCH_RESULTS");
-	private static readonly Regex ShowServiceConsole = Key("SHOW_SERVICE_CONSOLE");
 
 	public static AdvancedSettings Parse(string? text)
 	{
@@ -42,7 +41,7 @@ internal static class AdvancedParser
 		var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
 		var imprints = new Dictionary<string, string>(StringComparer.Ordinal);
 		int before = 0, after = 9999999, threshold = 9999999, delay = 1, maxResults = 100;
-		bool rating = false, covers = true, welcome = true, folders = false, seriesArt = false, noteDate = false, console = false;
+		bool rating = false, covers = true, welcome = true, folders = false, seriesArt = false, noteDate = false;
 		Regex? alt = null;
 
 		foreach (string line in raw.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
@@ -88,12 +87,10 @@ internal static class AdvancedParser
 			}
 			delay = Number(ScrapeDelay, line) is { } d ? Math.Min(3600, Math.Max(2, d)) : delay;
 			maxResults = Number(MaxSearchResults, line) is { } m ? Math.Min(5000, Math.Max(10, m)) : maxResults;
-			console = Flag(ShowServiceConsole, line) ?? console;
 		}
 		return new AdvancedSettings(raw, publishers, terms, before, after, threshold, rating, covers, welcome, alt,
 			folders, seriesArt, noteDate, aliases, imprints, delay, maxResults)
 		{
-			ShowServiceConsole = console,
 		};
 	}
 

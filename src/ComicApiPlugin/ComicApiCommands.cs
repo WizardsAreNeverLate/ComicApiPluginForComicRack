@@ -206,7 +206,14 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 	public void Configure()
 	{
 		PluginContext ctx = Context;
-		Guarded(ctx, () => ConfigForm.Show(env.MainWindow, ctx));
+		Guarded(ctx, () =>
+		{
+			if (ConfigForm.Show(env.MainWindow, ctx) is not null)
+			{
+				// Applies a changed console setting now, not at the next scrape.
+				CheckService(ctx);
+			}
+		});
 	}
 
 	private RunSummary Run(PluginContext ctx, Configuration config, ComicBook[] books)
@@ -242,7 +249,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 		{
 			return;
 		}
-		ServiceHost host = service ??= new ServiceHost(launch, () => ctx.Settings.Load().Advanced.ShowServiceConsole, ctx.Log.Debug);
+		ServiceHost host = service ??= new ServiceHost(launch, () => ctx.Settings.Load().ShowServiceConsole, ctx.Log.Debug);
 		Task.Run(async () => ctx.Log.Debug(await host.CheckAsync().ConfigureAwait(false)));
 	}
 

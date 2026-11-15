@@ -38,8 +38,8 @@ internal abstract record ServiceState
 	/// <summary>One start is in flight, and every caller waits on it.</summary>
 	public sealed record Starting(Task<ServiceEndpoint> Start) : ServiceState;
 
-	/// <summary>The service reported ready. The process may have exited since, and the next start then replaces it.</summary>
-	public sealed record Running(ServiceEndpoint Endpoint, Process Process) : ServiceState;
+	/// <summary>The service reported ready. The process may have exited since, and the next start then replaces it. ConsoleShown is whether it was launched with its window on show.</summary>
+	public sealed record Running(ServiceEndpoint Endpoint, Process Process, bool ConsoleShown) : ServiceState;
 
 	/// <summary>The last start failed. The next call starts again.</summary>
 	public sealed record Failed(string Reason) : ServiceState;

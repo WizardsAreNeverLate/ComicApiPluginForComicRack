@@ -477,7 +477,7 @@ The service stops in every way ComicRack can end:
 
 - Serilog writes `%LOCALAPPDATA%\ComicApiPlugin\logs\service-<yyyyMMdd>.log`, one file per day, and keeps 14 files.
 - Each request is one line with the method, the path without the query string, the status and the elapsed time. ASP.NET Core's own request log, which includes the query string, is off. No header is logged. `SecretHeaderPolicy` writes the three secret headers as `<redacted>` if a later change logs a header collection.
-- The console window is hidden by default. The line `SHOW_SERVICE_CONSOLE=True` in `advanced.dat` shows it from the next start of the service (`deviations.md`). stdout is a pipe to the plugin, so the service opens the window by its device name, `CONOUT$`, and writes the same log lines there.
+- The console window is hidden by default. The checkbox "Show the local API service console window" on the Providers tab (`showServiceConsole` in `settings.dat`) shows it. Saving a changed setting restarts a running service with the window shown or hidden. stdout is a pipe to the plugin, so the service opens the window by its device name, `CONOUT$`, and writes the same log lines there.
 
 ### Build and tests
 

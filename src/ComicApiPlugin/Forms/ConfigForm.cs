@@ -57,6 +57,7 @@ internal sealed class ConfigForm : ScraperForm
 		Size = new Size(260, 170),
 	};
 	private readonly CheckBox verseDbAutoAccept;
+	private readonly CheckBox showServiceConsole;
 	private readonly CheckBox comicVineAutoAccept;
 	private readonly Label compareCountLabel;
 	private readonly NumericUpDown compareCount = new()
@@ -96,6 +97,7 @@ internal sealed class ConfigForm : ScraperForm
 		Pin(tabs, AllEdges);
 
 		verseDbAutoAccept = MakeCheckBox("verseDbAutoAccept", TextKeys.ConfigFormVerseDbAutoAcceptCB, 34, 210, 315, 34);
+		showServiceConsole = MakeCheckBox("showServiceConsole", TextKeys.ConfigFormShowServiceConsoleCB, 34, 125, 315, 34);
 		comicVineAutoAccept = MakeCheckBox("comicVineAutoAccept", TextKeys.ConfigFormComicVineAutoAcceptCB, 34, 210, 315, 34);
 		compareCountLabel = new Label { Name = "comicVineCompareCountLabel", UseMnemonic = false, AutoSize = false, Location = new Point(52, 251), Size = new Size(135, 17), Text = Strings[TextKeys.ConfigFormCompareCountLabel] };
 		autochoose = MakeCheckBox("autochoose", TextKeys.ConfigFormAutochooseSeriesCB, 82, 45, 300, 34);
@@ -176,6 +178,7 @@ internal sealed class ConfigForm : ScraperForm
 		rescrapeTags.Checked = config.Update.HasFlag(BookFields.Tags);
 		summaryDialog.Checked = config.SummaryDialog;
 		verseDbAutoAccept.Checked = config.VerseDbAutoAccept;
+		showServiceConsole.Checked = config.ShowServiceConsole;
 		comicVineAutoAccept.Checked = config.ComicVineCoverAutoAccept;
 		compareCount.Value = config.ComicVineCoverCompareCount;
 		advanced.Text = config.Advanced.RawText;
@@ -217,6 +220,7 @@ internal sealed class ConfigForm : ScraperForm
 			FastRescrape = fastRescrape.Checked,
 			SummaryDialog = summaryDialog.Checked,
 			VerseDbAutoAccept = verseDbAutoAccept.Checked,
+			ShowServiceConsole = showServiceConsole.Checked,
 			ComicVineCoverAutoAccept = comicVineAutoAccept.Checked,
 			ComicVineCoverCompareCount = (int)compareCount.Value,
 			Advanced = AdvancedSettings.Parse(advanced.Text),
@@ -310,7 +314,7 @@ internal sealed class ConfigForm : ScraperForm
 		Button down = Pin(MakeButton("providerDown", TextKeys.ConfigFormProviderDown, new Point(292, 84), 60, 0), TopRight);
 		down.Click += (_, _) => MoveProvider(1);
 		var order = new Label { Name = "providersText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 15), Size = new Size(315, 34), Text = Strings[TextKeys.ConfigFormProvidersText] };
-		return Tab("providersTab", TextKeys.ConfigFormProvidersTab, Pin(order, AcrossTop), Pin(providers, AcrossTop), up, down);
+		return Tab("providersTab", TextKeys.ConfigFormProvidersTab, Pin(order, AcrossTop), Pin(providers, AcrossTop), up, down, showServiceConsole);
 	}
 
 	private TabPage BuildVerseDbTab()

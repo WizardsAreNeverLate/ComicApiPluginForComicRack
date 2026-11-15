@@ -63,6 +63,11 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 	/// <exception cref="ServiceUnavailableException">The start failed. <see cref="State"/> holds the same reason.</exception>
 	public Task<ServiceEndpoint> EnsureStartedAsync(CancellationToken ct)
 	{
+		if (State is ServiceState.Running live && !HasExited(live.Process) && live.ConsoleShown != showConsole())
+		{
+			log("Restarting the local API service to " + (live.ConsoleShown ? "hide" : "show") + " its console window");
+			Stop();
+		}
 		Task<ServiceEndpoint> start;
 		lock (gate)
 		{
@@ -196,6 +201,7 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 		{
 			parentPid = self.Id;
 		}
+		bool consoleShown = showConsole();
 		var info = new ProcessStartInfo(exe)
 		{
 			// A trailing backslash would escape the closing quote.
@@ -205,7 +211,7 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 			RedirectStandardError = true,
 			StandardOutputEncoding = Encoding.UTF8,
 			StandardErrorEncoding = Encoding.UTF8,
-			CreateNoWindow = !showConsole(),
+			CreateNoWindow = !consoleShown,
 		};
 		// The environment, not the command line, which any process of the user can read.
 		info.EnvironmentVariables[ServiceProtocol.TokenVariable] = token;
@@ -262,7 +268,7 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 			}
 			int port = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
 			int pid = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-			return new ServiceState.Running(new ServiceEndpoint(new Uri($"http://{ServiceProtocol.LoopbackHost}:{port}/"), token, pid), process);
+			return new ServiceState.Running(new ServiceEndpoint(new Uri($"http://{ServiceProtocol.LoopbackHost}:{port}/"), token, pid), process, consoleShown);
 		}
 		catch
 		{

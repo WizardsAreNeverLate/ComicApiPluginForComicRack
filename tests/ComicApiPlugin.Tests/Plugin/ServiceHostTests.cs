@@ -95,6 +95,35 @@ public sealed class ServiceHostTests
 	}
 
 	[Test]
+	public async Task Changing_the_console_setting_restarts_the_running_service_and_the_old_one_exits()
+	{
+		bool show = false;
+		var log = new List<string>();
+		using var host = new ServiceHost(BuiltService.Launch(), () => show, line => { lock (log) { log.Add(line); } });
+		ServiceEndpoint hidden = await host.EnsureStartedAsync(CancellationToken.None);
+		ServiceEndpoint same = await host.EnsureStartedAsync(CancellationToken.None);
+
+		show = true;
+		ServiceEndpoint shown = await host.EnsureStartedAsync(CancellationToken.None);
+		bool oldExited;
+		try
+		{
+			using Process old = Process.GetProcessById(hidden.Pid);
+			oldExited = old.WaitForExit(ExitWaitMilliseconds);
+		}
+		catch (ArgumentException)
+		{
+			oldExited = true;
+		}
+
+		await Assert.That(same).IsSameReferenceAs(hidden);
+		await Assert.That(shown.Pid).IsNotEqualTo(hidden.Pid);
+		await Assert.That(oldExited).IsTrue();
+		await Assert.That(host.State is ServiceState.Running { ConsoleShown: true }).IsTrue();
+		await Assert.That(log).Contains("Restarting the local API service to show its console window");
+	}
+
+	[Test]
 	public async Task A_service_that_exited_is_started_again_on_the_next_call()
 	{
 		using ServiceHost host = Host(BuiltService.Launch());

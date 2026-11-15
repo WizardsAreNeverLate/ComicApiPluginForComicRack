@@ -390,6 +390,32 @@ public sealed class ConfigFormTests
 	}
 
 	[Test]
+	public async Task The_service_console_checkbox_shows_the_saved_setting_and_saves_a_change()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with { ApiKey = Key, ShowServiceConsole = true });
+
+		(bool Shown, string Tab, Configuration? Returned) seen = Sta.Run(() =>
+		{
+			(bool, string) observed = (false, "");
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				CheckBox box = Ui.Find<CheckBox>(form, "showServiceConsole");
+				observed = (box.Checked, box.Parent?.Name ?? "");
+				box.Checked = false;
+				Ui.Find<Button>(form, "ok").PerformClick();
+			});
+			Configuration? returned = ConfigForm.Show(null, session.Ctx);
+			return (observed.Item1, observed.Item2, returned);
+		});
+
+		await Assert.That(seen.Shown).IsTrue();
+		await Assert.That(seen.Tab).IsEqualTo("providersTab");
+		await Assert.That(seen.Returned!.ShowServiceConsole).IsFalse();
+		await Assert.That(session.Settings.Load().ShowServiceConsole).IsFalse();
+	}
+
+	[Test]
 	public async Task The_saved_cover_auto_accept_settings_are_shown_and_the_count_follows_its_checkbox()
 	{
 		using var session = UiSession.Create();

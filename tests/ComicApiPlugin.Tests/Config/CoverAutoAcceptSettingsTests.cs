@@ -31,6 +31,16 @@ public sealed class CoverAutoAcceptSettingsTests
 	}
 
 	[Test]
+	public async Task The_service_console_is_hidden_by_default_and_round_trips_under_its_own_key()
+	{
+		IReadOnlyDictionary<string, DatValue> map = (Blank with { ShowServiceConsole = true }).ToSettingsMap();
+
+		await Assert.That(Configuration.FromMaps(new Dictionary<string, DatValue>(), "").ShowServiceConsole).IsFalse();
+		await Assert.That(map["showServiceConsole"]).IsEqualTo(new DatValue.Bool(true));
+		await Assert.That(Configuration.FromMaps(map, "").ShowServiceConsole).IsTrue();
+	}
+
+	[Test]
 	public async Task The_settings_use_their_own_keys_and_leave_the_Python_keys_alone()
 	{
 		IReadOnlyDictionary<string, DatValue> map = (Blank with { VerseDbAutoAccept = true, ComicVineCoverCompareCount = 7 }).ToSettingsMap();

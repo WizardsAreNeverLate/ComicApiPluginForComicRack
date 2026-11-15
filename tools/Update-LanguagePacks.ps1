@@ -58,6 +58,7 @@ $verseDbTexts = [ordered]@{
 	ConfigFormVerseDbText = "VerseDB cover search needs an API token. Paste yours in the space below."
 	ConfigFormVerseDbClickHere = "Click here to create a VerseDB API token"
 	ConfigFormVerseDbAutoAcceptCB = "Accept the match without asking when VerseDB finds one result and its cover matches the book"
+	ConfigFormShowServiceConsoleCB = "Show the local API service console window (for debugging)"
 	ConfigFormComicVineAutoAcceptCB = "Compare the covers of the top search results and accept a single confident match without asking"
 	ConfigFormCompareCountLabel = "Results to compare:"
 	LogWindowClose = "Close"
