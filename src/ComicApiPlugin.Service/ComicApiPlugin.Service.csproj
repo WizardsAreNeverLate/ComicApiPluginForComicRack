@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+	<PropertyGroup>
+		<TargetFramework>net11.0-windows</TargetFramework>
+		<OutputType>Exe</OutputType>
+		<RootNamespace>ComicApiPlugin.Service</RootNamespace>
+		<!-- Framework-dependent: the user installs the ASP.NET Core 11 runtime, and the apphost exe finds it without dotnet on PATH. -->
+		<SelfContained>false</SelfContained>
+		<!-- No IIS, so no web.config in the publish folder. -->
+		<IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+		<StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\ComicApiPlugin.Core\ComicApiPlugin.Core.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="ComicApiPlugin.Service.Tests" />
+	</ItemGroup>
+</Project>
