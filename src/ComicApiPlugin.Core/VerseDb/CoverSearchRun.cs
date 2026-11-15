@@ -8,6 +8,7 @@ using ComicApiPlugin.Books;
 using ComicApiPlugin.Config;
 using ComicApiPlugin.Diagnostics;
 using ComicApiPlugin.Engine;
+using ComicApiPlugin.Matching;
 using ComicApiPlugin.Model;
 using ComicApiPlugin.Text;
 

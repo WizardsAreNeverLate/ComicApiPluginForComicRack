@@ -29,6 +29,10 @@
 		<None Include="..\fixtures\comicvine\*.txt" Link="fixtures\comicvine\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 		<None Include="Golden\*" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
+	<!-- Not transitive: the build props that copy OpenCvSharpExtern.dll to the output only apply to a project that references the package itself. -->
+	<ItemGroup>
+		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
+	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\ComicApiPlugin.Core\ComicApiPlugin.Core.csproj" />
 		<ProjectReference Include="..\..\src\ComicApiPlugin\ComicApiPlugin.csproj" />

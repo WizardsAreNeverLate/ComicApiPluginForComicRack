@@ -5,9 +5,9 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 
-namespace ComicApiPlugin.VerseDb;
+namespace ComicApiPlugin.Matching;
 
-/// <summary>A page as the JPEG VerseDB's cover lookup takes: longest side at most 1200 pixels, quality 85, under 5 MB.</summary>
+/// <summary>A page as the JPEG VerseDB's cover lookup takes, which is also what the cover comparer is fed: longest side at most 1200 pixels, quality 85, under 5 MB.</summary>
 public static class CoverJpeg
 {
 	public const int MaxSide = 1200;
