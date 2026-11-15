@@ -13,11 +13,13 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 ./Build.ps1            # build, then run both test suites
 ./Build.ps1 -Rebuild
 ./Build.ps1 -SkipTests
+./BuildNoTests.ps1     # same as -SkipTests
 ```
 
+- Every build lays the installed plugin out in `artifacts\<Configuration>\Comic API Plugin\`: the DLLs, `Package.ini`, images and language zips, plus the PDBs. Copy that folder into `%APPDATA%\cYo\ComicRack Community Edition\Scripts\` to install the build, or set `COMICRACK_PLUGIN_DIR` to the installed plugin folder and every build copies it there. Close ComicRack first, because it locks the DLLs. Copying only `bin\` leaves the language zips stale, and the plugin then fails on any new text key with `unrecognized i18n key`.
 - Use `Build.ps1`, not `dotnet build`, for the plugin and test projects. They carry binary `.resx` resources that `dotnet build` cannot compile for .NET Framework.
 - `src/ComicApiPlugin.Core` has no ComicRack dependency and no `.resx`. `dotnet build src/ComicApiPlugin.Core/ComicApiPlugin.Core.csproj` works directly and is the fastest way to check a Core-only change compiles.
-- Everything else (`src/ComicApiPlugin`, both test projects, `tools/smoke`, `tools/differential`) needs `ComicRackDir`/`COMICRACK_DIR` pointed at a ComicRack CE build of `WizardsAreNeverLate/ComicRackCE@integration` (branch includes `feat/dotnet-plugins`). Without it, `Directory.Build.targets` fails the build with a clear error rather than a missing-reference error.
+- Everything else (`src/ComicApiPlugin`, both test projects, `tools/smoke`, `tools/differential`) needs `ComicRackDir`/`COMICRACK_DIR` pointed at a ComicRack CE build of `WizardsAreNeverLate/ComicRackCE@integration` (branch includes upstream's `feature/dotnet-plugin`, the `DotNetPlugin` API this plugin is built on). Without it, `Directory.Build.targets` fails the build with a clear error rather than a missing-reference error.
 
 ## Tests
 

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using ComicApiPlugin.ComicVine;
 
@@ -13,16 +15,21 @@ namespace ComicApiPlugin.Plugin;
 /// </summary>
 internal sealed class CoverPictureBox : PictureBox
 {
-	private readonly IComicVine comicVine;
+	private readonly Func<Uri, CancellationToken, Task<Bitmap?>> fetch;
 	private readonly LatestLoader loader;
 	private readonly Dictionary<Uri, Bitmap> cache = [];
 	private readonly Bitmap unknown = Images.Logo();
 	private readonly Bitmap loading = Images.Loading();
 	private Uri? wanted;
 
-	public CoverPictureBox(IComicVine comicVine, PluginContext ctx)
+	public CoverPictureBox(IComicVine comicVine, PluginContext ctx) : this(comicVine.GetImageAsync, ctx)
 	{
-		this.comicVine = comicVine;
+	}
+
+	/// <param name="fetch">Returns the picture at a URL, or null; the control owns the bitmap.</param>
+	public CoverPictureBox(Func<Uri, CancellationToken, Task<Bitmap?>> fetch, PluginContext ctx)
+	{
+		this.fetch = fetch;
 		loader = new LatestLoader(ctx.Log);
 		SizeMode = PictureBoxSizeMode.StretchImage;
 		Image = unknown;
@@ -79,7 +86,7 @@ internal sealed class CoverPictureBox : PictureBox
 		else
 		{
 			Image = loading;
-			_ = loader.Load(ct => comicVine.GetImageAsync(url, ct), image =>
+			_ = loader.Load(ct => fetch(url, ct), image =>
 			{
 				if (IsDisposed)
 				{

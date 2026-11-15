@@ -11,8 +11,10 @@ This is a native C# (.NET Framework 4.8) port of Cory Banack's [Comic Vine Scrap
 > [!IMPORTANT]
 > This plugin needs **a modified ComicRack Community Edition that can load .NET plugins.** Stock ComicRack CE loads only Python (IronPython) plugins, and it cannot load this one.
 
-- Build ComicRack CE from branch [`integration`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/integration) of the fork [WizardsAreNeverLate/ComicRackCE](https://github.com/WizardsAreNeverLate/ComicRackCE). That branch is upstream `master` with this fork's feature branches merged in, including [`feat/dotnet-plugins`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/feat/dotnet-plugins). That feature adds `[PluginCommand]` attributes, so a compiled class can provide ComicRack commands, and it adds `.crplugin` packages that contain .NET assemblies.
-- **Upstream ComicRack CE does not include this support yet:** it hasn't been submitted as a pull request. The feature branch is kept separate from `integration` so that it can be offered upstream on its own.
+- Build ComicRack CE from branch [`integration`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/integration) of the fork [WizardsAreNeverLate/ComicRackCE](https://github.com/WizardsAreNeverLate/ComicRackCE). That branch is upstream `master` with feature branches merged in:
+	- upstream's [`feature/dotnet-plugin`](https://github.com/maforget/ComicRackCE/tree/feature/dotnet-plugin), which loads plugin classes that derive from `DotNetPlugin` and implement hook interfaces such as `IBooks`. This plugin is one of those classes.
+	- this fork's [`feat/dotnet-plugins`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/feat/dotnet-plugins), which installs `.crplugin` packages that contain .NET assemblies.
+- **Upstream ComicRack CE has not released this support yet.** `feature/dotnet-plugin` is a branch of upstream, not yet merged into its `master`.
 - You need a Comic Vine API key, which is free. You can get one at <https://comicvine.gamespot.com/api/>.
 
 ## Features

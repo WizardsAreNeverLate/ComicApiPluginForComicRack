@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using ComicApiPlugin.Books;
 
 namespace ComicApiPlugin.Config;
@@ -6,6 +8,11 @@ namespace ComicApiPlugin.Config;
 public sealed partial record Configuration
 {
 	private const string ApiKeyKey = "apiKey";
+	// New keys, unknown to the Python plugin, which ignores them. DatFile drops a value containing ':', so a token with one is not saved.
+	private const string VerseDbApiKeyKey = "verseDbApiKey";
+	private const string ProviderOrderKey = "providerOrder";
+	private const string ComicVineEnabledKey = "comicVineEnabled";
+	private const string VerseDbEnabledKey = "verseDbEnabled";
 	private const string OverwriteExistingKey = "overwriteExisting";
 	private const string IgnoreBlanksKey = "ignoreBlanks";
 	private const string ConvertImprintsKey = "convertImprints";
@@ -17,6 +24,9 @@ public sealed partial record Configuration
 	private const string UpdateNotesKey = "updateNotes";
 	private const string UpdateTagsKey = "updateTags";
 	private const string SummaryDialogKey = "summaryDialog";
+	private const string VerseDbAutoAcceptKey = "verseDbAutoAccept";
+	private const string ComicVineCoverAutoAcceptKey = "comicVineCoverAutoAccept";
+	private const string ComicVineCoverCompareCountKey = "comicVineCoverCompareCount";
 
 	/// <summary>
 	/// settings.dat map to settings; a missing key keeps its default. Unknown keys are ignored here and kept by SettingsStore.
@@ -38,6 +48,8 @@ public sealed partial record Configuration
 		return config with
 		{
 			ApiKey = settings.TryGetValue(ApiKeyKey, out DatValue? key) ? key.ToFileText() : config.ApiKey,
+			VerseDbApiKey = settings.TryGetValue(VerseDbApiKeyKey, out DatValue? verseKey) ? verseKey.ToFileText() : config.VerseDbApiKey,
+			Providers = ReadProviders(settings),
 			Update = update,
 			OverwriteExisting = Flag(settings, OverwriteExistingKey, config.OverwriteExisting),
 			IgnoreBlanks = Flag(settings, IgnoreBlanksKey, config.IgnoreBlanks),
@@ -47,6 +59,9 @@ public sealed partial record Configuration
 			PreserveThumbs = Flag(settings, PreserveThumbsKey, config.PreserveThumbs),
 			FastRescrape = Flag(settings, FastRescrapeKey, config.FastRescrape),
 			SummaryDialog = Flag(settings, SummaryDialogKey, config.SummaryDialog),
+			VerseDbAutoAccept = Flag(settings, VerseDbAutoAcceptKey, config.VerseDbAutoAccept),
+			ComicVineCoverAutoAccept = Flag(settings, ComicVineCoverAutoAcceptKey, config.ComicVineCoverAutoAccept),
+			ComicVineCoverCompareCount = Count(settings, ComicVineCoverCompareCountKey, config.ComicVineCoverCompareCount),
 		};
 	}
 
@@ -56,6 +71,10 @@ public sealed partial record Configuration
 		var map = new Dictionary<string, DatValue>
 		{
 			[ApiKeyKey] = new DatValue.Text(ApiKey),
+			[VerseDbApiKeyKey] = new DatValue.Text(VerseDbApiKey),
+			[ProviderOrderKey] = new DatValue.Text(string.Join(",", Providers.Select(p => p.Kind))),
+			[ComicVineEnabledKey] = new DatValue.Bool(IsEnabled(ProviderKind.ComicVine)),
+			[VerseDbEnabledKey] = new DatValue.Bool(IsEnabled(ProviderKind.VerseDb)),
 			[OverwriteExistingKey] = new DatValue.Bool(OverwriteExisting),
 			[IgnoreBlanksKey] = new DatValue.Bool(IgnoreBlanks),
 			[ConvertImprintsKey] = new DatValue.Bool(ConvertImprints),
@@ -67,6 +86,9 @@ public sealed partial record Configuration
 			[UpdateNotesKey] = new DatValue.Bool(Update.HasFlag(BookFields.Notes)),
 			[UpdateTagsKey] = new DatValue.Bool(Update.HasFlag(BookFields.Tags)),
 			[SummaryDialogKey] = new DatValue.Bool(SummaryDialog),
+			[VerseDbAutoAcceptKey] = new DatValue.Bool(VerseDbAutoAccept),
+			[ComicVineCoverAutoAcceptKey] = new DatValue.Bool(ComicVineCoverAutoAccept),
+			[ComicVineCoverCompareCountKey] = new DatValue.Int(ComicVineCoverCompareCount),
 		};
 		foreach (FieldTable.Row row in FieldTable.Toggleable)
 		{
@@ -75,11 +97,29 @@ public sealed partial record Configuration
 		return map;
 	}
 
+	private bool IsEnabled(ProviderKind kind) => Providers.Any(p => p.Kind == kind && p.Enabled);
+
+	private static ProviderList ReadProviders(IReadOnlyDictionary<string, DatValue> settings)
+	{
+		bool comicVine = Flag(settings, ComicVineEnabledKey, true);
+		bool verseDb = Flag(settings, VerseDbEnabledKey, true);
+		IEnumerable<ProviderSetting> ordered = settings.TryGetValue(ProviderOrderKey, out DatValue? order)
+			? order.ToFileText().Split(',').Select(name => Enum.TryParse(name.Trim(), true, out ProviderKind kind) && Enum.IsDefined(typeof(ProviderKind), kind)
+				? new ProviderSetting(kind, kind == ProviderKind.ComicVine ? comicVine : verseDb)
+				: null).OfType<ProviderSetting>()
+			: [];
+		return ProviderTable.Normalize(ordered.Concat([new ProviderSetting(ProviderKind.ComicVine, comicVine), new ProviderSetting(ProviderKind.VerseDb, verseDb)]));
+	}
+
 	private static BookFields With(BookFields update, BookFields bits, IReadOnlyDictionary<string, DatValue> settings, string key) =>
 		settings.TryGetValue(key, out DatValue? value) ? (Truthy(value) ? update | bits : update & ~bits) : update;
 
 	private static bool Flag(IReadOnlyDictionary<string, DatValue> settings, string key, bool fallback) =>
 		settings.TryGetValue(key, out DatValue? value) ? Truthy(value) : fallback;
+
+	/// <summary>An integer setting; a value that is not a whole number keeps the fallback. The property clamps the range.</summary>
+	private static int Count(IReadOnlyDictionary<string, DatValue> settings, string key, int fallback) =>
+		settings.TryGetValue(key, out DatValue? value) && value is DatValue.Int i ? (int)Math.Max(int.MinValue, Math.Min(int.MaxValue, i.Value)) : fallback;
 
 	private static bool Truthy(DatValue value) => value switch
 	{

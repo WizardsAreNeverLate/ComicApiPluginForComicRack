@@ -1,6 +1,6 @@
 # Port plan: Comic Vine Scraper in C#
 
-This repository ports the Comic Vine Scraper plugin for ComicRack (IronPython 2.7, about 12,300 lines, [cbanack/comic-vine-scraper](https://github.com/cbanack/comic-vine-scraper) v1.0.102) to a native C# plugin. It uses the `[PluginCommand]` support on ComicRackCE branch `feat/dotnet-plugins`.
+This repository ports the Comic Vine Scraper plugin for ComicRack (IronPython 2.7, about 12,300 lines, [cbanack/comic-vine-scraper](https://github.com/cbanack/comic-vine-scraper) v1.0.102) to a native C# plugin. It uses the `DotNetPlugin` support from upstream ComicRackCE branch `feature/dotnet-plugin`. It first used the `[PluginCommand]` support on branch `feat/dotnet-plugins`, which it no longer depends on.
 
 The port keeps the plugin's behaviour and replaces Python patterns with .NET ones. It does not add features.
 
@@ -8,7 +8,7 @@ The port keeps the plugin's behaviour and replaces Python patterns with .NET one
 
 The port is done when every item below is true:
 
-1. The build produces `ComicApiPlugin.crplugin`. The plugin installs in a ComicRackCE build of `feat/dotnet-plugins` and shows the **Comic Vine Scraper** command, including its **Configure** action.
+1. The build produces `ComicApiPlugin.crplugin`. The plugin installs in a ComicRackCE build of `integration` and shows the **Comic Vine Scraper** command, including its **Configure** action.
 2. The Python project's golden tests pass against the C# code:
    - the 286 filename cases in `test_fnameparser.data`
    - the `natural_compare` and `natural_key` cases

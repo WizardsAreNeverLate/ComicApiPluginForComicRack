@@ -72,6 +72,9 @@ internal sealed class ComicForm : ScraperForm
 		cancel.Text = Strings.Format(TextKeys.ComicFormCancelButton, remaining);
 	}
 
+	/// <summary>Replaces the "Scraping: name" line until the next book starts.</summary>
+	public void ShowStatus(string text) => scraping.Text = text;
+
 	/// <summary>Cancel was asked for; the form stays up until the run observes it.</summary>
 	public void ShowCancelling() => cancel.Enabled = false;
 

@@ -20,9 +20,9 @@ namespace CvsNetSmoke;
 /// save from two forms through the shared log. Writes report.txt and the renders to CVS_NET_SMOKE_OUT, then closes ComicRack.
 /// The report carries one ASSERT line for the claim that the forms share one log; run-smoke.ps1 adds the claim about the user's settings.
 /// </summary>
-public sealed class Probe(IPluginEnvironment env)
+public sealed class Probe : DotNetPlugin, IStartup
 {
-	private const string Key = "comic-api-net";
+	private const string PluginKey = "comic-api-net";
 	private const string ApiKey = "0123456789abcdef0123456789abcdef01234567";
 	private readonly Report report = new(Path.Combine(Environment.GetEnvironmentVariable("CVS_NET_SMOKE_OUT")!, "report.txt"));
 	private readonly HashSet<Form> handled = [];
@@ -30,10 +30,15 @@ public sealed class Probe(IPluginEnvironment env)
 	private Form main = null!;
 	private int renders;
 
-	[PluginCommand(PluginHook.Startup, Name = "CvsNet Smoke")]
-	public void Start()
+	public override string Key { get; set; } = "cvsnet-smoke";
+
+	public override string Name { get; set; } = "CvsNet Smoke";
+
+	void IStartup.Execute() => Start();
+
+	private void Start()
 	{
-		main = (Form)env.MainWindow;
+		main = (Form)ComicRack.MainWindow;
 		var timer = new System.Windows.Forms.Timer { Interval = 50 };
 		timer.Tick += (_, _) => Drive();
 		try
@@ -58,7 +63,7 @@ public sealed class Probe(IPluginEnvironment env)
 		Type su = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("cYo.Projects.ComicRack.Viewer.ScriptUtility")).First(t => t != null);
 		var engine = (PluginEngine)su.GetProperty("Scripts")!.GetValue(null, null)!;
 		MethodInfo createBookCode = su.GetMethod("CreateBookCode")!;
-		Command scrape = engine.GetAllCommands().Single(c => c.Key == Key && c.IsHook("Books"));
+		Command scrape = engine.GetAllCommands().Single(c => c.Key == PluginKey && c.IsHook("Books"));
 		report.Add($"command key={scrape.Key} hook={scrape.Hook} configure={scrape.Configure?.Hook}");
 		report.Add("main.IsWindowEnabled before=" + IsWindowEnabled(main.Handle));
 
@@ -76,7 +81,7 @@ public sealed class Probe(IPluginEnvironment env)
 		report.Add("dialogs seen: " + string.Join(", ", seen));
 		if (!sharedLogChecked)
 		{
-			Check("forms share one log", false, "the FinishForm never saved its log, so there was nothing to compare");
+			Check("forms share one log", false, "the log window never saved its log, so there was nothing to compare");
 		}
 	}
 
@@ -87,13 +92,22 @@ public sealed class Probe(IPluginEnvironment env)
 	private void Drive()
 	{
 		List<Form> open;
+		List<Form> news;
 		try
 		{
 			open = [.. Application.OpenForms.Cast<Form>().Where(f => f.Visible && f.IsHandleCreated && f.GetType().Namespace == "ComicApiPlugin.Plugin")];
+			news = [.. Application.OpenForms.Cast<Form>().Where(f => f.Visible && f.GetType().Name == "NewsDialog")];
 		}
 		catch (InvalidOperationException)
 		{
 			return;
+		}
+		// A fresh configuration has unread news, so ComicRack opens its news dialog modally when the download finishes. If that lands on
+		// top of a plugin dialog, the plugin dialog is disabled and PerformClick does nothing, so the run would wait until it is killed.
+		foreach (Form form in news)
+		{
+			report.Add("closed ComicRack's news dialog");
+			form.Close();
 		}
 		foreach (Form form in open)
 		{
@@ -145,11 +159,10 @@ public sealed class Probe(IPluginEnvironment env)
 				report.Add($"  for '{scraping}': {grid.Rows.Count} candidates, picked {row.Cells["name"].Value} ({id}), comicForm.IsWindowEnabled={IsWindowEnabled(comic.Handle)}");
 				Find<Button>(form, "ok").PerformClick();
 				break;
-			case "FinishForm":
-				report.Add("  finish: " + Find<Label>(form, "scraped").Text + " / " + Find<Label>(form, "skipped").Text);
-				SaveLog(form, "log-from-finishform.txt");
+			case "LogWindow":
+				Check("log window usable during run", IsWindowEnabled(form.Handle), "the log window must stay enabled while the run's ComicForm is modal");
+				SaveLog(form, "log-from-logwindow.txt");
 				CheckSharedLog();
-				Find<Button>(form, "ok").PerformClick();
 				break;
 			default:
 				report.Add("  unexpected dialog; closing it: " + string.Join(" | ", Descendants(form).Where(c => c is Label).Select(c => c.Text)));
@@ -210,17 +223,17 @@ public sealed class Probe(IPluginEnvironment env)
 	}
 
 	/// <summary>
-	/// The ConfigForm saved its log, then the FinishForm saved its own. One shared log means the second file holds the first form's
+	/// The ConfigForm saved its log, then the log window saved its own. One shared log means the second file holds the first form's
 	/// lines, including the line the first save wrote about itself, in order before the second save's own line.
 	/// </summary>
 	private void CheckSharedLog()
 	{
 		sharedLogChecked = true;
 		string first = ReadLog("log-from-configform.txt");
-		string second = ReadLog("log-from-finishform.txt");
+		string second = ReadLog("log-from-logwindow.txt");
 		const string opened = "opened the settings dialog.";
 		const string firstSave = "wrote debug logfile: log-from-configform.txt";
-		const string secondSave = "wrote debug logfile: log-from-finishform.txt";
+		const string secondSave = "wrote debug logfile: log-from-logwindow.txt";
 		bool ok = first.Contains(opened) && first.Contains(firstSave) && second.Contains(opened) && second.Contains(firstSave)
 			&& second.Contains(secondSave) && second.IndexOf(firstSave, StringComparison.Ordinal) < second.IndexOf(secondSave, StringComparison.Ordinal);
 		Check("forms share one log", ok, $"first file {first.Length} chars, second file {second.Length} chars; the second must hold '{opened}' and '{firstSave}' before '{secondSave}'");

@@ -5,8 +5,13 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<Reference Include="System.Drawing" />
+		<Reference Include="System.Runtime.Serialization" />
 		<Reference Include="System.Net.Http" />
 		<Reference Include="System.Xml.Linq" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="ComicApiPlugin.Tests" />

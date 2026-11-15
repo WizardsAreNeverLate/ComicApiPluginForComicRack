@@ -3,6 +3,7 @@
 		<OutputType>Library</OutputType>
 		<RootNamespace>ComicApiPlugin.Plugin</RootNamespace>
 		<UsesComicRack>true</UsesComicRack>
+		<ComicRackPluginDir Condition="'$(ComicRackPluginDir)' == ''">$(COMICRACK_PLUGIN_DIR)</ComicRackPluginDir>
 	</PropertyGroup>
 	<!-- The in-app smoke test's recorded-response switch (Smoke/RecordedResponses.cs). Never set for a build you ship. -->
 	<PropertyGroup Condition="'$(CvsRecordedResponses)' == 'true'">
@@ -29,6 +30,10 @@
 		<Reference Include="cYo.Common" HintPath="$(ComicRackPath)cYo.Common.dll" Private="false" />
 		<Reference Include="cYo.Common.Windows" HintPath="$(ComicRackPath)cYo.Common.Windows.dll" Private="false" />
 	</ItemGroup>
+	<!-- Not transitive: the build props that copy OpenCvSharpExtern.dll to the output only apply to a project that references the package itself. -->
+	<ItemGroup>
+		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
+	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ComicApiPlugin.Core\ComicApiPlugin.Core.csproj" />
 	</ItemGroup>
@@ -40,17 +45,40 @@
 		<None Include="Package\**\*" />
 		<EmbeddedResource Include="Package\Images\comicvinelogo.png;Package\Images\*arrow.png" LogicalName="%(Filename)%(Extension)" />
 	</ItemGroup>
+	<!--
+		Every build lays the plugin out as ComicRack installs it in artifacts\<Configuration>\Comic API Plugin\ at the repo root:
+		the DLLs (OpenCvSharp's too), Package.ini, the images and the language zips, plus the PDBs for line numbers in stack traces. Copy that folder
+		into ComicRack's Scripts folder to install the build. The .crplugin in $(OutDir) is zipped from the same files, without the
+		PDBs. The recorded-response build stages under obj, so it never touches artifacts.
+	-->
 	<Target Name="PackCrPlugin" AfterTargets="Build">
 		<PropertyGroup>
-			<CrPluginStaging>$(IntermediateOutputPath)crplugin\</CrPluginStaging>
+			<CrPluginStaging Condition="'$(CvsRecordedResponses)' == 'true'">$(IntermediateOutputPath)crplugin\</CrPluginStaging>
+			<CrPluginStaging Condition="'$(CvsRecordedResponses)' != 'true'">$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '..', '..', 'artifacts', '$(Configuration)', 'Comic API Plugin'))</CrPluginStaging>
 			<CrPluginPath>$(OutDir)ComicApiPlugin.crplugin</CrPluginPath>
 		</PropertyGroup>
 		<ItemGroup>
 			<CrPluginContent Include="$(TargetPath);$(OutDir)ComicApiPlugin.Core.dll;Package\Package.ini;Package\Images\*;Package\Languages\*.zip" />
+			<!-- The OpenCV binding and its native library, 64-bit. OpenCvNative loads OpenCvSharpExtern.dll from beside OpenCvSharp.dll. System.Memory, Buffers and Unsafe come with ComicRack, and opencv_videoio_ffmpeg (video decoding) is not needed to read covers. -->
+			<CrPluginContent Include="$(OutDir)OpenCvSharp.dll;$(OutDir)dll\x64\OpenCvSharpExtern.dll" />
 		</ItemGroup>
 		<RemoveDir Directories="$(CrPluginStaging)" />
 		<Copy SourceFiles="@(CrPluginContent)" DestinationFolder="$(CrPluginStaging)" />
 		<ZipDirectory SourceDirectory="$(CrPluginStaging)" DestinationFile="$(CrPluginPath)" Overwrite="true" />
+		<Copy SourceFiles="$(OutDir)ComicApiPlugin.pdb;$(OutDir)ComicApiPlugin.Core.pdb" DestinationFolder="$(CrPluginStaging)" />
 		<Message Importance="high" Text="$(MSBuildProjectName) -> $([System.IO.Path]::GetFullPath('$(CrPluginPath)'))" />
+		<Message Importance="high" Text="$(MSBuildProjectName) -> $(CrPluginStaging)" Condition="'$(CvsRecordedResponses)' != 'true'" />
+	</Target>
+	<!--
+		Optional: set COMICRACK_PLUGIN_DIR (or -p:ComicRackPluginDir=) to the installed plugin folder, such as
+		%APPDATA%\cYo\ComicRack Community Edition\Scripts\Comic API Plugin, and every build copies the artifact folder there.
+		Close ComicRack first, because it locks the DLLs.
+	-->
+	<Target Name="DeployCrPlugin" AfterTargets="PackCrPlugin" Condition="'$(ComicRackPluginDir)' != '' and '$(CvsRecordedResponses)' != 'true'">
+		<ItemGroup>
+			<CrPluginArtifact Include="$(CrPluginStaging)*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(CrPluginArtifact)" DestinationFolder="$(ComicRackPluginDir)" />
+		<Message Importance="high" Text="$(MSBuildProjectName) deployed to $(ComicRackPluginDir)" />
 	</Target>
 </Project>

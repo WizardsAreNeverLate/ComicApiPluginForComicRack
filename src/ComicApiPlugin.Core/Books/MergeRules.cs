@@ -25,36 +25,53 @@ public static class MergeRules
 	{
 		BookValues old = book.Effective;
 		var plan = new Planner(old, settings);
-		plan.Text("Series", BookFields.Series, issue.SeriesName, v => v.Series, (v, x) => v with { Series = x }, ignoreBlanks: true);
-		plan.Text("Issue Number", BookFields.Number, issue.IssueNumber, v => v.Number, (v, x) => v with { Number = x }, ignoreBlanks: true);
-		plan.Text("Title", BookFields.Title, issue.Title, v => v.Title, (v, x) => v with { Title = x });
-		plan.List("Crossovers", BookFields.Crossovers, issue.Crossovers, v => v.Crossovers, (v, x) => v with { Crossovers = x });
-		plan.Text("Summary", BookFields.Summary, issue.Summary, v => v.Summary, (v, x) => v with { Summary = x });
-		plan.Date("Release Date", BookFields.Released, (old.Released.Year, old.Released.Month, old.Released.Day), old.Released.IsBlank, issue.Released, v => v with { Released = issue.Released });
-		plan.Date("Publish Date", BookFields.Published, (old.Published.Year, old.Published.Month, old.Published.Day), old.Published.IsBlank, issue.Published, v => v with { Published = issue.Published });
-		plan.Volume(old.Volume, issue.VolumeYear is > 0 ? issue.VolumeYear : null, v => v with { Volume = issue.VolumeYear is > 0 ? issue.VolumeYear : null });
-		(string publisher, string imprint) = Publishers.Resolve(issue.Publisher, issue.Imprint, settings);
-		plan.Text("Imprint", BookFields.Imprint, imprint, v => v.Imprint, (v, x) => v with { Imprint = x });
-		plan.Text("Publisher", BookFields.Publisher, publisher, v => v.Publisher, (v, x) => v with { Publisher = x });
-		plan.List("Characters", BookFields.Characters, issue.Characters, v => v.Characters, (v, x) => v with { Characters = x });
-		plan.List("Teams", BookFields.Teams, issue.Teams, v => v.Teams, (v, x) => v with { Teams = x });
-		plan.List("Locations", BookFields.Locations, issue.Locations, v => v.Locations, (v, x) => v with { Locations = x });
-		plan.List("Writers", BookFields.Writers, issue.Writers, v => v.Writers, (v, x) => v with { Writers = x });
-		plan.List("Pencillers", BookFields.Pencillers, issue.Pencillers, v => v.Pencillers, (v, x) => v with { Pencillers = x });
-		plan.List("Inkers", BookFields.Inkers, issue.Inkers, v => v.Inkers, (v, x) => v with { Inkers = x });
-		plan.List("Colorists", BookFields.Colorists, issue.Colorists, v => v.Colorists, (v, x) => v with { Colorists = x });
-		plan.List("Letterers", BookFields.Letterers, issue.Letterers, v => v.Letterers, (v, x) => v with { Letterers = x });
-		plan.List("CoverArtists", BookFields.CoverArtists, issue.CoverArtists, v => v.CoverArtists, (v, x) => v with { CoverArtists = x });
-		plan.List("Editors", BookFields.Editors, issue.Editors, v => v.Editors, (v, x) => v with { Editors = x });
-		plan.Text("Webpage", BookFields.Webpage, issue.Webpage, v => v.Webpage, (v, x) => v with { Webpage = x });
-		float? rating = issue.Rating is > 0f and <= 5f ? issue.Rating : null;
-		plan.Rating(old.Rating, rating, v => v with { Rating = rating });
+		PlanFields(plan, old, issue.Metadata, settings);
 		plan.List("Tags", BookFields.Tags, KeyMarkers.WithKeyTag(old.Tags, issue.Id), v => v.Tags, (v, x) => v with { Tags = x }, overwrite: true, ignoreBlanks: false);
 		plan.Text("Notes", BookFields.Notes, KeyMarkers.WithKeyNote(old.Notes, issue.Id, settings.NoteScrapeDate ? now : null), v => v.Notes,
 			(v, x) => v with { Notes = x }, overwrite: true, ignoreBlanks: false);
 		plan.Text("Issue Key", BookFields.IssueKey, issue.Id.ToString(), v => v.IssueKey, (v, x) => v with { IssueKey = x }, update: true, overwrite: true, ignoreBlanks: false);
 		plan.Text("Series Key", BookFields.SeriesKey, issue.SeriesId.ToString(), v => v.SeriesKey, (v, x) => v with { SeriesKey = x }, update: true, overwrite: true, ignoreBlanks: false);
 		return plan.Build();
+	}
+
+	/// <summary>
+	/// The metadata fields only. It never writes Tags, Notes, IssueKey, or SeriesKey: the CVDB markers and the comicvine_*
+	/// custom values are a format shared with the Python plugin, and a VerseDB id there would corrupt it.
+	/// </summary>
+	public static BookPatch PlanFromVerseDb(BookFacts book, IssueMetadata metadata, MergeSettings settings)
+	{
+		BookValues old = book.Effective;
+		var plan = new Planner(old, settings);
+		PlanFields(plan, old, metadata, settings);
+		return plan.Build();
+	}
+
+	private static void PlanFields(Planner plan, BookValues old, IssueMetadata metadata, MergeSettings settings)
+	{
+		plan.Text("Series", BookFields.Series, metadata.SeriesName, v => v.Series, (v, x) => v with { Series = x }, ignoreBlanks: true);
+		plan.Text("Issue Number", BookFields.Number, metadata.IssueNumber, v => v.Number, (v, x) => v with { Number = x }, ignoreBlanks: true);
+		plan.Text("Title", BookFields.Title, metadata.Title, v => v.Title, (v, x) => v with { Title = x });
+		plan.List("Crossovers", BookFields.Crossovers, metadata.Crossovers, v => v.Crossovers, (v, x) => v with { Crossovers = x });
+		plan.Text("Summary", BookFields.Summary, metadata.Summary, v => v.Summary, (v, x) => v with { Summary = x });
+		plan.Date("Release Date", BookFields.Released, (old.Released.Year, old.Released.Month, old.Released.Day), old.Released.IsBlank, metadata.Released, v => v with { Released = metadata.Released });
+		plan.Date("Publish Date", BookFields.Published, (old.Published.Year, old.Published.Month, old.Published.Day), old.Published.IsBlank, metadata.Published, v => v with { Published = metadata.Published });
+		plan.Volume(old.Volume, metadata.VolumeYear is > 0 ? metadata.VolumeYear : null, v => v with { Volume = metadata.VolumeYear is > 0 ? metadata.VolumeYear : null });
+		(string publisher, string imprint) = Publishers.Resolve(metadata.Publisher, metadata.Imprint, settings);
+		plan.Text("Imprint", BookFields.Imprint, imprint, v => v.Imprint, (v, x) => v with { Imprint = x });
+		plan.Text("Publisher", BookFields.Publisher, publisher, v => v.Publisher, (v, x) => v with { Publisher = x });
+		plan.List("Characters", BookFields.Characters, metadata.Characters, v => v.Characters, (v, x) => v with { Characters = x });
+		plan.List("Teams", BookFields.Teams, metadata.Teams, v => v.Teams, (v, x) => v with { Teams = x });
+		plan.List("Locations", BookFields.Locations, metadata.Locations, v => v.Locations, (v, x) => v with { Locations = x });
+		plan.List("Writers", BookFields.Writers, metadata.Writers, v => v.Writers, (v, x) => v with { Writers = x });
+		plan.List("Pencillers", BookFields.Pencillers, metadata.Pencillers, v => v.Pencillers, (v, x) => v with { Pencillers = x });
+		plan.List("Inkers", BookFields.Inkers, metadata.Inkers, v => v.Inkers, (v, x) => v with { Inkers = x });
+		plan.List("Colorists", BookFields.Colorists, metadata.Colorists, v => v.Colorists, (v, x) => v with { Colorists = x });
+		plan.List("Letterers", BookFields.Letterers, metadata.Letterers, v => v.Letterers, (v, x) => v with { Letterers = x });
+		plan.List("CoverArtists", BookFields.CoverArtists, metadata.CoverArtists, v => v.CoverArtists, (v, x) => v with { CoverArtists = x });
+		plan.List("Editors", BookFields.Editors, metadata.Editors, v => v.Editors, (v, x) => v with { Editors = x });
+		plan.Text("Webpage", BookFields.Webpage, metadata.Webpage, v => v.Webpage, (v, x) => v with { Webpage = x });
+		float? rating = metadata.Rating is > 0f and <= 5f ? metadata.Rating : null;
+		plan.Rating(old.Rating, rating, v => v with { Rating = rating });
 	}
 
 	/// <summary>

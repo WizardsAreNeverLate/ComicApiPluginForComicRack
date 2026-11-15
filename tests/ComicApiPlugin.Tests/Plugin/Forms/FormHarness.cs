@@ -80,6 +80,19 @@ internal sealed class UiSession : IDisposable
 	/// <param name="suffix">Appended to every localized text, as ComicRack hands back the untrimmed "Scraping:  " from en.zip.</param>
 	public static UiSession Create(bool marked = false, string suffix = "") => new(marked, suffix);
 
+	/// <summary>Saves a Comic Vine key (and a VerseDB token when given), so the welcome form has start buttons.</summary>
+	public UiSession WithKeys(string comicVine = "k", string verseDb = "", params ProviderKind[] order)
+	{
+		Settings.Save(new ComicApiPlugin.Config.Configuration
+		{
+			Advanced = ComicApiPlugin.Config.AdvancedSettings.Parse(""),
+			ApiKey = comicVine,
+			VerseDbApiKey = verseDb,
+			Providers = ComicApiPlugin.Config.ProviderTable.Normalize(order.Select(kind => new ComicApiPlugin.Config.ProviderSetting(kind, true))),
+		});
+		return this;
+	}
+
 	/// <summary>Defender or the indexer can briefly hold a file just written, so deleting retries. Cleanup that still fails is left to the temp folder.</summary>
 	public void Dispose()
 	{

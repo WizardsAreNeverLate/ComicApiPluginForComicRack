@@ -6,3 +6,4 @@ TestResults/
 *.crplugin
 tools/smoke/runs/
 tools/differential/runs/
+artifacts/

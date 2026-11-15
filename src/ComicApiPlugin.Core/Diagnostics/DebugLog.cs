@@ -18,6 +18,9 @@ public sealed class DebugLog
 	private readonly List<string> lines = [];
 	private readonly object gate = new();
 
+	/// <summary>Raised after each line is stored, already redacted, on the thread that wrote it.</summary>
+	public event Action<string>? LineWritten;
+
 	public void Debug(string message)
 	{
 		message = KeyLike.Replace(message, "<redacted>");
@@ -27,6 +30,7 @@ public sealed class DebugLog
 		}
 		Trace.WriteLine(message, "ComicApiPlugin");
 		Console.WriteLine("ComicApiPlugin: " + message);
+		LineWritten?.Invoke(message);
 	}
 
 	/// <summary>Records the exception type, message, and stack trace, as log.handle_error and debug_exc did.</summary>

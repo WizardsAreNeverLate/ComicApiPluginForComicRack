@@ -44,6 +44,9 @@ public sealed record ScrapeServices(
 	ChosenSeries Chosen,
 	CoverPreferences Covers)
 {
+	/// <summary>Null (the default) leaves the cover auto-accept off, so the series dialog opens as it does in the Python plugin.</summary>
+	public ICoverComparer? CoverComparer { get; init; }
+
 	/// <summary>Stands in for the AutoMatcher, so the engine oracle can say which books match without cover images.</summary>
 	internal Func<BookFacts, IScrapeBook, CancellationToken, Task<SeriesRef?>>? AutoMatch { get; init; }
 }
@@ -68,6 +71,9 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 
 	private readonly Func<BookFacts, IScrapeBook, CancellationToken, Task<SeriesRef?>> autoMatch =
 		services.AutoMatch ?? new AutoMatcher(services.ComicVine, services.Chosen.Contains, services.Clock.Now.Year).FindAsync;
+
+	// Series keys whose automatic cover pick the user sent Back from the issue dialog; asking again would repeat it forever.
+	private readonly HashSet<string> coverPickRefused = new(StringComparer.Ordinal);
 
 	// Python's scrape_cache: the series chosen for each unique series key, shared by every book of the run.
 	private readonly Dictionary<string, ResolvedSeries> seriesCache = new(StringComparer.Ordinal);
@@ -250,8 +256,18 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 
 	private async Task<Step> ChooseSeriesAsync(QueueEntry entry, Step.ChooseSeries step, CancellationToken ct)
 	{
-		services.Log.Debug("displaying the series selection dialog...");
 		IReadOnlyList<RankedSeries> ranked = MatchScore.Rank(entry.Facts.Effective, step.Found, services.Chosen.Contains, services.Clock.Now.Year);
+		if (config.ComicVineCoverAutoAccept && services.CoverComparer is { } comparer && !coverPickRefused.Contains(entry.Facts.UniqueSeriesKey))
+		{
+			services.Log.Debug("comparing covers to pick the series automatically...");
+			var picker = new CoverSeriesPicker(services.ComicVine, comparer, services.Log, config.ComicVineCoverCompareCount);
+			if (await picker.PickAsync(entry.Book, entry.Facts.Effective.Number, ranked, ct) is { } auto)
+			{
+				seriesCache[entry.Facts.UniqueSeriesKey] = new ResolvedSeries(auto);
+				return new Step.FindIssue(seriesCache[entry.Facts.UniqueSeriesKey], ForceDialog: config.ConfirmIssue, step.Terms, step.Found);
+			}
+		}
+		services.Log.Debug("displaying the series selection dialog...");
 		switch (await services.Ui.ChooseSeriesAsync(new SeriesQuestion(entry.Facts, step.Terms, ranked), services.Covers, ct))
 		{
 			case SeriesChoice.Pick pick:
@@ -307,6 +323,7 @@ public sealed class ScrapeRun(ScrapeServices services, Configuration config)
 				return new Step.Write(pick.Issue.Id, RecordChoice: step.Series.Ref, FastRescrape: false);
 			case IssueChoice.Back:
 				seriesCache.Remove(entry.Facts.UniqueSeriesKey);
+				coverPickRefused.Add(entry.Facts.UniqueSeriesKey);
 				return step.Found is { } found && step.Terms is { } terms
 					? new Step.ChooseSeries(terms, found)
 					: new Step.Search(Manual: true, FailedTerms: null);

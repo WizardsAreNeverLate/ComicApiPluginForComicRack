@@ -15,6 +15,7 @@ using ComicApiPlugin.Config;
 using ComicApiPlugin.Diagnostics;
 using ComicApiPlugin.Engine;
 using ComicApiPlugin.Fixtures;
+using ComicApiPlugin.Matching;
 using ComicApiPlugin.Model;
 using ComicApiPlugin.Plugin;
 using ComicApiPlugin.Tests.Plugin;
@@ -223,6 +224,9 @@ internal sealed class EngineWorld : IDisposable
 
 	public Configuration Config { get; set; } = new() { Advanced = AdvancedSettings.Parse(null) };
 
+	/// <summary>Handed to the run as ScrapeServices.CoverComparer; null leaves the cover auto-accept off.</summary>
+	public ICoverComparer? Comparer { get; set; }
+
 	public string Folder => folder;
 
 	/// <summary>The image served for a URL, or null for a 404.</summary>
@@ -263,7 +267,7 @@ internal sealed class EngineWorld : IDisposable
 	/// <summary>Calls ScrapeRun.RunAsync on the caller's thread and context, whatever they are.</summary>
 	public async Task<RunSummary> StartAsync(CancellationToken ct, params IScrapeBook[] books)
 	{
-		var run = new ScrapeRun(new ScrapeServices(catalog.Value, Ui, Clock, Log, Chosen, Covers), Config);
+		var run = new ScrapeRun(new ScrapeServices(catalog.Value, Ui, Clock, Log, Chosen, Covers) { CoverComparer = Comparer }, Config);
 		run.StepEntered += (facts, step) => Steps.Add(new StepTrace(Path.GetFileName(facts.Snapshot.FilePath), step));
 		return await run.RunAsync(books, ct);
 	}

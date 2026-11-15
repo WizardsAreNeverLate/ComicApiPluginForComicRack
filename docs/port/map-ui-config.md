@@ -20,7 +20,7 @@ All forms derive from `CVForm`, which derives from `PersistentForm`, which deriv
 | SeriesForm | Choosing a series | Grid (Series, Year, Issues, Publisher; hidden ID, Match, ModelID) sorted by MatchScore, highest first. OK, Skip, Search Again, Show Issues. IssueCoverPanel. | OK(ref), SHOW(ref), SKIP, PERMSKIP, SEARCH, or CANCEL |
 | IssueForm | Choosing an issue | Grid (Issue in natural sort order, Title), with the hinted issue preselected. OK, Skip, Go Back | OK(ref), SKIP, PERMSKIP, BACK, or CANCEL |
 | ProgressBarForm | Series and issue queries | ProgressBar; the title shows the count or percent | Closing it cancels the scrape |
-| FinishForm | The end of the run, when `summaryDialog` is on | Counts of scraped and skipped books | none |
+| FinishForm, now LogWindow | Opened before the run, when `summaryDialog` is on; reused while it is still open | The run's debug log as it is written, then the counts of scraped and skipped books | none (not modal; Close never stops the run) |
 
 ConfigForm enables its controls with these rules:
 
