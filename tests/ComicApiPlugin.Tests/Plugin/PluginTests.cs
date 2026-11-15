@@ -205,7 +205,7 @@ public sealed class PluginTests
 	}
 
 	[Test]
-	public async Task A_scrape_runs_as_before_when_the_local_service_cannot_start()
+	public async Task A_scrape_of_no_books_still_finishes_when_the_local_service_cannot_start()
 	{
 		using var world = new PluginWorld(BuiltService.Script("@echo no runtime here 1>&2", "@exit /b 1"));
 
@@ -217,6 +217,65 @@ public sealed class PluginTests
 		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
 		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
 		await Assert.That(mayClose).IsTrue();
+	}
+
+	[Test]
+	public async Task A_scrape_asks_Comic_Vine_through_the_local_service_and_writes_the_book()
+	{
+		// The cover URLs name a closed local port, so the service never asks the real Comic Vine for an image.
+		using FakeComicVineServer comicVine = FakeComicVineServer.FromFixtures(FixtureFiles.ReadFolder(FixtureFiles.OutputFolder)
+			.Select(response => response with { Body = response.Body.Replace("https://comicvine.gamespot.com/a/", "http://127.0.0.1:1/a/") }));
+		ServiceLaunch launch = BuiltService.Launch() with
+		{
+			Environment = new Dictionary<string, string> { [ServiceProtocol.ComicVineBaseUrlVariable] = comicVine.BaseUrl },
+		};
+		using var world = new PluginWorld(launch);
+		world.SaveSettings(new Configuration { ApiKey = EngineWorld.ApiKey, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook known = new() { Series = "Batman", Number = "497", Tags = "CVDB37566" };
+		world.Script.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick());
+
+		world.Run(plugin => plugin.Scrape([known]));
+		((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm" }, CollectionOrdering.Matching);
+		await Assert.That(known.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
+		await Assert.That(known.GetCustomValue("comicvine_volume")).IsEqualTo("796");
+		await Assert.That(known.Title).IsEqualTo("The Broken Bat");
+		await Assert.That(comicVine.RequestKeys).Contains(Issue37566);
+		await Assert.That(world.Requested).IsEmpty();
+		await Assert.That(world.LogWindowText).Contains(world.Strings[TextKeys.FinishFormScrapedSingle]);
+		await Assert.That(world.Log.Any(line => line.Contains(EngineWorld.ApiKey))).IsFalse();
+		await Assert.That(BuiltService.ReadLogs(launch.LogFolder)).DoesNotContain(EngineWorld.ApiKey);
+	}
+
+	[Test]
+	public async Task A_scrape_whose_local_service_cannot_start_says_why_with_the_download_link_and_writes_nothing()
+	{
+		using var world = new PluginWorld(BuiltService.Script("@echo You must install .NET to run this application. 1>&2", "@exit /b 1"));
+		world.SaveSettings(new Configuration { ApiKey = EngineWorld.ApiKey, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook known = new() { Series = "Batman", Number = "497", Tags = "CVDB37566" };
+		string title = "";
+		string message = "";
+		world.Script
+			.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick())
+			.On<PromptDialog>(prompt =>
+			{
+				title = prompt.Text;
+				message = Ui.Find<Control>(prompt, "message").Text;
+				Ui.Find<Button>(prompt, "ok").PerformClick();
+			});
+
+		world.Run(plugin => plugin.Scrape([known]));
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm", "PromptDialog" }, CollectionOrdering.Matching);
+		await Assert.That(title).IsEqualTo("Local API Service");
+		await Assert.That(message).IsEqualTo(
+			"The local API service of this plugin is not available.\n\n"
+			+ "The local API service needs the .NET 11 runtime (ASP.NET Core Runtime 11, x64), which is not installed. "
+			+ $"Download it from {ServiceProtocol.RuntimeDownloadUrl} and restart ComicRack.");
+		await Assert.That(known.GetCustomValue("comicvine_issue")).IsNull();
+		await Assert.That(world.Log.Count(line => line.StartsWith("Caught ComicVineException", StringComparison.Ordinal))).IsEqualTo(1);
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
 	}
 
 	[Test]
