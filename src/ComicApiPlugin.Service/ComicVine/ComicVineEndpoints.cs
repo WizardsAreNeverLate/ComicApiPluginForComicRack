@@ -132,7 +132,7 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 			else
 			{
 				Log.Error(error, "{Path:l} failed inside the service (run {RunId:l})", context.Request.Path.Value, RunScope.Current);
-				last = new StreamLineDto { ServiceError = ServiceErrors.Describe(error) };
+				last = new StreamLineDto { ServiceError = ServiceErrors.Describe(context, error) };
 			}
 		}
 		finally

@@ -25,7 +25,7 @@ public sealed class ServiceErrorsTests
 	[Test]
 	public async Task A_call_that_fails_unexpectedly_before_it_answers_is_a_500_that_names_the_error()
 	{
-		await using InProcessService service = await InProcessService.StartAsync(_ => true);
+		await using InProcessService service = await InProcessService.StartAsync(_ => "unexpected");
 
 		using HttpResponseMessage response = await service.PostAsync(ServiceProtocol.ComicVineFindIssuePath, ComicVineWorld.Body("\"series\":796,\"issueNumber\":\"497\""));
 
@@ -36,7 +36,7 @@ public sealed class ServiceErrorsTests
 	[Test]
 	public async Task A_search_that_fails_unexpectedly_after_its_first_progress_line_ends_with_a_line_that_names_the_error()
 	{
-		await using InProcessService service = await InProcessService.StartAsync(url => url.Contains("&page=2"));
+		await using InProcessService service = await InProcessService.StartAsync(url => url.Contains("&page=2") ? "unexpected" : null);
 
 		using HttpResponseMessage response = await service.PostAsync(ServiceProtocol.ComicVineSearchPath, ComicVineWorld.Body("\"terms\":\"batman\""));
 		List<JsonElement> lines = await ComicVineWorld.LinesAsync(response);
@@ -44,6 +44,18 @@ public sealed class ServiceErrorsTests
 		await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 		await Assert.That(lines[0].TryGetProperty("progress", out _)).IsTrue();
 		await Assert.That(lines[^1].GetRawText()).IsEqualTo("""{"serviceError":"InvalidOperationException: unexpected"}""");
+	}
+
+	[Test]
+	public async Task The_error_the_service_names_does_not_hold_the_API_key()
+	{
+		await using InProcessService service = await InProcessService.StartAsync(url => "unexpected at " + url);
+
+		using HttpResponseMessage response = await service.PostAsync(ServiceProtocol.ComicVineFindIssuePath, ComicVineWorld.Body("\"series\":796,\"issueNumber\":\"497\""));
+		string body = await response.Content.ReadAsStringAsync();
+
+		await Assert.That(body).Contains("api_key=...&");
+		await Assert.That(body).DoesNotContain(ComicVineWorld.Key);
 	}
 
 	private sealed class InProcessService : IAsyncDisposable
@@ -59,8 +71,8 @@ public sealed class ServiceErrorsTests
 			client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
 		}
 
-		/// <summary>The service's error handling and Comic Vine endpoints, on a transport that throws for each URL that <paramref name="fails"/> names.</summary>
-		public static async Task<InProcessService> StartAsync(Func<string, bool> fails)
+		/// <summary>The service's error handling and Comic Vine endpoints, on a transport that throws for each URL that <paramref name="fails"/> gives a message for.</summary>
+		public static async Task<InProcessService> StartAsync(Func<string, string?> fails)
 		{
 			FakeComicVineServer comicVine = FakeComicVineServer.FromFixtures(FixtureFiles.ReadFolder(FixtureFiles.OutputFolder));
 			WebApplicationBuilder builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions());
@@ -91,10 +103,10 @@ public sealed class ServiceErrorsTests
 		}
 	}
 
-	private sealed class Failing(Func<string, bool> fails) : DelegatingHandler(new HttpClientHandler { UseProxy = false })
+	private sealed class Failing(Func<string, string?> fails) : DelegatingHandler(new HttpClientHandler { UseProxy = false })
 	{
 		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-			fails(request.RequestUri!.ToString()) ? throw new InvalidOperationException("unexpected") : base.SendAsync(request, cancellationToken);
+			fails(request.RequestUri!.ToString()) is { } message ? throw new InvalidOperationException(message) : base.SendAsync(request, cancellationToken);
 	}
 
 	private sealed class NoWait : IClock

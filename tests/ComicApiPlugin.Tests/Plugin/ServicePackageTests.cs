@@ -77,7 +77,8 @@ public sealed class ServicePackageTests
 		string exe = Path.Combine(running, "ComicApiPlugin.Service.exe");
 		File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), exe);
 		File.WriteAllText(Path.Combine(running, "ComicApiPlugin.Service.runtimeconfig.json"), "{}");
-		using Process service = Process.Start(new ProcessStartInfo(exe, "/c ping -n 30 127.0.0.1 >nul") { UseShellExecute = false, CreateNoWindow = true })!;
+		// /k reads commands from stdin, a pipe this test never writes, and starts no child process that could outlive the kill.
+		using Process service = Process.Start(new ProcessStartInfo(exe, "/k") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true })!;
 		try
 		{
 			ServicePackage.Unpack(BuiltService.Zip, root);
