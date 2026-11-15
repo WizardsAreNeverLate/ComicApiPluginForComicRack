@@ -53,9 +53,9 @@ public sealed class CoverSearchFailedException(RunSummary summary, Exception cau
 /// <summary>
 /// Photographs each book's first page at VerseDB, lets the user pick one of the candidates, and writes that issue's
 /// metadata into the book. Runs on the caller's SynchronizationContext like ScrapeRun, so IScrapeBook and the UI need no marshalling.
-/// It never writes the Comic Vine markers (MergeRules.PlanFromVerseDb).
+/// It never writes the Comic Vine markers (MergeRules.PlanFromVerseDb). With VerseDbAutoAccept and a comparer, a lookup with one candidate whose cover matches the book's is written without asking (deviations.md).
 /// </summary>
-public sealed class CoverSearchRun(IVerseDb verseDb, ICoverSearchUi ui, IClock clock, DebugLog log, Configuration config)
+public sealed class CoverSearchRun(IVerseDb verseDb, ICoverSearchUi ui, IClock clock, DebugLog log, Configuration config, ICoverComparer? comparer = null)
 {
 	private static readonly TimeSpan DefaultRateLimitWait = TimeSpan.FromSeconds(60);
 
@@ -114,6 +114,12 @@ public sealed class CoverSearchRun(IVerseDb verseDb, ICoverSearchUi ui, IClock c
 			return BookOutcome.Skipped;
 		}
 
+		if (lookup.Candidates.Count == 1 && config.VerseDbAutoAccept && comparer is not null && await CoverMatchesAsync(comparer, image, lookup.Candidates[0], ct))
+		{
+			await WriteAsync(book, facts, lookup.Candidates[0], ct);
+			return BookOutcome.Scraped;
+		}
+
 		switch (await ui.ChooseAsync(book, facts, lookup, ct))
 		{
 			case CoverChoice.Picked picked:
@@ -126,6 +132,33 @@ public sealed class CoverSearchRun(IVerseDb verseDb, ICoverSearchUi ui, IClock c
 		}
 	}
 
+	/// <summary>Any trouble (no cover URL, a failed download, OpenCV missing) is logged and answered with false, so the dialog opens as it always did.</summary>
+	private async Task<bool> CoverMatchesAsync(ICoverComparer comparer, byte[] bookCover, CoverCandidate candidate, CancellationToken ct)
+	{
+		string label = $"cover check: {candidate.SeriesName} #{candidate.IssueNumber}: ";
+		if (candidate.CoverUrl is null)
+		{
+			log.Debug(label + "VerseDB sent no cover image");
+			return false;
+		}
+		try
+		{
+			byte[] candidateCover = await verseDb.GetImageAsync(candidate.CoverUrl, ct);
+			CoverSimilarity? score = await Task.Run(() => comparer.Compare(bookCover, candidateCover), ct);
+			log.Debug(label + (score is { } s ? $"{s} -> {(s.IsMatch ? "match" : "no match")}" : "the cover could not be decoded"));
+			return score is { IsMatch: true };
+		}
+		catch (OpenCvUnavailableException e)
+		{
+			log.Debug("cover auto-accept is unavailable: " + e.Message);
+			return false;
+		}
+		catch (Exception e) when (e is not OperationCanceledException)
+		{
+			log.Debug(label + "the check failed: " + e.Message);
+			return false;
+		}
+	}
 	private async Task WriteAsync(IScrapeBook book, BookFacts facts, CoverCandidate candidate, CancellationToken ct)
 	{
 		log.Debug("querying VerseDB for issue details...");

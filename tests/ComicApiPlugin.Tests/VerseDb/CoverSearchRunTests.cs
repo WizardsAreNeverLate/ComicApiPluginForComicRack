@@ -10,6 +10,7 @@ using ComicApiPlugin.Config;
 using ComicApiPlugin.Diagnostics;
 using ComicApiPlugin.Engine;
 using ComicApiPlugin.Fixtures;
+using ComicApiPlugin.Matching;
 using ComicApiPlugin.Model;
 using ComicApiPlugin.VerseDb;
 
@@ -34,9 +35,12 @@ public sealed class CoverSearchRunTests
 		public FakeVerseDb Api { get; } = new();
 		public FakeUi Ui { get; } = new();
 		public ManualClock Clock { get; } = new();
+		public DebugLog Log { get; } = new();
+		public bool AutoAccept { get; init; }
+		public ICoverComparer? Comparer { get; init; }
 
 		public Task<RunSummary> Run(IReadOnlyList<IScrapeBook> books, CancellationToken ct = default) =>
-			new CoverSearchRun(Api, Ui, Clock, new DebugLog(), new Configuration { Advanced = AdvancedSettings.Parse("") }).RunAsync(books, ct);
+			new CoverSearchRun(Api, Ui, Clock, Log, new Configuration { Advanced = AdvancedSettings.Parse(""), VerseDbAutoAccept = AutoAccept }, Comparer).RunAsync(books, ct);
 	}
 
 	[Test]
@@ -199,6 +203,134 @@ public sealed class CoverSearchRunTests
 		await Assert.That(((VerseDbException)error.InnerException!).Status).IsEqualTo(HttpStatusCode.Unauthorized);
 	}
 
+	private static readonly CoverCandidate WithCover = Candidate with { CoverUrl = new Uri("https://versedb.test/cover.webp") };
+
+	private sealed class FakeComparer(Func<CoverSimilarity?> score) : ICoverComparer
+	{
+		public int Calls { get; private set; }
+
+		public CoverSimilarity? Compare(byte[] bookCover, byte[] candidateCover)
+		{
+			Calls++;
+			return score();
+		}
+	}
+
+	private static Harness AutoAcceptHarness(FakeComparer comparer, params CoverCandidate[] candidates)
+	{
+		var h = new Harness { AutoAccept = true, Comparer = comparer };
+		h.Api.Lookups.Enqueue(() => Lookup(candidates));
+		h.Api.Issues.Enqueue(() => Metadata);
+		h.Api.Image = () => [1, 2, 3];
+		return h;
+	}
+
+	[Test]
+	public async Task One_candidate_whose_cover_matches_is_written_without_asking()
+	{
+		var comparer = new FakeComparer(() => new CoverSimilarity(0.95, 0.49));
+		Harness h = AutoAcceptHarness(comparer, WithCover);
+		var book = new FakeScrapeBook();
+
+		RunSummary summary = await h.Run([book]);
+
+		await Assert.That(summary).IsEqualTo(new RunSummary(1, 0, false));
+		await Assert.That(h.Ui.Choices).IsEqualTo(0);
+		await Assert.That(h.Api.ImageRequests).IsEquivalentTo([WithCover.CoverUrl!]);
+		await Assert.That(book.Applied.Count).IsEqualTo(1);
+		await Assert.That(h.Log.Snapshot()).Contains("cover check: Batman #12: correlation 0.95, features 0.49 -> match");
+	}
+
+	[Test]
+	public async Task One_candidate_whose_cover_does_not_match_opens_the_dialog()
+	{
+		Harness h = AutoAcceptHarness(new FakeComparer(() => new CoverSimilarity(0.1, 0.01)), WithCover);
+		h.Ui.Answers.Enqueue(new CoverChoice.Skip());
+
+		RunSummary summary = await h.Run([new FakeScrapeBook()]);
+
+		await Assert.That(summary).IsEqualTo(new RunSummary(0, 1, false));
+		await Assert.That(h.Ui.Choices).IsEqualTo(1);
+	}
+
+	[Test]
+	public async Task Two_candidates_open_the_dialog_even_when_both_covers_match()
+	{
+		var comparer = new FakeComparer(() => new CoverSimilarity(0.95, 0.49));
+		Harness h = AutoAcceptHarness(comparer, WithCover, WithCover with { IssueId = new VerseDbIssueId(5433) });
+		h.Ui.Answers.Enqueue(new CoverChoice.Skip());
+
+		await h.Run([new FakeScrapeBook()]);
+
+		await Assert.That(h.Ui.Choices).IsEqualTo(1);
+		await Assert.That(comparer.Calls).IsEqualTo(0);
+		await Assert.That(h.Api.ImageRequests).IsEmpty();
+	}
+
+	[Test]
+	public async Task With_the_setting_off_the_dialog_opens_and_no_image_is_fetched()
+	{
+		var comparer = new FakeComparer(() => new CoverSimilarity(0.95, 0.49));
+		Harness h = new() { Comparer = comparer };
+		h.Api.Lookups.Enqueue(() => Lookup(WithCover));
+		h.Ui.Answers.Enqueue(new CoverChoice.Skip());
+
+		await h.Run([new FakeScrapeBook()]);
+
+		await Assert.That(h.Ui.Choices).IsEqualTo(1);
+		await Assert.That(comparer.Calls).IsEqualTo(0);
+		await Assert.That(h.Api.ImageRequests).IsEmpty();
+	}
+
+	[Test]
+	public async Task A_candidate_without_a_cover_url_opens_the_dialog()
+	{
+		var comparer = new FakeComparer(() => new CoverSimilarity(0.95, 0.49));
+		Harness h = AutoAcceptHarness(comparer, Candidate);
+		h.Ui.Answers.Enqueue(new CoverChoice.Skip());
+
+		await h.Run([new FakeScrapeBook()]);
+
+		await Assert.That(h.Ui.Choices).IsEqualTo(1);
+		await Assert.That(comparer.Calls).IsEqualTo(0);
+	}
+
+	[Test]
+	public async Task A_comparer_that_cannot_load_OpenCV_opens_the_dialog()
+	{
+		Harness h = AutoAcceptHarness(new FakeComparer(() => throw new OpenCvUnavailableException("OpenCvSharpExtern.dll was not found.")), WithCover);
+		h.Ui.Answers.Enqueue(new CoverChoice.Skip());
+
+		RunSummary summary = await h.Run([new FakeScrapeBook()]);
+
+		await Assert.That(summary).IsEqualTo(new RunSummary(0, 1, false));
+		await Assert.That(h.Ui.Choices).IsEqualTo(1);
+		await Assert.That(h.Log.Snapshot().Any(l => l.StartsWith("cover auto-accept is unavailable", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task A_failed_image_download_opens_the_dialog()
+	{
+		var comparer = new FakeComparer(() => new CoverSimilarity(0.95, 0.49));
+		Harness h = AutoAcceptHarness(comparer, WithCover);
+		h.Api.Image = () => throw new VerseDbException(HttpStatusCode.NotFound, "Gone.");
+		h.Ui.Answers.Enqueue(new CoverChoice.Skip());
+
+		await h.Run([new FakeScrapeBook()]);
+
+		await Assert.That(h.Ui.Choices).IsEqualTo(1);
+	}
+
+	[Test]
+	public async Task A_cover_that_cannot_be_decoded_opens_the_dialog()
+	{
+		Harness h = AutoAcceptHarness(new FakeComparer(() => null), WithCover);
+		h.Ui.Answers.Enqueue(new CoverChoice.Skip());
+
+		await h.Run([new FakeScrapeBook()]);
+
+		await Assert.That(h.Ui.Choices).IsEqualTo(1);
+	}
 	private sealed class FakeVerseDb : IVerseDb
 	{
 		public Queue<Func<CoverLookup>> Lookups { get; } = new();
@@ -218,7 +350,14 @@ public sealed class CoverSearchRunTests
 			return Task.FromResult(Issues.Dequeue()());
 		}
 
-		public Task<byte[]> GetImageAsync(Uri url, CancellationToken ct) => throw new NotSupportedException();
+		public List<Uri> ImageRequests { get; } = [];
+		public Func<byte[]> Image { get; set; } = () => throw new NotSupportedException();
+
+		public Task<byte[]> GetImageAsync(Uri url, CancellationToken ct)
+		{
+			ImageRequests.Add(url);
+			return Task.FromResult(Image());
+		}
 	}
 
 	private sealed class FakeUi : ICoverSearchUi
