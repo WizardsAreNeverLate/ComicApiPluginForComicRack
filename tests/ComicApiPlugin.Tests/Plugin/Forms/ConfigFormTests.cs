@@ -168,6 +168,35 @@ public sealed class ConfigFormTests
 	private readonly record struct Gaps(int CancelRight, int CancelBottom, int AllRight, int ListToAll, int ListBottom, int EyeRight, int KeyToEye);
 
 	[Test]
+	public async Task Widening_the_dialog_makes_no_control_cover_another()
+	{
+		using var session = UiSession.Create();
+
+		(string[] AtDefault, string[] Wider) seen = Sta.Run(() =>
+		{
+			(string[], string[]) found = default;
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				TabControl tabs = Ui.Find<TabControl>(form, "tabs");
+				string[] Overlaps() => [.. tabs.TabPages.Cast<TabPage>().SelectMany(page =>
+				{
+					tabs.SelectedTab = page;
+					Control[] children = [.. page.Controls.Cast<Control>().Where(c => c.Visible)];
+					return children.SelectMany((a, i) => children.Skip(i + 1).Where(b => a.Bounds.IntersectsWith(b.Bounds)).Select(b => $"{page.Name}: {a.Name} covers {b.Name}"));
+				})];
+				string[] atDefault = Overlaps();
+				form.Size = new System.Drawing.Size(form.Width + 200, form.Height + 80);
+				found = (atDefault, Overlaps());
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return found;
+		});
+
+		await Assert.That(seen.Wider.Except(seen.AtDefault)).IsEmpty();
+	}
+
+	[Test]
 	public async Task Resizing_keeps_every_control_at_its_edges_and_the_minimum_is_the_original_layout()
 	{
 		using var session = UiSession.Create();

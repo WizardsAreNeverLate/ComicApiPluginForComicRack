@@ -216,6 +216,34 @@ public sealed class WelcomeFormTests
 	}
 
 	[Test]
+	public async Task The_buttons_keep_apart_and_inside_the_window()
+	{
+		using var session = UiSession.Create().WithKeys("k", "token");
+
+		string[] problems = Sta.Run(() =>
+		{
+			string[] found = [];
+			using IDisposable driver = Ui.WhenOpen<WelcomeForm>(form =>
+			{
+				const int gap = 6;
+				Button[] buttons = [.. form.Controls.OfType<Button>()];
+				found = [
+					.. buttons.SelectMany((a, i) => buttons.Skip(i + 1)
+						.Where(b => System.Drawing.Rectangle.Inflate(a.Bounds, gap - 1, gap - 1).IntersectsWith(b.Bounds))
+						.Select(b => $"{a.Name} is closer than {gap} px to {b.Name}")),
+					.. buttons.Where(b => b.Left < gap || b.Right > form.ClientSize.Width - gap || b.Bottom > form.ClientSize.Height - gap)
+						.Select(b => $"{b.Name} is within {gap} px of the window edge"),
+				];
+				form.Close();
+			});
+			WelcomeForm.Show(null, session.Ctx, 3);
+			return found;
+		});
+
+		await Assert.That(problems).IsEmpty();
+	}
+
+	[Test]
 	public async Task Starting_the_second_action_returns_it()
 	{
 		using var session = UiSession.Create().WithKeys("k", "token");

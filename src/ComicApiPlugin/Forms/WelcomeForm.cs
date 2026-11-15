@@ -31,7 +31,7 @@ internal sealed class WelcomeForm : ScraperForm
 			Text = count == 1 ? Strings[TextKeys.WelcomeFormTextSingle] : Strings.Format(TextKeys.WelcomeFormTextPlural, count),
 			TabIndex = 2,
 		};
-		settings = Make("settings", Strings[TextKeys.WelcomeFormSettings], 100, 3);
+		settings = Make("settings", Strings[TextKeys.WelcomeFormSettings], 96, 3);
 		settings.Click += (_, _) =>
 		{
 			ConfigForm.Show(this, Ctx);
@@ -75,7 +75,7 @@ internal sealed class WelcomeForm : ScraperForm
 			Controls.Add(start);
 		}
 		AcceptButton = starts.Count > 0 ? starts[0] : null;
-		settings.Location = new Point(214, 68);
+		settings.Location = new Point(208, 68);
 		cancel.Location = new Point(314, 68);
 		ClientSize = new Size(416, 68 + System.Math.Max(1, starts.Count) * RowHeight + 10);
 	}

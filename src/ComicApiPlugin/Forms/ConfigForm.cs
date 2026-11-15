@@ -290,7 +290,7 @@ internal sealed class ConfigForm : ScraperForm
 		apiKey.ContextMenuStrip = EditMenu(apiKey);
 		WireEye(showKey, apiKey);
 		var text = new Label { Name = "comicVineText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 80), Size = new Size(315, 54), Text = Strings[TextKeys.ConfigFormComicVineText] };
-		return Tab("comicVineTab", TextKeys.ConfigFormComicVineTab, Pin(text, AcrossTop), Pin(apiKey, AcrossTop), Pin(showKey, TopRight), Pin(link, AcrossTop), comicVineAutoAccept, Pin(compareCountLabel, AcrossTop), compareCount);
+		return Tab("comicVineTab", TextKeys.ConfigFormComicVineTab, Pin(text, AcrossTop), Pin(apiKey, AcrossTop), Pin(showKey, TopRight), Pin(link, AcrossTop), comicVineAutoAccept, compareCountLabel, compareCount);
 	}
 
 	private static void WireEye(Button button, TextBox box)
