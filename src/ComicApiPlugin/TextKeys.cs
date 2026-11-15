@@ -133,6 +133,8 @@ public static class TextKeys
 	public const string CoverSearchRateLimited = nameof(CoverSearchRateLimited);
 	public const string VerseDbErrorTitle = nameof(VerseDbErrorTitle);
 	public const string VerseDbErrorText = nameof(VerseDbErrorText);
+	public const string ServiceErrorTitle = nameof(ServiceErrorTitle);
+	public const string ServiceErrorText = nameof(ServiceErrorText);
 	public const string ConfigFormProvidersTab = nameof(ConfigFormProvidersTab);
 	public const string ConfigFormProvidersText = nameof(ConfigFormProvidersText);
 	public const string ConfigFormProviderUp = nameof(ConfigFormProviderUp);
@@ -141,6 +143,7 @@ public static class TextKeys
 	public const string ConfigFormVerseDbText = nameof(ConfigFormVerseDbText);
 	public const string ConfigFormVerseDbClickHere = nameof(ConfigFormVerseDbClickHere);
 	public const string ConfigFormVerseDbAutoAcceptCB = nameof(ConfigFormVerseDbAutoAcceptCB);
+	public const string ConfigFormShowServiceConsoleCB = nameof(ConfigFormShowServiceConsoleCB);
 	public const string ConfigFormComicVineAutoAcceptCB = nameof(ConfigFormComicVineAutoAcceptCB);
 	public const string ConfigFormCompareCountLabel = nameof(ConfigFormCompareCountLabel);
 	public const string LogWindowClose = nameof(LogWindowClose);

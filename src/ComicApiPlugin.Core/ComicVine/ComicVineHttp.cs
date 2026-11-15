@@ -22,21 +22,26 @@ namespace ComicApiPlugin.ComicVine;
 public sealed class ComicVineHttp : IDisposable
 {
 	internal static readonly TimeSpan RequestGap = TimeSpan.FromMilliseconds(1100);
-	internal static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(2500);
+	public static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(2500);
 	internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(100);
 
 	private readonly HttpClient client;
 	private readonly string apiKey;
 	private readonly IClock clock;
+	private readonly string baseUrl;
 	private readonly Throttle throttle;
 
 	/// <summary>Turns image bytes into a bitmap. A seam so tests can raise the GDI+ failures a real image rarely does.</summary>
 	internal Func<byte[], Bitmap> DecodeImage { get; init; } = bytes => new Bitmap(new MemoryStream(bytes));
 
+	/// <summary>Told the failure of a first attempt that is about to be tried again, so the owner can log it. The URL in it has no API key.</summary>
+	public Action<ComicVineException>? Retrying { get; init; }
+
 	/// <param name="handler">HttpClientHandler in the plugin; a recorded-response handler in tests. Disposed with this object.</param>
 	/// <param name="apiKey">Never logged: every URL in an exception passes through the redaction.</param>
-	public ComicVineHttp(HttpMessageHandler handler, string apiKey, string userAgent, IClock clock)
-		: this(handler, apiKey, userAgent, clock, StartMonotonic())
+	/// <param name="baseUrl">Where the API answers, or null for Comic Vine itself. Only a test that serves the API from a local server names one.</param>
+	public ComicVineHttp(HttpMessageHandler handler, string apiKey, string userAgent, IClock clock, string? baseUrl = null)
+		: this(handler, apiKey, userAgent, clock, StartMonotonic(), baseUrl)
 	{
 	}
 
@@ -44,7 +49,7 @@ public sealed class ComicVineHttp : IDisposable
 	/// A monotonic reading for the throttle. The wall clock (IClock.Now) steps back at a daylight-saving change, which would
 	/// stall every request for an hour.
 	/// </param>
-	internal ComicVineHttp(HttpMessageHandler handler, string apiKey, string userAgent, IClock clock, Func<TimeSpan> elapsed)
+	internal ComicVineHttp(HttpMessageHandler handler, string apiKey, string userAgent, IClock clock, Func<TimeSpan> elapsed, string? baseUrl = null)
 	{
 		if (string.IsNullOrWhiteSpace(apiKey))
 		{
@@ -52,6 +57,7 @@ public sealed class ComicVineHttp : IDisposable
 		}
 		this.apiKey = apiKey;
 		this.clock = clock;
+		this.baseUrl = baseUrl ?? ApiRequest.BaseUrl;
 		throttle = new Throttle(clock, elapsed, RequestGap);
 		client = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout };
 		client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", userAgent);
@@ -64,7 +70,7 @@ public sealed class ComicVineHttp : IDisposable
 	/// </summary>
 	internal async Task<XDocument> GetAsync(ApiRequest request, CancellationToken ct)
 	{
-		string url = request.ToUrl(apiKey);
+		string url = request.ToUrl(apiKey, baseUrl);
 		Outcome first = await TryGetAsync(url, ct).ConfigureAwait(false);
 		if (first.Document is { } document)
 		{
@@ -74,6 +80,7 @@ public sealed class ComicVineHttp : IDisposable
 		{
 			throw first.Error;
 		}
+		Retrying?.Invoke(first.Error);
 		await clock.Delay(RetryDelay, ct).ConfigureAwait(false);
 		Outcome second = await TryGetAsync(url, ct).ConfigureAwait(false);
 		return second.Document ?? throw second.Error!;
@@ -119,7 +126,8 @@ public sealed class ComicVineHttp : IDisposable
 		return () => stopwatch.Elapsed;
 	}
 
-	internal string Redact(string text) => ApiKeyRedaction.Redact(text, apiKey);
+	/// <summary>The request's URL as an error names it, with no API key.</summary>
+	internal string RedactedUrl(ApiRequest request) => Redact(request.ToUrl("", baseUrl));
 
 	public void Dispose() => client.Dispose();
 
@@ -181,6 +189,8 @@ public sealed class ComicVineHttp : IDisposable
 
 	private static bool IsTransportFailure(Exception e, CancellationToken ct) =>
 		e is HttpRequestException or IOException || (e is OperationCanceledException && !ct.IsCancellationRequested);
+
+	private string Redact(string text) => ApiKeyRedaction.Redact(text, apiKey);
 
 	private Outcome Fail(ComicVineError error, string url, int? apiStatus, Exception? inner)
 	{

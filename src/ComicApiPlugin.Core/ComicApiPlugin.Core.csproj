@@ -2,16 +2,19 @@
 	<PropertyGroup>
 		<OutputType>Library</OutputType>
 		<RootNamespace>ComicApiPlugin</RootNamespace>
+		<!-- net48 for the plugin, net11.0-windows for the local API service. The Windows target is needed for System.Drawing. -->
+		<TargetFramework />
+		<TargetFrameworks>net48;net11.0-windows</TargetFrameworks>
 	</PropertyGroup>
-	<ItemGroup>
+	<ItemGroup Condition="'$(TargetFramework)' == 'net48'">
 		<Reference Include="System.Drawing" />
 		<Reference Include="System.Runtime.Serialization" />
 		<Reference Include="System.Net.Http" />
 		<Reference Include="System.Xml.Linq" />
 	</ItemGroup>
-	<ItemGroup>
-		<PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
-		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
+	<!-- The package, not the Windows Desktop framework, so the service needs only the ASP.NET Core runtime. -->
+	<ItemGroup Condition="'$(TargetFramework)' != 'net48'">
+		<PackageReference Include="System.Drawing.Common" Version="10.0.14" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="ComicApiPlugin.Tests" />

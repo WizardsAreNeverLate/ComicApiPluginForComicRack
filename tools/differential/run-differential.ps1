@@ -177,8 +177,9 @@ try {
 	[System.IO.File]::WriteAllText($resources, $patched)
 	Add-Content -Path $report -Value "Python plugin $version installed as a copy; its profile_dir is the run's settings-py folder"
 
-	# Neither plugin logs its requests, so both are counted at the HTTP seam: the switch build's handler for C#, and, in the installed Python copy
-	# only, one line before each request that appends the host and path (never the query, which carries the key) to requests.txt.
+	# The C# plugin's requests are counted from the log of its local API service, which has one line for each request. The Python plugin does not
+	# log its requests, so the installed copy only gets one line before each request that appends the host and path (never the query, which carries
+	# the key) to requests.txt.
 	$counter = 'from System.IO import File as CvsDiffFile; CvsDiffFile.AppendAllText(r"' + $settingsPy + '\requests.txt", {0}.split("?")[0].split("//")[-1] + "\n")'
 	$connection = Join-Path $py "cvconnection.py"
 	$cText = [System.IO.File]::ReadAllText($connection)
@@ -211,19 +212,22 @@ finally {
 	}
 }
 
-function Get-RequestCounts([string]$file) {
+# Each request as its host and path, for example "comicvine.gamespot.com/api/search/".
+function Get-RequestCounts([string[]]$requests) {
 	$counts = [ordered]@{}
-	if (Test-Path $file) {
-		foreach ($line in Get-Content $file | Where-Object { $_.Trim() }) {
-			$parts = $line.Trim().Split('/')
-			$category = if ($parts[0] -like '*comicvine.gamespot.com' -and $parts[1] -eq 'api') { "api/" + $parts[2] } else { "images or other: " + $parts[0] }
-			$counts[$category] = 1 + [int]$counts[$category]
-		}
+	foreach ($line in $requests | Where-Object { $_ -and $_.Trim() }) {
+		$parts = $line.Trim().Split('/')
+		$category = if ($parts[0] -like '*comicvine.gamespot.com' -and $parts[1] -eq 'api') { "api/" + $parts[2] } else { "images or other: " + $parts[0] }
+		$counts[$category] = 1 + [int]$counts[$category]
 	}
 	return $counts
 }
-$requestLines = foreach ($pair in @(@("python", $settingsPy), @("net", $settingsNet))) {
-	$counts = Get-RequestCounts (Join-Path $pair[1] "requests.txt")
+$pythonRequests = @(Get-Content (Join-Path $settingsPy "requests.txt") -ErrorAction SilentlyContinue)
+# The service's log line for a request: "... Comic Vine GET <host and path> responded <status> in <n> ms (run <id>)".
+$netRequests = @(Get-ChildItem (Join-Path $settingsNet "service-logs") -Filter "service-*.log" -ErrorAction SilentlyContinue | Get-Content |
+	ForEach-Object { if ($_ -match '\] Comic Vine GET (\S+) (responded|failed)') { $Matches[1] } })
+$requestLines = foreach ($pair in @(@("python", $pythonRequests), @("net", $netRequests))) {
+	$counts = Get-RequestCounts $pair[1]
 	$api = ($counts.GetEnumerator() | Where-Object { $_.Key -like "api/*" } | Measure-Object -Property Value -Sum).Sum
 	"REQUESTS $($pair[0]): $([int]$api) Comic Vine API calls ($(($counts.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', '))"
 }
@@ -231,7 +235,8 @@ Remove-Item -Recurse -Force $covers -ErrorAction SilentlyContinue
 
 # What each plugin wrote into its own settings folder, by name and size. The folders hold the key, so they are deleted afterwards.
 $written = foreach ($folder in $settingsPy, $settingsNet) {
-	"$(Split-Path $folder -Leaf): " + ((Get-ChildItem $folder -Recurse -File | ForEach-Object { "$($_.FullName.Substring($folder.Length + 1)) ($($_.Length) bytes)" }) -join ", ")
+	# Without the C# plugin's unpacked service, which is the build's own output.
+	"$(Split-Path $folder -Leaf): " + ((Get-ChildItem $folder -Recurse -File | Where-Object { $_.FullName -notlike (Join-Path $folder "service\*") } | ForEach-Object { "$($_.FullName.Substring($folder.Length + 1)) ($($_.Length) bytes)" }) -join ", ")
 }
 Remove-Item -Recurse -Force $settingsPy, $settingsNet
 

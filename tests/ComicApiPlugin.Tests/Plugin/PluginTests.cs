@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using ComicApiPlugin.Config;
 using ComicApiPlugin.Fixtures;
 using ComicApiPlugin.Model;
 using ComicApiPlugin.Plugin;
+using ComicApiPlugin.Service;
 using ComicApiPlugin.Tests.Engine;
 using ComicApiPlugin.Tests.Plugin.Forms;
 using cYo.Projects.ComicRack.Engine;
@@ -24,7 +26,8 @@ namespace ComicApiPlugin.Tests.Plugin;
 
 /// <summary>
 /// The plugin's two commands, driven as ComicRack calls them: on a UI thread that owns a main window, with the real forms
-/// answered through their controls and Comic Vine answered from the recorded fixtures.
+/// answered through their controls. The plugin starts the packaged service, which asks a fake Comic Vine that answers from
+/// the recorded fixtures.
 /// </summary>
 public sealed class PluginTests
 {
@@ -84,7 +87,7 @@ public sealed class PluginTests
 		// "/issue/" is one issue's details (ApiRequest.IssueDetail), which the scrape itself fetches, so a miss there is a real gap in the fixtures.
 		// A full run also misses cover images and a few "/issues/" list queries that no fixture records. The "/issue/" substring does not match
 		// "/issues/", so those expected misses stay out of the assertion.
-		await Assert.That(world.Unrecorded.Any(key => key.Contains("/issue/") || key.Contains("/search/") || key.Contains("/volume/"))).IsFalse();
+		await Assert.That(world.ComicVine.Unrecorded.Any(key => key.Contains("/issue/") || key.Contains("/search/") || key.Contains("/volume/"))).IsFalse();
 	}
 
 	[Test]
@@ -98,7 +101,7 @@ public sealed class PluginTests
 		world.Run(plugin => plugin.Scrape([book]));
 
 		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "ConfigForm" }, CollectionOrdering.Matching);
-		await Assert.That(world.Requested).IsEmpty();
+		await Assert.That(world.ComicVine.Requests).IsEmpty();
 		await Assert.That(book.GetCustomValue("comicvine_issue")).IsNull();
 		await Assert.That(world.Log).Contains("Still no provider available.  Aborting.");
 		await Assert.That(world.LogWindowText).Contains(world.Strings[TextKeys.FinishFormSkippedSingle]);
@@ -181,9 +184,215 @@ public sealed class PluginTests
 		await Assert.That(world.Script.Seen).IsEmpty();
 		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
 		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormSkippedPlural, 0));
-		await Assert.That(world.Requested).IsEmpty();
+		await Assert.That(world.ComicVine.Requests).IsEmpty();
 		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
 		await Assert.That(world.Log.Any(line => line.StartsWith("CV Scraper Version:", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task A_scrape_starts_the_local_service_in_the_background_and_logs_that_it_answers()
+	{
+		ServiceLaunch launch = BuiltService.Launch();
+		using var world = new PluginWorld(launch);
+
+		world.Run(plugin => plugin.Scrape([]));
+		string ready = await world.LogLineAsync("Local API service ");
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(ready).Matches(@"^Local API service ready on 127\.0\.0\.1:\d+ \(pid \d+\)$");
+		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
+		await Assert.That(mayClose).IsTrue();
+		await Assert.That(BuiltService.CommandLines(launch.LogFolder)).IsEmpty();
+		await Assert.That(BuiltService.ReadLogs(launch.LogFolder)).Contains($"HTTP POST {ServiceProtocol.ShutdownPath} responded 202");
+	}
+
+	[Test]
+	public async Task A_scrape_of_no_books_still_finishes_when_the_local_service_cannot_start()
+	{
+		using var world = new PluginWorld(BuiltService.Script("@echo no runtime here 1>&2", "@exit /b 1"));
+
+		world.Run(plugin => plugin.Scrape([]));
+		string failure = await world.LogLineAsync("Local API service ");
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: false);
+
+		await Assert.That(failure).IsEqualTo("Local API service unavailable: The local API service exited with code 1 before it was ready. It wrote: no runtime here ");
+		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(mayClose).IsTrue();
+	}
+
+	[Test]
+	public async Task A_scrape_asks_Comic_Vine_through_the_local_service_and_writes_the_book()
+	{
+		using var world = new PluginWorld();
+		world.SaveSettings(new Configuration { ApiKey = EngineWorld.ApiKey, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook known = new() { Series = "Batman", Number = "497", Tags = "CVDB37566" };
+		world.Script.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick());
+
+		world.Run(plugin => plugin.Scrape([known]));
+		((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm" }, CollectionOrdering.Matching);
+		await Assert.That(known.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
+		await Assert.That(known.GetCustomValue("comicvine_volume")).IsEqualTo("796");
+		await Assert.That(known.Title).IsEqualTo("The Broken Bat");
+		await Assert.That(world.ComicVine.RequestKeys).Contains(Issue37566);
+		await Assert.That(world.LogWindowText).Contains(world.Strings[TextKeys.FinishFormScrapedSingle]);
+		await Assert.That(world.Log.Any(line => line.Contains(EngineWorld.ApiKey))).IsFalse();
+		await Assert.That(BuiltService.ReadLogs(world.Launch.LogFolder)).DoesNotContain(EngineWorld.ApiKey);
+	}
+
+	[Test]
+	public async Task A_scrape_whose_local_service_cannot_start_says_why_with_the_download_link_and_writes_nothing()
+	{
+		using var world = new PluginWorld(BuiltService.Script("@echo You must install .NET to run this application. 1>&2", "@exit /b 1"));
+		world.SaveSettings(new Configuration { ApiKey = EngineWorld.ApiKey, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook known = new() { Series = "Batman", Number = "497", Tags = "CVDB37566" };
+		string title = "";
+		string message = "";
+		world.Script
+			.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick())
+			.On<PromptDialog>(prompt =>
+			{
+				title = prompt.Text;
+				message = Ui.Find<Control>(prompt, "message").Text;
+				Ui.Find<Button>(prompt, "ok").PerformClick();
+			});
+
+		world.Run(plugin => plugin.Scrape([known]));
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm", "PromptDialog" }, CollectionOrdering.Matching);
+		await Assert.That(title).IsEqualTo("Local API Service");
+		await Assert.That(message).IsEqualTo(
+			"The local API service of this plugin is not available.\n\n"
+			+ "The local API service needs the .NET 11 runtime (ASP.NET Core Runtime 11, x64), which is not installed. "
+			+ $"Download it from {ServiceProtocol.RuntimeDownloadUrl} and restart ComicRack.");
+		await Assert.That(known.GetCustomValue("comicvine_issue")).IsNull();
+		await Assert.That(world.Log.Count(line => line.StartsWith("Caught ComicVineException", StringComparison.Ordinal))).IsEqualTo(1);
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+	}
+
+	[Test]
+	public async Task A_cover_search_asks_VerseDB_and_compares_the_covers_through_the_local_service_and_writes_the_book_without_asking()
+	{
+		using Bitmap cover = SyntheticCover.Make(2);
+		using Bitmap cropped = SyntheticCover.Cropped(cover, 0.05);
+		using var verseDb = new FakeVerseDbServer(cover: SyntheticCover.Encode(cropped, ImageFormat.Jpeg));
+		ServiceLaunch launch = BuiltService.Launch() with
+		{
+			Environment = new Dictionary<string, string> { [ServiceProtocol.VerseDbBaseUrlVariable] = verseDb.BaseUrl },
+		};
+		using var world = new PluginWorld(launch) { Pages = (_, _) => new Bitmap(cover) };
+		world.SaveSettings(new Configuration { VerseDbApiKey = VerseDbFixtures.Token, VerseDbAutoAccept = true, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook book = new() { FilePath = @"C:\comics\Batman 012.cbz", Series = "Old" };
+		world.Script.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick());
+
+		world.Run(plugin => plugin.Scrape([book]));
+		((IShutdown)world.Plugin).Execute(user_is_closing: true);
+		string serviceLog = BuiltService.ReadLogs(launch.LogFolder);
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm" }, CollectionOrdering.Matching);
+		await Assert.That(book.Series).IsEqualTo("Batman");
+		await Assert.That(book.Title).IsEqualTo("The Joker");
+		await Assert.That(verseDb.Requests.Select(request => request.Method + " " + request.Target)).IsEquivalentTo(
+			["POST " + FakeVerseDbServer.LookupPath, "GET " + FakeVerseDbServer.CoverPath, "GET " + FakeVerseDbServer.IssuePath], CollectionOrdering.Matching);
+		await Assert.That(world.Log.Any(line => line.StartsWith("cover check: Batman #12: correlation ", StringComparison.Ordinal) && line.EndsWith("-> match", StringComparison.Ordinal))).IsTrue();
+		await Assert.That(serviceLog).Contains($"HTTP POST {ServiceProtocol.CoverComparePath} responded 200");
+		await Assert.That(world.LogWindowText).Contains(world.Strings[TextKeys.FinishFormScrapedSingle]);
+		await Assert.That(world.ComicVine.Requests).IsEmpty();
+		await Assert.That(world.Log.Any(line => line.Contains(VerseDbFixtures.Token))).IsFalse();
+		await Assert.That(serviceLog).DoesNotContain(VerseDbFixtures.Token);
+	}
+
+	[Test]
+	public async Task A_cover_search_whose_local_service_cannot_start_says_why_with_the_download_link_and_writes_nothing()
+	{
+		using var world = new PluginWorld(BuiltService.Script("@echo You must install .NET to run this application. 1>&2", "@exit /b 1")) { Pages = (_, _) => new Bitmap(100, 150) };
+		world.SaveSettings(new Configuration { VerseDbApiKey = VerseDbFixtures.Token, VerseDbAutoAccept = true, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook book = new() { FilePath = @"C:\comics\Batman 012.cbz", Series = "Old" };
+		string title = "";
+		string message = "";
+		world.Script
+			.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick())
+			.On<PromptDialog>(prompt =>
+			{
+				title = prompt.Text;
+				message = Ui.Find<Control>(prompt, "message").Text;
+				Ui.Find<Button>(prompt, "ok").PerformClick();
+			});
+
+		world.Run(plugin => plugin.Scrape([book]));
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm", "PromptDialog" }, CollectionOrdering.Matching);
+		await Assert.That(title).IsEqualTo("Local API Service");
+		await Assert.That(message).IsEqualTo(
+			"The local API service of this plugin is not available.\n\n"
+			+ "The local API service needs the .NET 11 runtime (ASP.NET Core Runtime 11, x64), which is not installed. "
+			+ $"Download it from {ServiceProtocol.RuntimeDownloadUrl} and restart ComicRack.");
+		await Assert.That(book.Series).IsEqualTo("Old");
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+	}
+
+	[Test]
+	public async Task Saving_the_settings_dialog_with_the_console_setting_changed_restarts_the_local_service_at_once()
+	{
+		ServiceLaunch launch = BuiltService.Launch();
+		using var world = new PluginWorld(launch);
+		world.SaveSettings(new Configuration { ApiKey = EngineWorld.ApiKey, ShowServiceConsole = true, Advanced = AdvancedSettings.Parse(null) });
+		world.Script.On<ConfigForm>(form =>
+		{
+			Ui.Find<CheckBox>(form, "showServiceConsole").Checked = false;
+			Ui.Find<Button>(form, "ok").PerformClick();
+		});
+
+		world.Run(plugin => ((IStartup)plugin).Execute());
+		string started = await world.LogLineAsync("Local API service ready on ");
+		world.Run(plugin => plugin.Configure());
+		string restarted = await world.LogLineAsync("Restarting the local API service ");
+		var watch = Stopwatch.StartNew();
+		while (world.Log.Count(line => line.StartsWith("Local API service ready on ", StringComparison.Ordinal)) < 2 && watch.Elapsed < TimeSpan.FromSeconds(60))
+		{
+			await Task.Delay(50);
+		}
+		string[] ready = [.. world.Log.Where(line => line.StartsWith("Local API service ready on ", StringComparison.Ordinal))];
+		((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(restarted).IsEqualTo("Restarting the local API service to hide its console window");
+		await Assert.That(ready.Length).IsEqualTo(2);
+		await Assert.That(ready[1]).IsNotEqualTo(started);
+		await Assert.That(BuiltService.CommandLines(launch.LogFolder)).IsEmpty();
+	}
+
+	[Test]
+	public async Task ComicRacks_startup_starts_the_local_service_without_waiting_and_its_shutdown_stops_it()
+	{
+		ServiceLaunch launch = BuiltService.Launch();
+		using var world = new PluginWorld(launch);
+
+		var watch = Stopwatch.StartNew();
+		world.Run(plugin => ((IStartup)plugin).Execute());
+		TimeSpan startup = watch.Elapsed;
+		string ready = await world.LogLineAsync("Local API service ");
+		int running = BuiltService.CommandLines(launch.LogFolder).Count;
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(ready).StartsWith("Local API service ready on 127.0.0.1:");
+		await Assert.That(running).IsEqualTo(1);
+		await Assert.That(mayClose).IsTrue();
+		await Assert.That(BuiltService.CommandLines(launch.LogFolder)).IsEmpty();
+		await Assert.That(startup).IsLessThan(TimeSpan.FromSeconds(15));
+	}
+
+	[Test]
+	public async Task A_shutdown_before_any_start_lets_ComicRack_close_and_starts_no_service()
+	{
+		using var world = new PluginWorld();
+
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(mayClose).IsTrue();
+		await Assert.That(world.Log.Where(line => line.Contains("Local API service"))).IsEmpty();
+		await Assert.That(BuiltService.CommandLines(world.Launch.LogFolder)).IsEmpty();
 	}
 
 	[Test]
@@ -298,7 +507,7 @@ public sealed class PluginTests
 	}
 
 	[Test]
-	public async Task Two_scrapes_in_sequence_both_run_and_share_one_http_client()
+	public async Task Two_scrapes_in_sequence_both_run_and_share_one_service_process()
 	{
 		using var world = new PluginWorld();
 		world.SaveSettings(QuietConfiguration(EngineWorld.ApiKey));
@@ -311,16 +520,19 @@ public sealed class PluginTests
 			plugin.Scrape([first]);
 			plugin.Scrape([second]);
 		});
+		int running = BuiltService.CommandLines(world.Launch.LogFolder).Count;
+		((IShutdown)world.Plugin).Execute(user_is_closing: true);
+		int starts = BuiltService.ReadLogs(world.Launch.LogFolder).Split('\n').Count(line => line.Contains(" listening on "));
 
 		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "SeriesForm", "SeriesForm" }, CollectionOrdering.Matching);
 		await Assert.That(first.GetCustomValue("comicvine_issue")).IsEqualTo("37566");
 		await Assert.That(second.GetCustomValue("comicvine_issue")).IsEqualTo("535328");
-		await Assert.That(world.Handlers.Count).IsEqualTo(1);
-		await Assert.That(world.Handlers[0].Disposed).IsFalse();
+		await Assert.That(running).IsEqualTo(1);
+		await Assert.That(starts).IsEqualTo(1);
 	}
 
 	[Test]
-	public async Task Changing_the_api_key_between_runs_replaces_and_disposes_the_http_client()
+	public async Task Changing_the_api_key_between_runs_asks_Comic_Vine_with_the_new_key_from_then_on()
 	{
 		const string newKey = "fedcba9876543210fedcba9876543210fedcba98";
 		using var world = new PluginWorld();
@@ -334,16 +546,13 @@ public sealed class PluginTests
 			plugin.Scrape([new ComicBook { Series = "Batman", Number = "1", Volume = 2016 }]);
 		});
 
-		await Assert.That(world.Handlers.Count).IsEqualTo(2);
-		await Assert.That(world.Handlers[0].Disposed).IsTrue();
-		await Assert.That(world.Handlers[1].Disposed).IsFalse();
 		// Image requests carry no key, so only the API calls are checked.
-		string[] oldCalls = [.. world.Handlers[0].Urls.Where(url => url.Contains("/api/"))];
-		string[] newCalls = [.. world.Handlers[1].Urls.Where(url => url.Contains("/api/"))];
+		string[] calls = [.. world.ComicVine.Requests.Select(request => request.Target).Where(target => target.StartsWith("/api/", StringComparison.Ordinal))];
+		string[] oldCalls = [.. calls.TakeWhile(target => target.Contains("api_key=" + EngineWorld.ApiKey))];
+		string[] newCalls = [.. calls.Skip(oldCalls.Length)];
 		await Assert.That(oldCalls).IsNotEmpty();
 		await Assert.That(newCalls).IsNotEmpty();
-		await Assert.That(oldCalls.All(url => url.Contains("api_key=" + EngineWorld.ApiKey))).IsTrue();
-		await Assert.That(newCalls.All(url => url.Contains("api_key=" + newKey))).IsTrue();
+		await Assert.That(newCalls.All(target => target.Contains("api_key=" + newKey))).IsTrue();
 	}
 
 	/// <summary>A key, no welcome form, and no summary, so a run shows only the series dialog.</summary>
@@ -372,20 +581,33 @@ public sealed class PluginTests
 	[return: MarshalAs(UnmanagedType.Bool)]
 	private static extern bool IsWindowEnabled(IntPtr window);
 
-	/// <summary>A plugin instance over a main window of its own, a settings folder of its own, and the recorded responses.</summary>
+	/// <summary>
+	/// A plugin instance over a main window of its own, a settings folder of its own, and a service of its own, which asks
+	/// a fake Comic Vine of its own. A test therefore sees only its own requests.
+	/// </summary>
 	private sealed class PluginWorld : IDisposable
 	{
-		private readonly List<RecordedResponse> responses;
-		private readonly List<TrackedHandler> handlers = [];
-		private readonly List<string> unrecorded = [];
 		private readonly HostEnvironment env = new();
 
-		public PluginWorld(params RecordedResponse[] overrides)
+		/// <param name="overrides">Recorded responses that replace the fixture for the same request.</param>
+		public PluginWorld(params RecordedResponse[] overrides) : this(BuiltService.Launch(), overrides)
 		{
-			responses = [.. FixtureFiles.ReadFolder(FixtureFiles.OutputFolder), .. overrides];
-			var ports = new PluginPorts(NewHandler, Folder, new ManualClock());
-			Plugin = new ComicApiCommands(env, ports);
 		}
+
+		public PluginWorld(ServiceLaunch launch, params RecordedResponse[] overrides)
+		{
+			ComicVine = FakeComicVineServer.FromFixtures([.. FixtureFiles.ReadFolder(FixtureFiles.OutputFolder), .. overrides], ownImages: true);
+			var environment = launch.Environment.ToDictionary(variable => variable.Key, variable => variable.Value);
+			environment[ServiceProtocol.ComicVineBaseUrlVariable] = ComicVine.BaseUrl;
+			Launch = launch with { Environment = environment };
+			Plugin = new ComicApiCommands(env, new PluginPorts(Launch, Folder, new ManualClock()));
+		}
+
+		/// <summary>What the service asks in place of Comic Vine: its requests, and the ones no fixture answered (cover lookups and images the dialogs ask for).</summary>
+		public FakeComicVineServer ComicVine { get; }
+
+		/// <summary>How the plugin starts its service.</summary>
+		public ServiceLaunch Launch { get; }
 
 		public string Folder { get; } = Path.Combine(Path.GetTempPath(), "cvs-plugin-" + Guid.NewGuid().ToString("N"));
 
@@ -394,6 +616,12 @@ public sealed class PluginTests
 		public DialogScript Script { get; } = new();
 
 		public Form Main => env.Main!;
+
+		/// <summary>What ComicRack gives as a page of a book.</summary>
+		public Func<ComicBook, int, Bitmap?> Pages
+		{
+			set => env.Fake.Pages = value;
+		}
 
 		public bool MainEnabledAfter { get; private set; }
 
@@ -416,15 +644,25 @@ public sealed class PluginTests
 
 		public IReadOnlyList<string> Log => Plugin.Context.Log.Snapshot();
 
-		/// <summary>One per HttpClient the plugin made, in order.</summary>
-		public IReadOnlyList<TrackedHandler> Handlers => handlers;
-
-		public IReadOnlyList<string> Requested => [.. handlers.SelectMany(handler => handler.Requested)];
-
-		/// <summary>The requests no fixture answered: cover lookups and images the dialogs ask for.</summary>
-		public IReadOnlyList<string> Unrecorded => unrecorded;
-
 		public void SaveSettings(Configuration config) => new SettingsStore(Folder, new ManualClock()).Save(config);
+
+		/// <summary>The first log line that starts with <paramref name="prefix"/>. The service check writes its line from the background.</summary>
+		public async Task<string> LogLineAsync(string prefix)
+		{
+			var watch = Stopwatch.StartNew();
+			while (true)
+			{
+				if (Log.FirstOrDefault(line => line.StartsWith(prefix, StringComparison.Ordinal)) is { } found)
+				{
+					return found;
+				}
+				if (watch.Elapsed > TimeSpan.FromSeconds(60))
+				{
+					throw new TimeoutException($"No log line starts with '{prefix}'. The log: {string.Join(" | ", Log)}");
+				}
+				await Task.Delay(50);
+			}
+		}
 
 		/// <summary>Runs the commands on a UI thread with a visible main window, as ComicRack calls them.</summary>
 		public void Run(Action<ComicApiCommands> commands) => Sta.Run(() =>
@@ -440,6 +678,8 @@ public sealed class PluginTests
 
 		public void Dispose()
 		{
+			((IShutdown)Plugin).Execute(user_is_closing: true);
+			ComicVine.Dispose();
 			try
 			{
 				Directory.Delete(Folder, recursive: true);
@@ -447,45 +687,6 @@ public sealed class PluginTests
 			catch (DirectoryNotFoundException)
 			{
 			}
-		}
-
-		private TrackedHandler NewHandler()
-		{
-			var handler = new TrackedHandler(new FixtureHandler(responses, key =>
-			{
-				lock (unrecorded)
-				{
-					unrecorded.Add(key);
-				}
-				return FixtureHandler.NothingFound(key);
-			}));
-			handlers.Add(handler);
-			return handler;
-		}
-	}
-
-	/// <summary>The fixture handler, plus the raw request URLs (with the key) and whether the plugin disposed it.</summary>
-	private sealed class TrackedHandler(FixtureHandler inner) : DelegatingHandler(inner)
-	{
-		public List<string> Urls { get; } = [];
-
-		public bool Disposed { get; private set; }
-
-		public IReadOnlyList<string> Requested => inner.Requested;
-
-		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken ct)
-		{
-			lock (Urls)
-			{
-				Urls.Add(request.RequestUri!.AbsoluteUri);
-			}
-			return base.SendAsync(request, ct);
-		}
-
-		protected override void Dispose(bool disposing)
-		{
-			Disposed = true;
-			base.Dispose(disposing);
 		}
 	}
 

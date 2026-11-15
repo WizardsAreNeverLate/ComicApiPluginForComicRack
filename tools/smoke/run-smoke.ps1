@@ -8,8 +8,12 @@ src\ComicApiPlugin\bin\smoke, never the shipping output) and the probe (tools\sm
 ComicRack's Scripts folder, starts ComicRack with -ac CvsNetSmoke, and waits for the probe to close it. It never touches the
 real %APPDATA%\Comic Vine Scraper folder: the plugin keeps its settings in the run folder.
 
+The switch build starts a fake Comic Vine on a loopback port, which answers from the run's copy of tests\fixtures\comicvine, and
+starts the packaged local API service with that fake as its Comic Vine and its VerseDB. The service is unpacked into the run
+folder and writes its log there, so the run uses neither the network nor %LOCALAPPDATA%\ComicApiPlugin.
+
 Everything lands in tools\smoke\runs\<stamp>\out\report.txt. The probe writes the "forms share one log" assertion. This script
-adds "user settings unchanged" and the process checks. The exit code is 0 only when every assertion passed.
+adds "user settings unchanged", the process checks, and the checks of the service's log. The exit code is 0 only when every assertion passed.
 
 .PARAMETER Bin
 The output folder of a ComicRack CE build of WizardsAreNeverLate/ComicRackCE branch integration. Defaults to COMICRACK_DIR.
@@ -91,6 +95,16 @@ foreach ($name in $probeFailures) { $failures += $name }
 $after = @(Get-UserSettings)
 $unchanged = $null -eq (Compare-Object $before $after)
 Assert-Smoke "user settings unchanged" $unchanged "$($before.Count) entries before, $($after.Count) after, in %APPDATA%\Comic Vine Scraper"
+# Each call the service made to a provider is one line: "Comic Vine GET <host and path> responded <status> ...".
+$serviceLog = @(Get-ChildItem (Join-Path $run "service-logs") -Filter "service-*.log" -ErrorAction SilentlyContinue | Get-Content)
+$calls = @($serviceLog | ForEach-Object { if ($_ -match '\] (Comic Vine|VerseDB) [A-Z]+ (\S+) (responded|failed)') { $Matches[2] } })
+$remote = @($calls | Where-Object { $_ -notlike '127.0.0.1:*' })
+Assert-Smoke "the service answered from recorded responses" (@($calls | Where-Object { $_ -like '127.0.0.1:*/api/*' }).Count -gt 0) "$($calls.Count) provider calls in the service's log"
+Assert-Smoke "no request left the machine" ($remote.Count -eq 0) "$($remote.Count) provider calls to a host other than 127.0.0.1: $(($remote | Select-Object -Unique) -join ', ')"
+$serviceLeft = @(Get-Process ComicApiPlugin.Service -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$run\*" })
+Assert-Smoke "no service process left" ($serviceLeft.Count -eq 0) "no ComicApiPlugin.Service.exe from the run folder is running"
+# The unpacked service is about 72 MB and is the build's own output, so a kept run does not need it.
+Remove-Item -Recurse -Force (Join-Path $run "service") -ErrorAction SilentlyContinue
 $left = (Test-Path $plugin) -or (Test-Path $probe) -or (Test-Path (Join-Path $env:APPDATA "cYo\ComicRack Community Edition\Configurations\CvsNetSmoke")) -or (Test-Path (Join-Path $env:LOCALAPPDATA "cYo\ComicRack Community Edition\Configurations\CvsNetSmoke"))
 Assert-Smoke "nothing left behind" (-not $left) "the Scripts folders and the probe's configuration are removed"
 

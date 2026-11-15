@@ -331,7 +331,7 @@ public sealed class CoverSearchRunTests
 
 		await Assert.That(h.Ui.Choices).IsEqualTo(1);
 	}
-	private sealed class FakeVerseDb : IVerseDb
+	internal sealed class FakeVerseDb : IVerseDb
 	{
 		public Queue<Func<CoverLookup>> Lookups { get; } = new();
 		public Queue<Func<IssueMetadata>> Issues { get; } = new();
@@ -360,7 +360,7 @@ public sealed class CoverSearchRunTests
 		}
 	}
 
-	private sealed class FakeUi : ICoverSearchUi
+	internal sealed class FakeUi : ICoverSearchUi
 	{
 		public Queue<CoverChoice> Answers { get; } = new();
 		public int Started { get; private set; }
@@ -381,7 +381,7 @@ public sealed class CoverSearchRunTests
 		public void ShowRateLimited(TimeSpan wait) => RateLimits.Add(wait);
 	}
 
-	private sealed class FakeScrapeBook : IScrapeBook
+	internal sealed class FakeScrapeBook : IScrapeBook
 	{
 		public BookValues Values { get; private set; } = new() { Series = "Old", Tags = ["CVDB1"] };
 		public List<BookPatch> Applied { get; } = [];

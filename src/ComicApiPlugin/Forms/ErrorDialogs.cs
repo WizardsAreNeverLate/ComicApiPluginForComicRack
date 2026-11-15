@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Windows.Forms;
+using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Diagnostics;
 using ComicApiPlugin.VerseDb;
 
@@ -12,6 +13,12 @@ internal static class ErrorDialogs
 {
 	public static void Show(IWin32Window? owner, PluginContext ctx, Exception error)
 	{
+		if (ServiceFailure(error) is { } cause)
+		{
+			// The cause names what the user can do, such as where to download the .NET runtime.
+			PromptDialog.Show(owner, ctx, ctx.Strings.Format(TextKeys.ServiceErrorText, cause.Message), ctx.Strings[TextKeys.ServiceErrorTitle], MessageBoxIcon.Warning, PromptButtons.Ok);
+			return;
+		}
 		if (error is VerseDbException verseDb)
 		{
 			PromptDialog.Show(owner, ctx, ctx.Strings.Format(TextKeys.VerseDbErrorText, verseDb.Message), ctx.Strings[TextKeys.VerseDbErrorTitle], MessageBoxIcon.Warning, PromptButtons.Ok);
@@ -30,6 +37,14 @@ internal static class ErrorDialogs
 			LogFile.SaveWithDialog(owner, ctx, confirm: true);
 		}
 	}
+
+	/// <summary>Why the local API service could not be started or reached, when that is what stopped a provider's call.</summary>
+	private static Exception? ServiceFailure(Exception error) => error switch
+	{
+		ComicVineException { Error: ComicVineError.ServiceUnavailable, InnerException: { } cause } => cause,
+		VerseDbException { InnerException: ServiceUnavailableException cause } => cause,
+		_ => null,
+	};
 }
 
 /// <summary>log.save: the user picks a file, and every debug log line is written to it.</summary>

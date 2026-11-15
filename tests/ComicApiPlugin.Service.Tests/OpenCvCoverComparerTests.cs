@@ -1,9 +1,12 @@
+using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Threading.Tasks;
+using ComicApiPlugin.Fixtures;
 using ComicApiPlugin.Matching;
+using ComicApiPlugin.Service.Covers;
 
-namespace ComicApiPlugin.Tests.Matching;
+namespace ComicApiPlugin.Service.Tests;
 
 public sealed class OpenCvCoverComparerTests
 {
@@ -55,6 +58,17 @@ public sealed class OpenCvCoverComparerTests
 		CoverSimilarity? score = comparer.Compare(SyntheticCover.Encode(cover, ImageFormat.Png), SyntheticCover.Encode(flat, ImageFormat.Png));
 
 		await Assert.That(score!.Value.IsMatch).IsFalse();
+	}
+
+	[Test]
+	public async Task A_cover_whose_header_claims_too_many_pixels_fails_with_an_OpenCV_error_and_not_as_a_missing_library()
+	{
+		using Bitmap cover = SyntheticCover.Make(6);
+
+		Exception? error = Assert.Throws<Exception>(() => comparer.Compare(SyntheticCover.Encode(cover, ImageFormat.Png), SyntheticCover.OversizedPng()));
+
+		await Assert.That(error).IsNotNull();
+		await Assert.That(error is OpenCvUnavailableException).IsFalse();
 	}
 
 	[Test]

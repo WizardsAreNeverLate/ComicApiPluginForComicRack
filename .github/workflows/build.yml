@@ -51,8 +51,24 @@ jobs:
     - name: setup-msbuild
       uses: microsoft/setup-msbuild@v3
 
+    # The local API service and its tests target .NET 11.
+    - name: Setup .NET 11
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 11.0.x
+
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v4
+
+    # Build.ps1 builds the net11.0 projects with the newest Visual Studio MSBuild on the runner. Fail early if that is older than 18.
+    - name: Check the MSBuild version
+      shell: pwsh
+      run: |
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+        $version = [version](& $msbuild -nologo -version)
+        "MSBuild $version at $msbuild"
+        if ($version.Major -lt 18) { throw "MSBuild 18 or later is needed to build the net11.0 projects. This runner has $version." }
 
     - name: ComicRack CE commit
       id: comicrack
@@ -84,7 +100,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: ComicApiPlugin.crplugin
-        path: src/ComicApiPlugin/bin/Release/net48/ComicApiPlugin.crplugin
+        path: artifacts/Release/ComicApiPlugin.crplugin
         if-no-files-found: error
 
     - name: Upload test results
@@ -92,5 +108,5 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: test-results
-        path: tests/*/bin/Release/net48/TestResults/
+        path: tests/*/bin/Release/*/TestResults/
         if-no-files-found: ignore

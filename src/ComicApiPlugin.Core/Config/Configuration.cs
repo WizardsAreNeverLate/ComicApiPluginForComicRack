@@ -40,6 +40,9 @@ public sealed partial record Configuration
 	/// <summary>VerseDB: write the match without asking when the lookup finds one candidate and its cover matches the book's.</summary>
 	public bool VerseDbAutoAccept { get; init; }
 
+	/// <summary>The local API service runs with its console window on show, for debugging.</summary>
+	public bool ShowServiceConsole { get; init; }
+
 	/// <summary>Comic Vine: compare the covers of the top search results and take a single confident match without asking.</summary>
 	public bool ComicVineCoverAutoAccept { get; init; }
 
@@ -71,6 +74,7 @@ public sealed partial record Configuration
 		builder.Append(", FastRescrape = ").Append(FastRescrape);
 		builder.Append(", SummaryDialog = ").Append(SummaryDialog);
 		builder.Append(", VerseDbAutoAccept = ").Append(VerseDbAutoAccept);
+		builder.Append(", ShowServiceConsole = ").Append(ShowServiceConsole);
 		builder.Append(", ComicVineCoverAutoAccept = ").Append(ComicVineCoverAutoAccept);
 		builder.Append(", ComicVineCoverCompareCount = ").Append(ComicVineCoverCompareCount);
 		builder.Append(", Advanced = ").Append(Advanced);

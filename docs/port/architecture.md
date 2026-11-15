@@ -1,4 +1,4 @@
-# Architecture
+A scrape then needs the service, and the UI shows a failed start. | Done |# Architecture
 
 This document describes the design that the C# port of Comic Vine Scraper is built on. The type sketch in `sketch/` is the contract, and `sketch/README.md` gives the reading order.
 
@@ -59,7 +59,7 @@ An oracle test passes the same input to a pure Core function and to its Python o
 
 ### Projects
 
-All projects target net48 and AnyCPU, with LangVersion 14 and PolySharp. The plugin needs no NuGet packages at run time.
+The plugin, its two test suites and the tools target net48 and AnyCPU, with LangVersion 14 and PolySharp. The plugin needs no NuGet packages at run time. Core also builds for net11.0-windows, for the local API service and its tests (see [Local API service](#local-api-service)).
 
 - `ComicApiPlugin.Core.dll` contains the model, the merge rules, the engine, the Comic Vine client, the configuration and `.dat` files, the algorithms, and the debug log. It references System.Drawing, System.Net.Http, and System.Xml.Linq, and nothing from ComicRack or WinForms. The compiler therefore stops Core from naming `ComicBook` or `Form`.
 - `ComicApiPlugin.dll` contains the plugin entry points, the `ComicBook` adapter, the forms, i18n, and the error dialogs. It references ComicRack with `Private=false`.
@@ -112,13 +112,13 @@ Begin → Search(manual, failedTerms) → ChooseSeries(terms, found) → FindIss
 ### Comic Vine client
 
 - `IComicVine` returns domain types only. It covers search, the issues in a series, finding an issue by number, issue details, resolving a series, and images. `ComicVineCatalog` implements it for one run. It owns the caches, the search cleanup, paging, and the ignore filters.
-- `ComicVineHttp` lives as long as the plugin. It owns the `HttpClient`, and it takes an injectable `HttpMessageHandler`, so recorded-response tests need no network. It also owns:
+- `ComicVineHttp` lives as long as its owner, the local API service, which keeps one for each API key (see [Comic Vine through the service](#comic-vine-through-the-service)). It owns the `HttpClient`, and it takes an injectable `HttpMessageHandler`, so the Core tests answer it from recorded responses without a network. It also owns:
   - a throttle of 1100 ms between requests across threads (deviation 6)
   - one retry after 2500 ms for network errors, 5xx responses, empty bodies, and invalid XML
   - no retry for codes 100 or 107 (deviation 5)
   - reading the body on a 4xx status, so HTTP 401 shows the invalid-key message (deviation 4)
   - an invalid-character filter that keeps valid surrogate pairs (deviation 8)
-- `ComicVineException` carries the error kind and the URL with the API key removed. `IsRecoverable` decides whether a failed fast rescrape delays the book or ends the run. An invalid key or a rate limit ends the run.
+- `ComicVineException` carries the error kind and the URL with the API key removed. `IsRecoverable` decides whether a failed fast rescrape delays the book or ends the run. An invalid key, a rate limit, or a local API service that is not available ends the run.
 - XML is parsed into domain types with `XDocument`. There is no port of `xml2py`.
 
 ### Configuration, i18n, and logging
@@ -326,8 +326,8 @@ The algorithms live in `ComicApiPlugin.Text` (`Text/`) and `ComicApiPlugin.Match
 - **The summary follows every scrape when `summaryDialog` is on,** as Python's `finally` did, but in the log window, not a modal FinishForm (deviations.md). `LogWindow` is not modal: it opens before the run starts and streams each `DebugLog` line through `DebugLog.LineWritten`, and the run writes the scraped and skipped counts into it at the end. It overrides `WM_ENABLE`, because the run's `ShowDialog` calls disable every other window of the thread, and it must stay usable to scroll or close. A window still open is reused by the next run. One the user closed stays closed for the rest of that run. A scrape that stopped at the key prompt or the welcome form opens it at the end, showing 0 scraped. `PluginTests.Cancelling_the_key_prompt_stops_before_any_request_and_still_sums_up_as_Python_did` pins it. After a run-ending error the form shows the partial summary. It also follows a run that fails before the settings load: the plugin starts from a default `Configuration` (summary on), as Python built its `Configuration` before it loaded it. `PluginTests.A_run_that_fails_before_the_settings_load_still_shows_the_error_and_the_summary` pins it.
 - **One `PluginContext` per plugin instance,** created on first use. Every command and every form therefore shares one `SettingsStore` and one `DebugLog`, and Ctrl+Shift+L in any form saves that log. The plugin also keeps one `ComicVineHttp`, so one `HttpClient` and one throttle serve every run. It makes a new one only when the API key changes, because the key is fixed for the life of a `ComicVineHttp`. The user agent is Python's `ComicApiPlugin/{version} (https://github.com/cbanack/comic-vine-scraper/)`. `PluginTests.Two_scrapes_in_sequence_both_run_and_share_one_http_client` and `Changing_the_api_key_between_runs_replaces_and_disposes_the_http_client` pin the client's life. The context holds `CurrentTheme`, a function that reads `IPluginEnvironment.Theme` each time a form applies its theme, because ComicRack can change it while it runs. `Strings` keeps the environment and localizes on every lookup, and a language change needs a restart, so it stays as it is. The ComicForm trims the end of its localized label before it adds the space (`deviations.md`).
 - **A blank key is a whitespace-only key too.** Python tested `not api_key_s`, so a key of spaces went on to `db.initialize`, which threw. The plugin opens `ConfigForm` instead, which trims the key it saves.
-- **`PluginPorts` is the seam to the outside:** the `HttpMessageHandler` factory, the settings folder, and the clock. ComicRack's constructor uses `PluginPorts.FromProcess()`, which is the live handler, `%APPDATA%\Comic Vine Scraper`, and the system clock. Tests use the internal constructor. `PluginTests` drives both commands through it on an STA thread that owns a visible main window. It answers each real dialog through its controls, serves the recorded fixtures, and checks the fields written, the dialogs in order, the re-entrancy guard, the main window disabled (Win32 `IsWindowEnabled`) during the run, and the log.
-- **The recorded-response switch is for the in-app smoke test only.** Building with `-p:CvsRecordedResponses=true` defines `CVS_RECORDED_RESPONSES` and compiles `Smoke/RecordedResponses.cs` and `tests/Shared/ComicVineFixtures.cs` into the plugin. Only that build reads the environment variable `CVS_NET_RECORDED_RESPONSES`. When the variable names a folder, the plugin answers every Comic Vine request from `<folder>\fixtures\*.txt`, keeps its settings in `<folder>\settings`, and writes each request no fixture answered to `<folder>\unrecorded.txt`. An unrecorded API request finds nothing, and an unrecorded image is not found. A normal build has no code that reads the variable, so the switch cannot be turned on by accident. The switch build writes to `src\ComicApiPlugin\bin\smoke\<Configuration>\net48\` and `obj\smoke\`, so it can never overwrite the shipping `bin\<Configuration>\net48\ComicApiPlugin.crplugin` or the Debug output that `Build.ps1` tests. Never ship that build.
+- **`PluginPorts` is the seam to the outside:** how to start the local API service, the settings folder, and the clock. The plugin asks Comic Vine and VerseDB only through the service (see [Comic Vine through the service](#comic-vine-through-the-service)). ComicRack's constructor uses `PluginPorts.FromProcess()`, which is the packaged service, `%APPDATA%\Comic Vine Scraper`, and the system clock. Tests use the internal constructor. `PluginTests` drives both commands through it on an STA thread that owns a visible main window. It answers each real dialog through its controls, starts the packaged service against a fake Comic Vine that serves the recorded fixtures (see [Tests and tools through the service](#tests-and-tools-through-the-service)), and checks the fields written, the dialogs in order, the re-entrancy guard, the main window disabled (Win32 `IsWindowEnabled`) during the run, and the log.
+- **The recorded-response switch is for the in-app smoke test only.** Building with `-p:CvsRecordedResponses=true` defines `CVS_RECORDED_RESPONSES` and compiles `Smoke/*.cs` and, from `tests/Shared`, `ComicVineFixtures.cs`, `FakeHttpServer.cs` and `FakeComicVineServer.cs` into the plugin. Only that build reads the environment variable `CVS_NET_RECORDED_RESPONSES`. When the variable names a folder, the plugin starts a fake Comic Vine on a loopback port, which answers every request from `<folder>\fixtures\*.txt` and writes each request no fixture answered to `<folder>\unrecorded.txt`. An unrecorded API request finds nothing, and an unrecorded image is not found. The plugin starts the packaged service with that fake as its Comic Vine and its VerseDB, so no request leaves the machine. The service is unpacked into `<folder>\service` and writes its log to `<folder>\service-logs`, and the plugin keeps its settings in `<folder>\settings`. A normal build has no code that reads the variable, so the switch cannot be turned on by accident. The switch build writes to `src\ComicApiPlugin\bin\smoke\<Configuration>\net48\` and `obj\smoke\`, so it can never overwrite the shipping `bin\<Configuration>\net48\ComicApiPlugin.crplugin` or the Debug output that `Build.ps1` tests. Never ship that build.
 - **Not driven headless.** The Ctrl+Shift+L save dialog (the common file dialog), the link to the API key page, and ComicRack's own undo group and book dialog. The in-app smoke test covers ComicRack's side.
 - **In-app smoke test (phase 5b).** A probe plugin started ComicRack 0.9.186 with `-ac CvsNetSmoke`, ran the switch build over the recorded fixtures with a temporary settings folder, and scraped two fileless books (Batman #497, and Batman #1 with volume 2016) through `ScriptUtility.CreateBookCode`. It answered each dialog through its controls. Both books got the issue's fields, `comicvine_issue`, `comicvine_volume`, and the `[CVDB…]` note. Win32 `IsWindowEnabled` reported ComicRack's main window disabled while each dialog and the ComicForm were open, and enabled again after the run. The probe called `ProcessCmdKey(Ctrl+Shift+L)` in the ConfigForm and in the FinishForm. It answered the save dialog with window messages. The second file held the first save's line and the run's lines, so the forms share one log. The command's undo group and cancellation inside ComicRack were not exercised.
 - **The smoke harness is in the repo (`tools/smoke`).** `CvsNetSmoke.cs` is the probe plugin, built by `CvsNetSmoke.csproj` (part of the solution, so `Build.ps1` compiles it with warnings as errors). `run-smoke.ps1` builds the switch build and the probe, installs both under ComicRack's `Scripts` folder, starts ComicRack with `Start-Process -PassThru`, waits on that process, and kills only that process if it does not close in 240 s. The probe closes ComicRack with `MainForm.MenuClose()` by reflection, because `Form.Close()` only minimizes it to the tray. The run writes `tools/smoke/runs/<stamp>/out/report.txt`, and the script exits 1 unless every `ASSERT` line in it passed. Two claims above are now assertions, not hand inspection. `forms share one log` (probe): the log window's saved log holds the ConfigForm's `opened the settings dialog.` line and the line the first save wrote about itself, before the second save's own line. `user settings unchanged` (script): the file names, sizes, and write times in `%APPDATA%\Comic Vine Scraper` are the same before and after the run (the contents are never read). The script also asserts that ComicRack closed itself, that the report has no `EXCEPTION`, and that nothing was left in `Scripts`. The assertion code compiles and its checks hold on the logs of the earlier hand-inspected run. The updated harness has not itself run inside ComicRack yet.
@@ -337,7 +337,7 @@ The algorithms live in `ComicApiPlugin.Text` (`Text/`) and `ComicApiPlugin.Match
 - **What it is.** `tools/differential/run-differential.ps1` starts ComicRack 0.9.186 with `-ac CvsDiff`. A probe plugin (`CvsDiffProbe.cs`) scrapes two identical sets of 16 books against the live Comic Vine API: first with the original Python plugin 1.0.102 (a flattened copy of `src` installed under `Scripts`, as `build.xml` flattens it), then with the C# plugin (the switch build). Both run in auto-choose mode with identical `settings.dat` (`autochooseSeries`, `summaryDialog`, the key) and `advanced.dat` (`WELCOME_DIALOG = false`). The probe writes every readable and writable simple `ComicBook` property, every custom value, and a hash of the custom thumbnail file. `Compare-Snapshot.ps1` diffs the sets per book and per field. `Id` (a new GUID per `ComicBook`) is skipped, and `CustomThumbnailKey` (a new GUID per scrape) is compared through the thumbnail hash.
 - **The plugins do not touch the real settings.** Python's `resources.py` takes its folder from `Environment.GetFolderPath`, so the installed copy has its `profile_dir` statement rewritten to the run folder. The C# plugin gets `CVS_NET_LIVE_FOLDER` through `Smoke/LiveFolder.cs`, which exists only in the switch build (`CVS_RECORDED_RESPONSES`). The runner proves a normal Release build holds neither variable name, by searching the DLL for the ASCII and UTF-16 spelling, and proves the check can find them by searching the switch DLL too. It also asserts that `%APPDATA%\Comic Vine Scraper` is unchanged (names, sizes, write times), that ComicRack exited with code 0 inside the timeout (25 minutes) after `MenuClose`, that no ComicRack process, Scripts folder, `CvsDiff` configuration or downloaded cover is left, that the settings folders (which hold the key) are deleted, that the volume table matches Comic Vine, and that no kept file contains the key.
 - **Books and policy (`books.tsv`).** Each book has the Comic Vine volume id that is correct for it. The runner checks every id once through the API (name and start year must match the table) and, for the cover books, finds the issue's cover and packs it as page 1 of a `.cbz` in the run's git-ignored `covers` folder, deleted after the run. The probe adds the cover books to ComicRack from those files. One of them, `Batman 001 (2016).cbz`, has no Series, Number or Volume set, so the filename parser runs. The dialog policy is the same for both plugins. On a series list, pick the row whose id is the book's volume id, else record "not listed" and press Skip. On an issue list, pick the row whose number is the book's number, else record it and press Skip. A book with no correct volume gets Skip. An unknown book, a dialog with no known book, or no progress for 4 minutes is fatal: the probe writes an `EXCEPTION` line, closes the plugin forms and exits ComicRack through `MenuClose`. It also closes ComicRack's own "Latest ComicRack News" dialog, which opens at startup on a fresh configuration, is modal, and blocked the first attempt.
-- **Request counts.** Neither plugin logs its requests (each logs only retries and errors), so both are counted at the HTTP seam. The switch build's handler appends the host and path (never the query, which carries the key) to `requests.txt` in the settings folder. The installed Python copy has one line added before each request in `cvconnection.__get_page` and `cvdb._query_image` that does the same. The counts are in each report.
+- **Request counts.** The C# plugin's requests are counted from the log of its local API service, which has one line for each request with the host and path (never the query, which carries the key). `Smoke/LiveFolder.cs` puts that log in `service-logs` in the settings folder. The Python plugin logs only retries and errors, so the installed copy has one line added before each request in `cvconnection.__get_page` and `cvdb._query_image`, which appends the host and path to `requests.txt` in its settings folder. The counts are in each report.
 
 | # | Book | Volume | Cover | Python: dialog shown, Number written | C#: dialog shown, Number written |
 |---|---|---|---|---|---|
@@ -390,8 +390,8 @@ Both providers can skip their choice dialog when a cover settles it. Both settin
 
 - **Comic Vine.** `ScrapeRun.ChooseSeriesAsync` calls `CoverSeriesPicker` before the series dialog when `ComicVineCoverAutoAccept` is on and `ScrapeServices.CoverComparer` is set. The picker takes the first `ComicVineCoverCompareCount` series of the `MatchScore` ranking, finds the book's issue in each (`FindIssueAsync`), downloads that issue's existing small thumbnail (`IssueRef.ThumbUrl`, so no extra request per candidate beyond the issue lookup), and compares it with the book's first page. A pick goes into the series cache as a user's pick would and continues at `Step.FindIssue`. Going Back from the issue dialog records the series key in `coverPickRefused`, so the series dialog opens instead of the same pick repeating.
 - **VerseDB.** After a lookup with one candidate, `CoverSearchRun` downloads that candidate's cover with `IVerseDb.GetImageAsync` and compares it with the JPEG it sent.
-- **Failure.** `CoverSeriesPicker` and `CoverSearchRun` turn every comparison problem into a debug-log line and the usual dialog. A missing or unloadable OpenCV library is `OpenCvUnavailableException`, logged as `cover auto-accept is unavailable`. A run never fails because of OpenCV.
-- **Wiring.** `ComicApiCommands` holds one `OpenCvCoverComparer` and gives it to a run only when that run's setting is on. A comparison takes about 100 ms, so callers run it with `Task.Run`.
+- **Failure.** `CoverSeriesPicker` and `CoverSearchRun` turn every comparison problem into a debug-log line and the usual dialog. A comparison that cannot be done at all is `OpenCvUnavailableException`, logged as `cover auto-accept is unavailable`: the local API service cannot be started or reached, or it cannot load the OpenCV library. A run never fails because of the comparison.
+- **Wiring.** The comparison runs in the local API service (`OpenCvCoverComparer`, behind `POST /covers/compare`). `ComicApiCommands` gives a run a `ServiceCoverComparer` only when that run's setting is on. A comparison takes about 100 ms plus the request, and `ServiceCoverComparer.Compare` blocks on it, so callers run it with `Task.Run`. See [VerseDB and the cover comparison through the service](#versedb-and-the-cover-comparison-through-the-service).
 
 ### The comparison
 
@@ -413,6 +413,181 @@ Correlation separates the true pairs from the rest with a wide margin on undisto
 
 ### Native loading and package size
 
-OpenCvSharp calls `OpenCvSharpExtern.dll` by name. ComicRack loads the plugin from its Scripts folder, outside the default search path, so `OpenCvNative.EnsureLoaded` calls `LoadLibraryEx` on the full path of the file beside `OpenCvSharp.dll` (or in `dll\x64` there) before the first use, with `LOAD_WITH_ALTERED_SEARCH_PATH`. Once it is loaded, the by-name call resolves to it. The library is 64-bit only, and ComicRack's process is. Both DLLs sit at the package root. `System.Memory`, `System.Buffers` and `System.Runtime.CompilerServices.Unsafe` come with ComicRack. `opencv_videoio_ffmpeg*.dll` (28 MB, video decoding) is not packed.
+OpenCV is only in the local API service. `ComicApiPlugin.Service` references `OpenCvSharp4` (the binding, `OpenCvSharp.dll`, 1.0 MB) and copies one file out of `OpenCvSharp4.runtime.win`: `OpenCvSharpExtern.dll` (68.6 MB, 64-bit), to the folder of the exe. The package's other file, `opencv_videoio_ffmpeg*.dll` (28 MB, video decoding), is not taken, because the project references the package with `ExcludeAssets="all"` and names the one file. Core, the plugin and the net48 test projects do not reference OpenCvSharp.
 
-The package grows because of the native library: `ComicApiPlugin.crplugin` is 27.4 MB (it was 0.29 MB), and the installed folder is 70.4 MB with PDBs (it was 0.74 MB). `OpenCvSharpExtern.dll` is 68.6 MB, `OpenCvSharp.dll` 1.0 MB. A project that only references Core does not receive the runtime package's build props, since build assets are not transitive. The plugin and both test projects each reference `OpenCvSharp4.runtime.win` for that reason.
+OpenCvSharp calls `OpenCvSharpExtern.dll` by name, and .NET looks for it first in the folder of `OpenCvSharp.dll`, which is the service's own folder. No helper loads it. (Before the move, `OpenCvNative` loaded it with `LoadLibraryEx`, because ComicRack's Scripts folder is outside the default search path.) The first call into OpenCvSharp loads the library in a type initializer, so a library that is missing arrives as a `TypeInitializationException` around a `DllNotFoundException`. `OpenCvCoverComparer` reports that as `OpenCvUnavailableException`, and the service answers `503`.
+
+Package sizes, Debug build: the OpenCV files moved from the plugin's own files into `service.zip`, which is inside the package, so the download is almost the same size.
+
+| Item | Before the move | After |
+|---|---|---|
+| `ComicApiPlugin.crplugin` | 28.9 MB | 28.4 MB |
+| `service.zip` inside it | 1.4 MB | 28.3 MB |
+| Installed plugin folder in Scripts, with PDBs | 71.9 MB | 29.1 MB |
+| Unpacked service in `%LOCALAPPDATA%` | approximately 4 MB | approximately 72 MB |
+
+## Local API service
+
+The Comic Vine and VerseDB calls and the OpenCV cover comparison run in `ComicApiPlugin.Service`, a .NET 11 minimal API that runs as a separate process on the same machine. The aims are an API that can be tested without ComicRack, a smaller plugin, and a current runtime. The plugin starts the service, talks to it over HTTP on the loopback address, and stops it.
+
+The move had five phases. All are done.
+
+| Phase | Content | State |
+|---|---|---|
+| 1 | The service skeleton, and the plugin code that starts it, reaches it and stops it. No provider call moves. | Done |
+| 2 | The Comic Vine calls move behind service endpoints, with a remote `IComicVine` in the plugin, caches per run and a throttle per key. A scrape then needs the service, and the UI shows a failed start. | Done |
+| 3 | The VerseDB calls and the OpenCV cover comparison move to the service, and OpenCV leaves the plugin package. | Done |
+| 4 | The recorded-response tests run through the service: the plugin tests, the smoke tool and the differential tool. The plugin's own route to the providers is removed. | Done |
+| 5 | Final packaging and documents. | Done |
+
+### Projects and packaging
+
+- `ComicApiPlugin.Core` builds for net48 and for net11.0-windows. On .NET 11, `System.Drawing` comes from the `System.Drawing.Common` package, so the service needs the ASP.NET Core 11 runtime and not the Windows Desktop runtime. `ServiceProtocol` (Core/Service) holds every name the two sides share: the environment variable, the arguments, the ready prefix, the paths and the header names.
+- `ComicApiPlugin.Service` is framework-dependent. The user installs the runtime, and the apphost `ComicApiPlugin.Service.exe` finds it without `dotnet` on `PATH`.
+- The package holds the service as one file, `service.zip`, beside the plugin's DLLs. It is not a subfolder, for two reasons found in ComicRack CE:
+  - `PackageManager.Package.UnzipFile` writes every zip entry to `Path.GetFileName(entry.Name)`, and `CommitInstallPackage` copies only the top-level files. A `.crplugin` is therefore installed flat (`ComicRack.Engine/PackageManager.cs`).
+  - `PluginEngine.Initialize` lists the Scripts folder with `SearchOption.AllDirectories`, and `DotNetPluginInitializer.ReferencesPluginApi` loads every DLL for reflection and notes it as a library by name. The service's own .NET 11 `ComicApiPlugin.Core.dll` under Scripts would be noted beside the plugin's.
+- `ServicePackage.Unpack` unpacks the zip to `%LOCALAPPDATA%\ComicApiPlugin\service\<id>\`, where `<id>` is the first 16 hex digits of the zip's SHA-256. It extracts to a `.partial` folder, writes the marker file `.complete` into it last, and moves it into place. Only a folder with the marker is whole, and a second call with a whole folder does nothing. A folder under the final name without the marker (an unpack that a crash or an earlier build left) is deleted and unpacked again, unless a service runs from it. Then it removes the folders of other versions, but not a folder whose `ComicApiPlugin.Service.exe` Windows refuses to open for writing (a service runs from it, for example in another ComicRack install of a different plugin version), and not a `.partial` folder younger than 10 minutes (another ComicRack can still be unpacking into it). It deletes the marker of a folder first, so a folder that is only partly deleted is never taken for whole.
+- The `PackService` target in `ComicApiPlugin.csproj` publishes the service and zips the output without the PDBs. `service.zip` is 28.3 MB, nearly all of it the OpenCV native library, and `ComicApiPlugin.crplugin` is 28.4 MB ("Native loading and package size" has the table).
+
+### Start and handshake
+
+`ServiceHost` (plugin) owns the process. Its state is one of `NotStarted`, `Starting(task)`, `Running(endpoint, process)`, `Failed(reason)` and `Stopped`. `EnsureStartedAsync` returns the endpoint of a running service. Otherwise it starts one. Concurrent callers share one start, and a service that failed, exited or was stopped is started again on the next call.
+
+1. The plugin makes a token of 32 random bytes (base64url) and starts the exe with `--parent-pid <ComicRack pid> --log-dir <folder>`. The token goes in the environment variable `COMICAPI_SERVICE_TOKEN`, never on the command line, which other processes can read.
+2. The service binds Kestrel to `127.0.0.1` with port 0, so the system picks a free port. No command line or `ASPNETCORE_URLS` reaches the host.
+3. When the server accepts requests, the service writes one line to stdout: `COMICAPI-READY {"port":<n>,"pid":<pid>,"version":"<v>"}`. The plugin reads that line. It never probes for a port.
+4. The plugin waits 20 seconds for the line. A timeout, an exit before the line, or a missing exe gives `Failed` with a reason that includes what the service wrote to stderr. When the apphost reports that .NET is not installed, the reason names the .NET 11 runtime and `https://dotnet.microsoft.com/download/dotnet/11.0`.
+
+The plugin reads stdout and stderr for the life of the process, so a full pipe cannot block the service.
+
+### Requests
+
+`RequestGuard` runs before routing, so no endpoint is anonymous.
+
+- The `Host` header must be `127.0.0.1:<bound port>`. Any other value gets 400. This stops a web page that reaches the port under another name (DNS rebinding).
+- The request must carry `Authorization: Bearer <token>`. The comparison takes constant time. A missing or wrong token gets 401.
+- `GET /health` returns `{ "version", "pid", "uptimeSeconds" }`. `POST /shutdown` returns 202 and then stops the service.
+- The Comic Vine API key travels with each request in the `X-ComicVine-Key` header. The service keeps it only in memory, as the key of that key's transport. The VerseDB token travels the same way in `X-VerseDb-Token`.
+
+`ServiceEndpoint.CreateClient` makes the plugin's `HttpClient` with the base address and the token, and with the system proxy off.
+
+### Lifetime
+
+The service stops in every way ComicRack can end:
+
+- **ComicRack closes.** `ComicApiCommands` implements `IShutdown`. It posts `/shutdown` with a 2 second timeout, waits 3 seconds for the exit, then kills the process. It always lets ComicRack close. If another plugin cancels the close, the next call starts the service again.
+- **ComicRack crashes or is killed.** The process is in a Windows job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The plugin holds the only handle, so Windows kills the service when ComicRack's process ends. If Windows refuses the job (`CreateJobObject` or `AssignProcessToJobObject` fails, for example when ComicRack runs in a restrictive job), `ServiceHost` logs a warning and keeps the service, which `ParentWatch` then stops.
+- **Anything else.** `ParentWatch` in the service waits on the parent process and stops the service when it exits. If the parent is already gone at startup, the service exits with code 3.
+
+`ComicApiCommands` implements `IStartup` and starts the service in the background, so ComicRack's startup neither waits nor fails. Each scrape also starts the service if needed, calls `/health`, and writes `Local API service ready on 127.0.0.1:<port> (pid <pid>)` or the failure to the debug log. That check runs in the background. A provider call that needs the service waits for the start itself.
+
+### Comic Vine through the service
+
+The engine, the dialogs and `AutoMatcher` still talk only to `IComicVine`. In production the implementation is `ServiceComicVine` (plugin), which calls the service. `ComicVineCatalog` and `ComicVineHttp` are unchanged and now run in the service.
+
+**Contract.** `ComicVineDtos` and `ComicVineWire` (Core/Service) hold the JSON bodies and their mapping to the domain records, and both sides compile them. The domain records carry no serializer attributes. The serializer is `DataContractJsonSerializer`, which .NET Framework and .NET both include. `System.Text.Json` was not used in the plugin: ComicRack ships version 10.0.0.10 with no binding redirect, so a plugin built against it would fail to load as soon as ComicRack ships another version.
+
+**Endpoints.** Every endpoint is a POST with a JSON body. Every request carries the headers `X-ComicVine-Key` (the API key) and `X-Run-Id` (a GUID that the plugin makes for each scrape run), and the member `settings` (the `SearchSettings` from `Configuration.ToSearchSettings`).
+
+| Path | Body members beside `settings` | Answer |
+|---|---|---|
+| `/comicvine/search` | `terms` | JSON Lines: `{"progress":{"done","total"}}` for each page, then `{"series":[...]}` |
+| `/comicvine/issues` | `series` | JSON Lines: progress lines, then `{"issues":[...]}` |
+| `/comicvine/find-issue` | `series`, `issueNumber` | `{"issue": {...} or null}` |
+| `/comicvine/issue` | `issue`, `includeRating` | The issue details |
+| `/comicvine/resolve-series` | `series` or `issue`, exactly one | `{"series": {...} or null}` |
+| `/comicvine/image` | `url` | The image as PNG, or 204 when it cannot be fetched |
+
+The image endpoint returns what `ComicVineCatalog.GetImageAsync` returns, so the back cover is already removed. PNG keeps every pixel of the decoded image.
+
+**State.** `ComicVineSessions` (service) keeps all Comic Vine state in memory:
+
+- One `ComicVineHttp` for each API key, for the life of the service. Every run that uses a key therefore shares its 1100 ms throttle.
+- One `ComicVineCatalog` for each API key, run id and set of search settings. A run keeps the caches it had in the plugin, and two runs never share a cache. The service drops a catalog when its run has sent no request for 30 minutes. A run that continues after that only loses its caches.
+
+**Progress.** Search and issues answer in JSON Lines (`application/x-ndjson`). The service writes and flushes one progress line each time the catalog reports a page, and the result is the last line. `ServiceComicVine` reports each line to the caller's `IProgress<QueryProgress>` as it arrives. The alternative, one request for each page with the loop in the plugin, would have split the paging, the caches and the filters between the two processes.
+
+**Cancellation.** `HttpContext.RequestAborted` is the token of the catalog call. When the scrape is cancelled, the plugin cancels its HTTP request, the connection closes, and the service cancels its request to Comic Vine. The caller gets `OperationCanceledException`.
+
+**Errors.** The service turns a `ComicVineException` into a status code and the body `{"comicVine":{"kind","url","apiStatus","detail"}}`. The URL never holds the API key.
+
+| `ComicVineError` | Status |
+|---|---|
+| `InvalidApiKey` | 401 |
+| `RateLimited` | 429 |
+| `Network`, `Api` | 502 |
+
+- A failure after the first progress line cannot change the status, so it is the last line of the stream: `{"error":{...}}`.
+- `ServiceComicVine` throws a `ComicVineException` with the same kind, URL and API status, so the engine, the fast-rescrape recovery and the error dialogs behave as before. The transport exception behind a network error comes back as its message only.
+- A request that lacks a header or a member gets 400 and `{"message":"..."}`.
+- An exception that no endpoint expected is a 500 with `{"serviceError":"<exception type>: <message>"}` (`ServiceErrors`, a middleware before the routing, logs it as an error). After the first progress line it is the last line of the stream instead: `{"serviceError":"..."}`. `ServiceComicVine` and `ServiceVerseDb` throw `ServiceErrorException` for it, which is neither a `ComicVineException` nor a `VerseDbException`, so the run ends as on any unexpected error: `ErrorDialogs` offers to save the debug log. `ServiceUnavailable` stays for a service that cannot be started or reached.
+- A service that cannot be started or reached is a `ComicVineException` of the kind `ServiceUnavailable`. Its inner `ServiceUnavailableException` holds the reason. The kind is not recoverable, so the run ends, and `ErrorDialogs` shows the reason. For a missing runtime the reason names the .NET 11 download. `GetImageAsync` returns null instead, because no caller expects an image to fail.
+
+**Outbound log.** `OutboundLog` is the handler under every `ComicVineHttp` in the service. It writes one line for each call to Comic Vine: `Comic Vine GET comicvine.gamespot.com/api/search/ responded 200 in 118 ms (run <run id>)`. It never writes the query string, which holds the API key, or a header. A status of 400 or more and a transport failure are warnings. `ComicVineHttp.Retrying` reports a first attempt that will be tried again, and the service logs it as a warning. The throttle wait is not logged, because every request waits its turn.
+
+**Test seam in the service.** The environment variable `COMICAPI_COMICVINE_BASE_URL` makes the service send its Comic Vine API requests to another base URL. Only tests and the switch build set it, through `ServiceLaunch.Environment`, which is empty in a normal build. `FakeComicVineServer` (tests/Shared) answers there from the recorded responses.
+
+### VerseDB and the cover comparison through the service
+
+`CoverSearchRun`, `CoverMatchForm` and `CoverSeriesPicker` still talk only to `IVerseDb` and `ICoverComparer`. In production the implementations are `ServiceVerseDb` and `ServiceCoverComparer` (plugin). `VerseDbHttp` is unchanged and runs in the service. `OpenCvCoverComparer` moved from Core to the service project, because only the service has OpenCV.
+
+**Contract.** `VerseDbDtos` and `VerseDbWire` (Core/Service) hold the JSON bodies and their mapping. `WireJson` holds the serializer calls that the Comic Vine and the VerseDB bodies share.
+
+| Path | Request | Answer |
+|---|---|---|
+| `/versedb/lookup-cover` | `multipart/form-data` with the part `image` (the JPEG) | `{"clearMatch", "candidates":[...]}`, best candidate first |
+| `/versedb/issue` | JSON `{"issue": <VerseDB issue id>}` | The issue metadata |
+| `/versedb/image` | JSON `{"url": "<cover URL>"}` | The bytes that VerseDB served, as `application/octet-stream` |
+| `/covers/compare` | `multipart/form-data` with the parts `book` and `candidate` | `{"similarity":{"correlation","featureMatch"}}`, or `{"similarity":null}` when a cover cannot be decoded |
+
+- A `/versedb/` request carries the headers `X-VerseDb-Token` and `X-Run-Id`. The token is never in a URL. `/covers/compare` needs neither.
+- **Images are bytes, never JSON.** An image in a request is a part of a `multipart/form-data` body, which `curl -F` can send. An image in an answer is the whole body. The service reads the parts into memory with `MultipartReader` (`EndpointIo.ReadParts`). ASP.NET Core's form reader is not used, because it writes a part of more than 64 KB to a temporary file. Base64 in JSON was rejected: it makes each image a third larger and the serializer would hold it as one string.
+- **WebP stays in the plugin.** VerseDB serves its covers as WebP. `/versedb/image` returns them unchanged, so `ServiceVerseDb.GetImageAsync` gives what `VerseDbHttp.GetImageAsync` gives. `CoverSearchRun` passes those bytes to the comparison, and OpenCV decodes WebP. `CoverMatchForm` converts them for display with ComicRack's `WebpImage.ConvertToJpeg`, as before. Decoding in the service would add a second encoding of every cover and a second meaning of the `IVerseDb` bytes.
+
+**State.** `VerseDbClients` (service) keeps one `VerseDbHttp`, and so one `HttpClient`, for each token until the service stops. The service sends the multipart form that VerseDB needs (quoted `name` and `filename`, no `filename*`). VerseDB has no throttle and no cache in the plugin, so the service has none. The comparison has no state. One `OpenCvCoverComparer` serves every request on the thread pool.
+
+**Errors.**
+
+| Cause | Status | Body |
+|---|---|---|
+| VerseDB answers 401 | 401 | `{"verseDb":{"status":401,"message":"...","retryAfterSeconds":null}}` |
+| VerseDB answers 429 | 429 | `{"verseDb":{"status":429,...,"retryAfterSeconds":42}}` |
+| VerseDB answers another error status, cannot be reached, or a cover download fails | 502 | `{"verseDb":{"status": <VerseDB's status or null>,...}}` |
+| The service cannot load the OpenCV library | 503 | `{"openCvUnavailable":"<reason>"}` |
+| OpenCV fails the comparison, such as for an image whose header claims too many pixels | 500 | `{"serviceError":"<exception type>: <message>"}` |
+| A header, a part or a member is missing | 400 | `{"message":"..."}` |
+
+- `ServiceVerseDb` throws a `VerseDbException` with the same status, message and `RetryAfter`, so `CoverSearchRun` still waits as long as a 429 asks, shows the wait, and asks again once. The message never holds the token.
+- A service that cannot be started or reached is a `VerseDbException` without a status, whose inner `ServiceUnavailableException` holds the reason. `ErrorDialogs` shows it with the "Local API Service" warning, as for Comic Vine. `CoverMatchForm` shows the logo for a cover it cannot download.
+- `ServiceCoverComparer` throws `OpenCvUnavailableException` for a `503`, for a service that cannot be started or reached, and for a comparison that takes more than 60 seconds. The callers then log `cover auto-accept is unavailable` and ask the user. `ICoverComparer.Compare` has no cancellation token, so the 60 seconds are what keeps a service that hangs from holding a run.
+- A comparison that OpenCV fails is a `500` with a `serviceError` body, and `ServiceCoverComparer` throws `ServiceErrorException`. That is not `OpenCvUnavailableException`, so `CoverSeriesPicker` logs `the comparison failed`, scores that one series as no match and goes on with the next, as it did before the comparison moved to the service. `CoverSearchRun` logs `the check failed` and opens the dialog.
+
+**Shared client code.** `ServiceConnection.CallAsync` sends a request and reads the answer for all three clients. It gives `OperationCanceledException` for a cancelled call, the provider's exception for an error body that the caller knows, `ServiceErrorException` for a `serviceError` body, `ServiceSilentException` for a service that sends nothing for 150 seconds (`ServiceConnection.DefaultQuietLimit`), and `ServiceUnavailableException` for everything else. The 150 seconds count from the request until the headers arrive, and then again from each line of a JSON Lines answer. They are above the 100 seconds that the service waits for one answer from Comic Vine or VerseDB, so only a service that is stuck reaches them. `ServiceComicVine` turns `ServiceSilentException` into a `ComicVineException` of the kind `Network`, which is recoverable, and `ServiceVerseDb` into a `VerseDbException` without a status, as when the service itself waits too long for its provider. Each client turns `ServiceUnavailableException` into its own exception.
+
+**Outbound log.** The `HttpClient` of each `VerseDbHttp` in the service sends through `OutboundLog`, so each call to VerseDB is one line: `VerseDB POST versedb.com/api/v1/lookup/cover responded 200 in 2309 ms (run <run id>)`. A cover download is such a line too, with the host `media.versedb.com`. The token is a header, and no header is logged.
+
+**Test seam in the service.** `COMICAPI_VERSEDB_BASE_URL` makes the service send its VerseDB API requests to another base URL. Only tests set it. A cover is always downloaded from the URL in the lookup answer. `FakeVerseDbServer` (tests/Shared) answers a lookup, an issue and a cover.
+
+### Logging and the console window
+
+- Serilog writes `%LOCALAPPDATA%\ComicApiPlugin\logs\service-<yyyyMMdd>.log`, one file per day, and keeps 14 files.
+- Each request is one line with the method, the path without the query string, the status and the elapsed time. A status of 400 or more is a warning, and only a 500 or an exception is an error. ASP.NET Core's own request log, which includes the query string, is off. No header is logged. `SecretHeaderPolicy` writes the three secret headers as `<redacted>` if a later change logs a header collection.
+- The console window is hidden by default. The checkbox "Show the local API service console window" on the Providers tab (`showServiceConsole` in `settings.dat`) shows it. Saving a changed setting restarts a running service with the window shown or hidden. The restart is one transition of the `ServiceHost` state machine: the next call moves `Running` to `Starting` under the lock, and the start stops the old process on a pool thread before it launches the new one. The caller, which can be the UI thread, never waits for the old process to exit, and callers at the same time share the one new start. `ServiceHost` asks for the setting before each call, and `ComicApiCommands` answers from memory: it refreshes the value when it loads the settings and when the settings dialog saves, so the question reads no file. stdout is a pipe to the plugin, so the service opens the window by its device name, `CONOUT$`, and writes the same log lines there.
+
+### Tests and tools through the service
+
+The plugin has one route to the providers. `ComicApiCommands` always uses `ServiceComicVine`, `ServiceVerseDb` and `ServiceCoverComparer`, and `PluginPorts.Service` says how to start the service. The plugin tests and the in-app tools use that same route. They change only what the service asks in place of the provider.
+
+- **`FakeComicVineServer` (tests/Shared)** is an HTTP server on a loopback port that answers from the recorded responses in `tests/fixtures/comicvine`. A request that no fixture names finds nothing, and the server keeps its key in `Unrecorded`. `Requests` holds every request as it arrived, with the API key. With `ownImages`, the server changes each image URL in an answer to its own address, so the service asks the fake for a cover and not the real Comic Vine.
+- **`PluginTests`.** Each test has a `PluginWorld`: a plugin, a packaged service that the plugin starts through `ServiceHost`, and a fake Comic Vine. `ServiceLaunch.Environment` carries the fake's address to the service. A test reads the requests and the unrecorded requests from its own fake. One service for each test costs one to two seconds, and it lets a test replace a recorded response, count the processes, and stop the service without an effect on other tests.
+- **The switch build** (`tools/smoke`, `tools/differential`). The plugin inside ComicRack starts the fake and the service itself (see "The recorded-response switch" in [Phase 5b: the plugin](#phase-5b-the-plugin)). The fake lives and dies with ComicRack, so a run has no second process to start or stop, and `unrecorded.txt` is written as before.
+- **Time.** The service waits 1100 ms between two Comic Vine requests of one key, and the tests do not turn that off. A plugin test that scrapes two books makes approximately 12 requests and takes approximately 17 seconds. The tests run in parallel, and each service has its own throttle, so the suite takes 46 to 49 seconds (33 seconds before phase 4).
+
+The Core tests and the oracle tests do not start the service. They give `ComicVineHttp` and `VerseDbHttp` a handler, as before.
+
+### Build and tests
+
+Visual Studio's MSBuild (18.11) builds the .NET 11 projects with the .NET 11 SDK, so `Build.ps1` still builds the one solution. `tests/ComicApiPlugin.Service.Tests` (net11.0-windows) starts the built exe as a process. `ComicVineEndpointTests` there call each `/comicvine/` endpoint with the service pointed at `FakeComicVineServer`. `ServiceHostTests` and `ServicePackageTests` in `ComicApiPlugin.Tests` run `ServiceHost` against the `service.zip` in the artifacts folder, and against `.cmd` scripts that fail the way a service can. `ServiceComicVineTests` point the packaged service and an in-process `ComicVineCatalog` at one fake Comic Vine and compare what each returns and throws. `ServiceVerseDbTests` do the same for VerseDB with an in-process `VerseDbHttp`, and run `CoverSearchRun` through the service: the wait after a 429, the auto-accept of a matching cover, and the dialog when the service cannot start. `VerseDbEndpointTests`, `CoverEndpointTests` and `OpenCvCoverComparerTests` in the service tests call the endpoints and the comparer.
+
+Each plugin test that starts the service holds three thread-pool threads: one waits for the ready line, and .NET Framework reads each of the two output pipes on a blocked thread. `ThreadPoolForServices` raises the pool's minimum for the test run, because the pool otherwise adds about one thread each second and a ready line was read more than 20 seconds late. The test launches (`BuiltService.Launch`) also give a stop 30 seconds for the shutdown request and for the exit (`ServiceLaunch.ShutdownRequestTimeout`, `ShutdownExitTimeout`; the plugin's values are 2 and 3 seconds), so a stop in a test always ends through `/shutdown` and the log is complete.

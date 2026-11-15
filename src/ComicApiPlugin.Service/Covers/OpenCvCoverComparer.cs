@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ComicApiPlugin.Matching;
 using OpenCvSharp;
 
-namespace ComicApiPlugin.Matching;
+namespace ComicApiPlugin.Service.Covers;
 
 /// <summary>
 /// ICoverComparer on OpenCV. Two measures, as docs/port/architecture.md describes: a correlation of 64x96 blurred
 /// grayscale copies, and the share of ORB keypoint matches that agree on one homography.
 /// </summary>
-public sealed class OpenCvCoverComparer : ICoverComparer
+internal sealed class OpenCvCoverComparer : ICoverComparer
 {
 	private const int ThumbWidth = 64;
 	private const int ThumbHeight = 96;
@@ -23,7 +24,6 @@ public sealed class OpenCvCoverComparer : ICoverComparer
 
 	public CoverSimilarity? Compare(byte[] bookCover, byte[] candidateCover)
 	{
-		OpenCvNative.EnsureLoaded();
 		try
 		{
 			using Mat? book = Gray(bookCover);
@@ -34,11 +34,19 @@ public sealed class OpenCvCoverComparer : ICoverComparer
 			}
 			return new CoverSimilarity(Correlation(book, candidate), FeatureMatch(book, candidate));
 		}
-		catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+		catch (Exception e) when (LoadFailure(e) is { } cause)
 		{
-			throw new OpenCvUnavailableException("The OpenCV library could not be used: " + e.Message, e);
+			throw new OpenCvUnavailableException("The OpenCV library could not be used: " + cause.Message, e);
 		}
 	}
+
+	/// <summary>The first call into OpenCvSharp loads the native library in a type initializer, so a failed load arrives wrapped.</summary>
+	private static Exception? LoadFailure(Exception e) => e switch
+	{
+		DllNotFoundException or EntryPointNotFoundException or BadImageFormatException => e,
+		TypeInitializationException { InnerException: { } inner } => LoadFailure(inner),
+		_ => null,
+	};
 
 	private static Mat? Gray(byte[] encoded)
 	{

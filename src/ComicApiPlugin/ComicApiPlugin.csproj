@@ -17,7 +17,7 @@
 	</ItemGroup>
 	<ItemGroup Condition="'$(CvsRecordedResponses)' == 'true'">
 		<Compile Include="Smoke\**\*.cs" />
-		<Compile Include="..\..\tests\Shared\ComicVineFixtures.cs" Link="Smoke\ComicVineFixtures.cs" />
+		<Compile Include="..\..\tests\Shared\ComicVineFixtures.cs;..\..\tests\Shared\FakeHttpServer.cs;..\..\tests\Shared\FakeComicVineServer.cs" Link="Smoke\%(Filename)%(Extension)" />
 	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="System.Drawing" />
@@ -29,10 +29,6 @@
 		<Reference Include="ComicRack.Engine" HintPath="$(ComicRackPath)ComicRack.Engine.dll" Private="false" />
 		<Reference Include="cYo.Common" HintPath="$(ComicRackPath)cYo.Common.dll" Private="false" />
 		<Reference Include="cYo.Common.Windows" HintPath="$(ComicRackPath)cYo.Common.Windows.dll" Private="false" />
-	</ItemGroup>
-	<!-- Not transitive: the build props that copy OpenCvSharpExtern.dll to the output only apply to a project that references the package itself. -->
-	<ItemGroup>
-		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ComicApiPlugin.Core\ComicApiPlugin.Core.csproj" />
@@ -47,10 +43,30 @@
 	</ItemGroup>
 	<!--
 		Every build lays the plugin out as ComicRack installs it in artifacts\<Configuration>\Comic API Plugin\ at the repo root:
-		the DLLs (OpenCvSharp's too), Package.ini, the images and the language zips, plus the PDBs for line numbers in stack traces. Copy that folder
+		the DLLs, Package.ini, the images, the language zips and service.zip, plus the PDBs for line numbers in stack traces. Copy that folder
 		into ComicRack's Scripts folder to install the build. The .crplugin in $(OutDir) is zipped from the same files, without the
 		PDBs. The recorded-response build stages under obj, so it never touches artifacts.
+
+		service.zip is the published local API service (ComicApiPlugin.Service, .NET 11, framework-dependent) with its OpenCV library, without its PDBs. It is a zip and
+		not a subfolder for two reasons. ComicRack installs a .crplugin flat: it drops the folder of every entry. And ComicRack scans every DLL
+		under its Scripts folder, where the service's .NET 11 build of ComicApiPlugin.Core.dll would be noted as a library with the plugin's own
+		name. The plugin unpacks the zip outside the Scripts folder on first use (ServicePackage).
 	-->
+	<Target Name="PackService" BeforeTargets="PackCrPlugin">
+		<PropertyGroup>
+			<ServicePublishDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '..', 'ComicApiPlugin.Service', 'bin', '$(Configuration)', 'net11.0-windows', 'publish'))</ServicePublishDir>
+			<ServiceStaging>$(IntermediateOutputPath)service\</ServiceStaging>
+			<ServiceZipPath>$(IntermediateOutputPath)service.zip</ServiceZipPath>
+		</PropertyGroup>
+		<!-- No extra properties, so this is the same project instance the solution builds, and the service is built once. -->
+		<MSBuild Projects="..\ComicApiPlugin.Service\ComicApiPlugin.Service.csproj" Targets="Publish" RemoveProperties="CvsRecordedResponses" />
+		<ItemGroup>
+			<ServiceFile Include="$(ServicePublishDir)**\*" Exclude="$(ServicePublishDir)**\*.pdb" />
+		</ItemGroup>
+		<RemoveDir Directories="$(ServiceStaging)" />
+		<Copy SourceFiles="@(ServiceFile)" DestinationFiles="@(ServiceFile->'$(ServiceStaging)%(RecursiveDir)%(Filename)%(Extension)')" />
+		<ZipDirectory SourceDirectory="$(ServiceStaging)" DestinationFile="$(ServiceZipPath)" Overwrite="true" />
+	</Target>
 	<Target Name="PackCrPlugin" AfterTargets="Build">
 		<PropertyGroup>
 			<CrPluginStaging Condition="'$(CvsRecordedResponses)' == 'true'">$(IntermediateOutputPath)crplugin\</CrPluginStaging>
@@ -59,8 +75,7 @@
 		</PropertyGroup>
 		<ItemGroup>
 			<CrPluginContent Include="$(TargetPath);$(OutDir)ComicApiPlugin.Core.dll;Package\Package.ini;Package\Images\*;Package\Languages\*.zip" />
-			<!-- The OpenCV binding and its native library, 64-bit. OpenCvNative loads OpenCvSharpExtern.dll from beside OpenCvSharp.dll. System.Memory, Buffers and Unsafe come with ComicRack, and opencv_videoio_ffmpeg (video decoding) is not needed to read covers. -->
-			<CrPluginContent Include="$(OutDir)OpenCvSharp.dll;$(OutDir)dll\x64\OpenCvSharpExtern.dll" />
+			<CrPluginContent Include="$(ServiceZipPath)" />
 		</ItemGroup>
 		<RemoveDir Directories="$(CrPluginStaging)" />
 		<Copy SourceFiles="@(CrPluginContent)" DestinationFolder="$(CrPluginStaging)" />

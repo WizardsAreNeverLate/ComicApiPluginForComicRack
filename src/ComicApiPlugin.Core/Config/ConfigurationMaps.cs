@@ -25,6 +25,7 @@ public sealed partial record Configuration
 	private const string UpdateTagsKey = "updateTags";
 	private const string SummaryDialogKey = "summaryDialog";
 	private const string VerseDbAutoAcceptKey = "verseDbAutoAccept";
+	private const string ShowServiceConsoleKey = "showServiceConsole";
 	private const string ComicVineCoverAutoAcceptKey = "comicVineCoverAutoAccept";
 	private const string ComicVineCoverCompareCountKey = "comicVineCoverCompareCount";
 
@@ -60,6 +61,7 @@ public sealed partial record Configuration
 			FastRescrape = Flag(settings, FastRescrapeKey, config.FastRescrape),
 			SummaryDialog = Flag(settings, SummaryDialogKey, config.SummaryDialog),
 			VerseDbAutoAccept = Flag(settings, VerseDbAutoAcceptKey, config.VerseDbAutoAccept),
+			ShowServiceConsole = Flag(settings, ShowServiceConsoleKey, config.ShowServiceConsole),
 			ComicVineCoverAutoAccept = Flag(settings, ComicVineCoverAutoAcceptKey, config.ComicVineCoverAutoAccept),
 			ComicVineCoverCompareCount = Count(settings, ComicVineCoverCompareCountKey, config.ComicVineCoverCompareCount),
 		};
@@ -87,6 +89,7 @@ public sealed partial record Configuration
 			[UpdateTagsKey] = new DatValue.Bool(Update.HasFlag(BookFields.Tags)),
 			[SummaryDialogKey] = new DatValue.Bool(SummaryDialog),
 			[VerseDbAutoAcceptKey] = new DatValue.Bool(VerseDbAutoAccept),
+			[ShowServiceConsoleKey] = new DatValue.Bool(ShowServiceConsole),
 			[ComicVineCoverAutoAcceptKey] = new DatValue.Bool(ComicVineCoverAutoAccept),
 			[ComicVineCoverCompareCountKey] = new DatValue.Int(ComicVineCoverCompareCount),
 		};

@@ -5,7 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 
-namespace ComicApiPlugin.Tests.Matching;
+namespace ComicApiPlugin.Fixtures;
 
 /// <summary>A made-up comic cover: a coloured body of shapes and captions under a title banner that every series issue shares.</summary>
 internal static class SyntheticCover
@@ -84,6 +84,45 @@ internal static class SyntheticCover
 			image.Save(stream, format);
 		}
 		return stream.ToArray();
+	}
+
+	/// <summary>
+	/// A PNG whose header claims 100000 x 100000 pixels and that holds no pixel data. OpenCV reads the header and then
+	/// refuses the size with an error, where bytes that are no image at all only decode to nothing.
+	/// </summary>
+	public static byte[] OversizedPng()
+	{
+		using var png = new MemoryStream();
+		png.Write([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A], 0, 8);
+		WriteChunk(png, "IHDR", [0, 1, 0x86, 0xA0, 0, 1, 0x86, 0xA0, 8, 2, 0, 0, 0]);
+		WriteChunk(png, "IDAT", [0x78, 0x9C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01]);
+		WriteChunk(png, "IEND", []);
+		return png.ToArray();
+	}
+
+	private static void WriteChunk(Stream png, string type, byte[] data)
+	{
+		byte[] typeAndData = [.. type.Select(c => (byte)c), .. data];
+		WriteBigEndian(png, (uint)data.Length);
+		png.Write(typeAndData, 0, typeAndData.Length);
+		WriteBigEndian(png, Crc32(typeAndData));
+	}
+
+	private static void WriteBigEndian(Stream stream, uint value) =>
+		stream.Write([(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value], 0, 4);
+
+	private static uint Crc32(byte[] bytes)
+	{
+		uint crc = 0xFFFFFFFF;
+		foreach (byte b in bytes)
+		{
+			crc ^= b;
+			for (int bit = 0; bit < 8; bit++)
+			{
+				crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320 : crc >> 1;
+			}
+		}
+		return ~crc;
 	}
 
 	private static Color RandomColor(Random random) => Color.FromArgb(random.Next(256), random.Next(256), random.Next(256));

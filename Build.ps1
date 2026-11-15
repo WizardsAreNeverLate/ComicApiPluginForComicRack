@@ -61,8 +61,9 @@ if ($SkipTests) {
 
 $env:TESTINGPLATFORM_TELEMETRY_OPTOUT = "1"
 $failed = @()
-foreach ($name in "ComicApiPlugin.Tests", "ComicApiPlugin.Oracle.Tests") {
-	$exe = Join-Path $PSScriptRoot "tests\$name\bin\$Configuration\net48\$name.exe"
+$suites = [ordered]@{ "ComicApiPlugin.Tests" = "net48"; "ComicApiPlugin.Oracle.Tests" = "net48"; "ComicApiPlugin.Service.Tests" = "net11.0-windows" }
+foreach ($name in $suites.Keys) {
+	$exe = Join-Path $PSScriptRoot "tests\$name\bin\$Configuration\$($suites[$name])\$name.exe"
 	if (!(Test-Path $exe)) {
 		Write-Error "The build reported success, but $exe does not exist."
 		exit 1
