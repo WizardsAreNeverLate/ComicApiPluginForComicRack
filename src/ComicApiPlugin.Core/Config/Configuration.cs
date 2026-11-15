@@ -37,6 +37,22 @@ public sealed partial record Configuration
 
 	public bool FastRescrape { get; init; } = true;
 	public bool SummaryDialog { get; init; } = true;
+	/// <summary>VerseDB: write the match without asking when the lookup finds one candidate and its cover matches the book's.</summary>
+	public bool VerseDbAutoAccept { get; init; }
+
+	/// <summary>Comic Vine: compare the covers of the top search results and take a single confident match without asking.</summary>
+	public bool ComicVineCoverAutoAccept { get; init; }
+
+	public const int MinCoverCompareCount = 1;
+	public const int MaxCoverCompareCount = 20;
+
+	/// <summary>How many top-ranked series ComicVineCoverAutoAccept compares. Always within MinCoverCompareCount..MaxCoverCompareCount.</summary>
+	public int ComicVineCoverCompareCount
+	{
+		get;
+		init => field = Math.Max(MinCoverCompareCount, Math.Min(MaxCoverCompareCount, value));
+	} = 5;
+
 	public required AdvancedSettings Advanced { get; init; }
 
 	/// <summary>The generated ToString would print ApiKey, and so into the debug log.</summary>
@@ -54,6 +70,9 @@ public sealed partial record Configuration
 		builder.Append(", PreserveThumbs = ").Append(PreserveThumbs);
 		builder.Append(", FastRescrape = ").Append(FastRescrape);
 		builder.Append(", SummaryDialog = ").Append(SummaryDialog);
+		builder.Append(", VerseDbAutoAccept = ").Append(VerseDbAutoAccept);
+		builder.Append(", ComicVineCoverAutoAccept = ").Append(ComicVineCoverAutoAccept);
+		builder.Append(", ComicVineCoverCompareCount = ").Append(ComicVineCoverCompareCount);
 		builder.Append(", Advanced = ").Append(Advanced);
 		return true;
 	}

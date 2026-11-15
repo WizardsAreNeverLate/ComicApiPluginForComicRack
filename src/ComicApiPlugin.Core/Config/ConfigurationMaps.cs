@@ -24,6 +24,9 @@ public sealed partial record Configuration
 	private const string UpdateNotesKey = "updateNotes";
 	private const string UpdateTagsKey = "updateTags";
 	private const string SummaryDialogKey = "summaryDialog";
+	private const string VerseDbAutoAcceptKey = "verseDbAutoAccept";
+	private const string ComicVineCoverAutoAcceptKey = "comicVineCoverAutoAccept";
+	private const string ComicVineCoverCompareCountKey = "comicVineCoverCompareCount";
 
 	/// <summary>
 	/// settings.dat map to settings; a missing key keeps its default. Unknown keys are ignored here and kept by SettingsStore.
@@ -56,6 +59,9 @@ public sealed partial record Configuration
 			PreserveThumbs = Flag(settings, PreserveThumbsKey, config.PreserveThumbs),
 			FastRescrape = Flag(settings, FastRescrapeKey, config.FastRescrape),
 			SummaryDialog = Flag(settings, SummaryDialogKey, config.SummaryDialog),
+			VerseDbAutoAccept = Flag(settings, VerseDbAutoAcceptKey, config.VerseDbAutoAccept),
+			ComicVineCoverAutoAccept = Flag(settings, ComicVineCoverAutoAcceptKey, config.ComicVineCoverAutoAccept),
+			ComicVineCoverCompareCount = Count(settings, ComicVineCoverCompareCountKey, config.ComicVineCoverCompareCount),
 		};
 	}
 
@@ -80,6 +86,9 @@ public sealed partial record Configuration
 			[UpdateNotesKey] = new DatValue.Bool(Update.HasFlag(BookFields.Notes)),
 			[UpdateTagsKey] = new DatValue.Bool(Update.HasFlag(BookFields.Tags)),
 			[SummaryDialogKey] = new DatValue.Bool(SummaryDialog),
+			[VerseDbAutoAcceptKey] = new DatValue.Bool(VerseDbAutoAccept),
+			[ComicVineCoverAutoAcceptKey] = new DatValue.Bool(ComicVineCoverAutoAccept),
+			[ComicVineCoverCompareCountKey] = new DatValue.Int(ComicVineCoverCompareCount),
 		};
 		foreach (FieldTable.Row row in FieldTable.Toggleable)
 		{
@@ -107,6 +116,10 @@ public sealed partial record Configuration
 
 	private static bool Flag(IReadOnlyDictionary<string, DatValue> settings, string key, bool fallback) =>
 		settings.TryGetValue(key, out DatValue? value) ? Truthy(value) : fallback;
+
+	/// <summary>An integer setting; a value that is not a whole number keeps the fallback. The property clamps the range.</summary>
+	private static int Count(IReadOnlyDictionary<string, DatValue> settings, string key, int fallback) =>
+		settings.TryGetValue(key, out DatValue? value) && value is DatValue.Int i ? (int)Math.Max(int.MinValue, Math.Min(int.MaxValue, i.Value)) : fallback;
 
 	private static bool Truthy(DatValue value) => value switch
 	{
