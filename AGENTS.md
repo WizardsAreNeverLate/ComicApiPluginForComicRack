@@ -25,7 +25,7 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 
 ## Tests
 
-- `tests/ComicApiPlugin.Tests`: TUnit unit tests against recorded Comic Vine responses.
+- `tests/ComicApiPlugin.Tests`: TUnit unit tests against recorded Comic Vine responses. The plugin tests start the packaged service (`service.zip` in `artifacts\`) against a fake Comic Vine, so build with `Build.ps1` before you run them. `docs/local-api-service.md` ("Test architecture") has the design.
 - `tests/ComicApiPlugin.Oracle.Tests`: runs the original Python modules under IronPython, in-process, and compares results against the C# port.
 - `tests/ComicApiPlugin.Service.Tests`: TUnit tests on .NET 11 that start the built service exe as a process. `ServiceHostTests` in `ComicApiPlugin.Tests` start the packaged service from the plugin side.
 - `tools/smoke`, `tools/differential`: in-app checks that start ComicRack itself. Not part of the normal test loop.

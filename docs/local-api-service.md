@@ -30,7 +30,7 @@ The move is planned in five phases:
 | 1 | Service skeleton: start, health check, secure access, stop, logging | Done |
 | 2 | Comic Vine calls move to the service | Done |
 | 3 | VerseDB calls and the OpenCV cover comparison move to the service | Done |
-| 4 | Tests that use recorded responses run through the service | Planned |
+| 4 | Tests that use recorded responses run through the service | Done |
 | 5 | Packaging and documentation | Planned |
 
 A Comic Vine scrape and a VerseDB cover search need the service. The plugin sends each provider call to it (see
@@ -535,22 +535,17 @@ Every request needs the bearer token and the correct `Host` header.
 
 - **`COMICAPI_COMICVINE_BASE_URL`.** If this environment variable is set when the service starts, the service sends its
   Comic Vine API requests to that base URL and not to `https://comicvine.gamespot.com/api/`. The value must be an `http`
-  or `https` URL that ends with a slash. Only tests set it. The plugin never sets it: `ServiceLaunch.Environment`, which
-  carries it, is empty in the live ports.
+  or `https` URL that ends with a slash. Only tests and the switch build set it. A normal build of the plugin never sets
+  it: `ServiceLaunch.Environment`, which carries it, is empty in the live ports.
 - **`FakeComicVineServer`** (`tests/Shared`) is a small HTTP server on a loopback port. It answers Comic Vine requests
-  from the recorded responses in `tests/fixtures/comicvine`. The service tests and the plugin tests point the service at it.
+  from the recorded responses in `tests/fixtures/comicvine`. The service tests, the plugin tests, and the switch build
+  point the service at it. See "Test architecture".
 - **`COMICAPI_VERSEDB_BASE_URL`.** If this environment variable is set when the service starts, the service sends its
   VerseDB API requests to that base URL and not to `https://versedb.com`. The value must be an `http` or `https` URL.
   The service always gets a cover image from the URL in the lookup answer. Only tests set this variable.
 - **`FakeVerseDbServer`** (`tests/Shared`) is a small HTTP server on a loopback port. It answers a cover lookup with one
   candidate, the details of that issue, and the cover of that issue. A test can give a different answer for a request.
   `FakeHttpServer` is the HTTP part that the two fake servers share.
-- **The in-process route (temporary).** `PluginPorts.Service` selects how the plugin asks the providers. The live ports
-  have a service, so the plugin uses `ServiceComicVine`, `ServiceVerseDb`, and `ServiceCoverComparer`. Ports without a
-  service use `ComicVineCatalog` and `VerseDbHttp` in the plugin's own process, with the handler from
-  `PluginPorts.Handler`. They have no cover comparison, so a run with cover auto-accept asks the user. The
-  recorded-response plugin tests (`PluginTests`), `tools/smoke`, and `tools/differential` use this route. Phase 4 moves
-  their recorded responses into the service and removes the route.
 - **Stop timeouts.** `ServiceLaunch.ShutdownRequestTimeout` (2 seconds) and `ShutdownExitTimeout` (3 seconds) are the
   times that a stop waits for the shutdown request and for the exit. The tests set 30 seconds for each, so that a stop
   on a busy computer always ends through `POST /shutdown` and the log file is complete.
@@ -558,6 +553,76 @@ Every request needs the bearer token and the correct `Host` header.
   life of the service. `ThreadPoolForServices` increases the minimum size of the pool for the test run. Without it,
   approximately 50 such tests at the same time made the pool so slow that the plugin read a ready line more than
   20 seconds late, and tests failed at random.
+
+## Test architecture
+
+The plugin has one route to Comic Vine and VerseDB: the service. Production, the plugin tests, and the in-app tools all
+use it. A test does not replace the route. It replaces the provider that the service calls.
+
+```text
+plugin (ComicApiCommands) -> ServiceHost -> ComicApiPlugin.Service.exe -> FakeComicVineServer (recorded responses)
+```
+
+### The fake provider
+
+`FakeComicVineServer` listens on `127.0.0.1` with a port that Windows chooses. The service gets its address in
+`COMICAPI_COMICVINE_BASE_URL`.
+
+- **Recorded responses.** The server finds the answer by the request URL, with the API key removed. The files are in
+  `tests/fixtures/comicvine`.
+- **A request that no file names.** An API request gets an empty result, and an image gets `404`. The server keeps the
+  URL of each such request in `Unrecorded`.
+- **All requests.** `Requests` has each request as the server received it, with the API key. `RequestKeys` has the same
+  requests as Comic Vine URLs without the key.
+- **Images.** With `ownImages`, the server changes each image URL in an answer to its own address. Without this, the
+  service would get the covers from the real Comic Vine.
+
+The fake provider is test code. It is not in `ComicApiPlugin.Service.exe`, and it is not in a normal build of the plugin.
+
+### Plugin tests
+
+Each test in `PluginTests` makes a `PluginWorld`. A `PluginWorld` has a plugin, a fake Comic Vine, and the packaged
+service from `service.zip`, which the plugin starts through `ServiceHost` as in ComicRack. `ServiceLaunch.Environment`
+gives the address of the fake to the service. The test reads the requests from its own fake, and the end of the test
+stops the service.
+
+The tests do not share a service. A service of its own lets a test replace a recorded response, count the service
+processes, and stop the service, with no effect on a different test. The cost is one to two seconds for each
+start.
+
+### Time
+
+The service waits 1100 ms between two Comic Vine requests that use the same key. The tests do not change that wait. A
+test that scrapes two books makes approximately 12 requests to the fake and takes approximately 17 seconds. The tests
+run at the same time, and each service has its own wait, so the longest test sets the time of the suite.
+
+| Suite | Before phase 4 | After phase 4 |
+|---|---|---|
+| `tests/ComicApiPlugin.Tests` (1023 tests) | 33.5 s | 46 s to 49 s |
+| `tests/ComicApiPlugin.Service.Tests` (56 tests) | 7.4 s | 7.3 s |
+
+The times are from one computer, with one run before and three runs after.
+
+### In-app runs
+
+The two in-app tools use the switch build of the plugin, which is built with `-p:CvsRecordedResponses=true`. Run
+`Build.ps1` first. Close ComicRack, because each script stops if a ComicRack process is running.
+
+```powershell
+$env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
+./tools/smoke/run-smoke.ps1
+./tools/differential/run-differential.ps1 -PythonSource <src folder of the Python plugin> -KeyFile <file with the API key>
+```
+
+- **Smoke run** (`CVS_NET_RECORDED_RESPONSES`). The plugin inside ComicRack starts the fake Comic Vine and then the
+  service. The fake answers from a copy of the fixtures in the run folder, and it is also the service's VerseDB, so no
+  request leaves the computer. The plugin unpacks the service into the run folder, and the service writes its log
+  there. Thus the run does not use `%LOCALAPPDATA%\ComicApiPlugin`. The fake is in the plugin, not in a separate
+  process, because it then starts and stops with ComicRack and the script has no second process to control. The script
+  reads the service log and fails if the service made no call to the fake, if a call went to a different host, or if a
+  service process from the run folder is still running.
+- **Differential run** (`CVS_NET_LIVE_FOLDER`). The service calls the real Comic Vine. The script counts the requests of
+  the C# plugin from the `Comic Vine GET` lines of the service log.
 
 ## Tests
 
@@ -570,12 +635,16 @@ Every request needs the bearer token and the correct `Host` header.
 | `tests/ComicApiPlugin.Service.Tests` (`VerseDbEndpointTests`) | Starts the real exe with a fake VerseDB: a lookup that is clear and one that is not, the issue details, the image bytes, the multipart form that VerseDB gets (quoted `name` and `filename`, no `filename*`), the error bodies for 401, 422, 429 with `Retry-After`, and 503, a VerseDB that cannot be reached, `400` for an incomplete request, and the log line for each call without the token |
 | `tests/ComicApiPlugin.Service.Tests` (`CoverEndpointTests`, `OpenCvCoverComparerTests`) | `/covers/compare` gives the scores that the comparer gives: a cropped copy matches, a different cover does not, bytes that are not an image give `null`. A service without `OpenCvSharpExtern.dll` answers `503` and continues. The comparer tests moved here from `tests/ComicApiPlugin.Tests`, because OpenCV is now only in the service. |
 | `tests/ComicApiPlugin.Tests` (`ServiceVerseDbTests`) | Points the packaged service and an in-process `VerseDbHttp` at one fake VerseDB: the same results, requests, and exceptions on both routes; a cover search that waits after a 429 and tries again; cover auto-accept through the service; the dialog when the service cannot start; no token in the service log or the plugin log |
-| `tests/ComicApiPlugin.Tests` (`PluginTests`) | A full scrape through the service writes the book; a full cover search through the service writes the book without a dialog when the cover matches; a scrape or a cover search without the runtime shows the warning with the download link and changes no book; a saved console setting restarts the service |
+| `tests/ComicApiPlugin.Tests` (`PluginTests`) | Each scrape goes through the packaged service to a fake Comic Vine: the dialogs in order, the fields written, no unrecorded request of the scrape itself, one error dialog for a rejected key, one service process for two scrapes, and a changed API key in the next requests. A full cover search through the service writes the book without a dialog when the cover matches; a scrape or a cover search without the runtime shows the warning with the download link and changes no book; a saved console setting restarts the service; a shutdown before a start starts no service |
 
 ## Known limitations and open items
 
-- **Not tested inside ComicRack yet:** the `IStartup` and `IShutdown` hooks, the visible console window, a scrape
-  through the service, and a cover search with the cover dialog through the service.
+- **Tested inside ComicRack by the smoke run:** the start of the service, a scrape of two books through the service, and
+  the stop through `POST /shutdown` when ComicRack closes.
+- **Not tested inside ComicRack yet:** the visible console window, a cover search with the cover dialog through the
+  service, and the stop of the service when ComicRack crashes.
+- **The differential run has not been run since phase 4.** It needs an API key and the Python plugin. Its new request
+  count from the service log is not tested.
 - **The download is not smaller after phase 3.** See "OpenCV". A smaller download needs a different delivery of the
   native library, for example a download on first use.
 - **A cover comparison cannot be cancelled.** `ICoverComparer.Compare` has no cancellation token. A cancelled run waits
