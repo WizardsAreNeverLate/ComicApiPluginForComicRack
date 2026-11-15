@@ -40,9 +40,10 @@ internal sealed record ServiceLaunch(Func<string> Executable, string LogFolder)
 
 /// <summary>
 /// Owns the local API service process for one ComicRack process: starts it on demand, hands out its endpoint, and stops
-/// it. The process is held in a job object, so it cannot outlive this process.
+/// it. The process is held in a job object, so it cannot outlive this process. Where Windows refuses the job, the
+/// service's own watch on this process stops it.
 /// </summary>
-internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, Action<string> log) : IDisposable
+internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, Action<string> log, Action<Process>? joinJob = null) : IDisposable
 {
 	private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(3);
 	private static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(5);
@@ -273,7 +274,7 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 		process.Start();
 		try
 		{
-			job.Value.Add(process);
+			JoinJob(process);
 			// Reading both pipes for the life of the process keeps a full pipe from blocking the service.
 			process.BeginOutputReadLine();
 			process.BeginErrorReadLine();
@@ -311,6 +312,22 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 			Kill(process);
 			process.Dispose();
 			throw;
+		}
+	}
+
+	/// <summary>
+	/// Windows can refuse a job object, for example when ComicRack itself runs in a job that forbids one. The service then
+	/// still stops when this process exits, through its watch on the parent process, so it keeps running.
+	/// </summary>
+	private void JoinJob(Process process)
+	{
+		try
+		{
+			(joinJob ?? job.Value.Add)(process);
+		}
+		catch (Win32Exception error)
+		{
+			log($"The local API service could not join a job object ({error.Message}), so only its watch on this process stops it if ComicRack crashes.");
 		}
 	}
 

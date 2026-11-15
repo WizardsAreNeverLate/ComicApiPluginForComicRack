@@ -477,7 +477,7 @@ The plugin reads stdout and stderr for the life of the process, so a full pipe c
 The service stops in every way ComicRack can end:
 
 - **ComicRack closes.** `ComicApiCommands` implements `IShutdown`. It posts `/shutdown` with a 2 second timeout, waits 3 seconds for the exit, then kills the process. It always lets ComicRack close. If another plugin cancels the close, the next call starts the service again.
-- **ComicRack crashes or is killed.** The process is in a Windows job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The plugin holds the only handle, so Windows kills the service when ComicRack's process ends.
+- **ComicRack crashes or is killed.** The process is in a Windows job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The plugin holds the only handle, so Windows kills the service when ComicRack's process ends. If Windows refuses the job (`CreateJobObject` or `AssignProcessToJobObject` fails, for example when ComicRack runs in a restrictive job), `ServiceHost` logs a warning and keeps the service, which `ParentWatch` then stops.
 - **Anything else.** `ParentWatch` in the service waits on the parent process and stops the service when it exits. If the parent is already gone at startup, the service exits with code 3.
 
 `ComicApiCommands` implements `IStartup` and starts the service in the background, so ComicRack's startup neither waits nor fails. Each scrape also starts the service if needed, calls `/health`, and writes `Local API service ready on 127.0.0.1:<port> (pid <pid>)` or the failure to the debug log. That check runs in the background. A provider call that needs the service waits for the start itself.

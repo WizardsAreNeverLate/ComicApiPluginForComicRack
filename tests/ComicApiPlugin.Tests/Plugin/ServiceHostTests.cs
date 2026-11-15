@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -232,6 +233,20 @@ public sealed class ServiceHostTests
 		ServiceUnavailableException? failure = await Failure(host);
 
 		await Assert.That(failure!.Message).IsEqualTo("The local API service exited with code 7 before it was ready. It wrote: cannot open the log folder ");
+	}
+
+	[Test]
+	public async Task A_service_that_cannot_join_a_job_object_runs_with_its_parent_watch_and_the_log_says_so()
+	{
+		var log = new List<string>();
+		ServiceLaunch launch = BuiltService.Launch();
+		using var host = new ServiceHost(launch, () => false, line => { lock (log) { log.Add(line); } }, joinJob: _ => throw new Win32Exception(5));
+
+		string health = await host.CheckAsync();
+
+		await Assert.That(health).StartsWith("Local API service ready on ");
+		await Assert.That(log).Contains($"The local API service could not join a job object ({new Win32Exception(5).Message}), so only its watch on this process stops it if ComicRack crashes.");
+		await Assert.That(BuiltService.CommandLines(launch.LogFolder)[0]).Contains($"{ServiceProtocol.ParentPidArgument} {Process.GetCurrentProcess().Id} ");
 	}
 
 	[Test]
