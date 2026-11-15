@@ -13,8 +13,9 @@ internal readonly record struct ApiRequest(string Path, string Query)
 
 	private const string IssueFields = "field_list=name,issue_number,id,image";
 
-	public string ToUrl(string apiKey) =>
-		BaseUrl + Path + "?api_key=" + apiKey + "&client=cvscraper&format=xml" + (Query.Length > 0 ? "&" + Query : "");
+	/// <param name="baseUrl">BaseUrl, except in a test that answers the API from a local server.</param>
+	public string ToUrl(string apiKey, string baseUrl = BaseUrl) =>
+		baseUrl + Path + "?api_key=" + apiKey + "&client=cvscraper&format=xml" + (Query.Length > 0 ? "&" + Query : "");
 
 	/// <summary>Page 1 sends no page parameter: Comic Vine returns other results for "&amp;page=1" (the "bprd vampire" bug).</summary>
 	public static ApiRequest SeriesSearch(string terms, int page)

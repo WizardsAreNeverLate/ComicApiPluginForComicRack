@@ -26,6 +26,27 @@ public static class ServiceProtocol
 
 	public const string VerseDbTokenHeader = "X-VerseDb-Token";
 
+	/// <summary>Names the scrape run a request belongs to. The service keeps one set of Comic Vine caches for each run.</summary>
+	public const string RunIdHeader = "X-Run-Id";
+
+	public const string ComicVineSearchPath = "/comicvine/search";
+
+	public const string ComicVineIssuesPath = "/comicvine/issues";
+
+	public const string ComicVineFindIssuePath = "/comicvine/find-issue";
+
+	public const string ComicVineIssuePath = "/comicvine/issue";
+
+	public const string ComicVineResolveSeriesPath = "/comicvine/resolve-series";
+
+	public const string ComicVineImagePath = "/comicvine/image";
+
+	/// <summary>
+	/// For tests only: the service sends its Comic Vine API requests to this base URL and not to comicvine.gamespot.com, so a
+	/// test can answer them from a local server. It must end with a slash.
+	/// </summary>
+	public const string ComicVineBaseUrlVariable = "COMICAPI_COMICVINE_BASE_URL";
+
 	/// <summary>Where the .NET runtime that the service needs is downloaded.</summary>
 	public const string RuntimeDownloadUrl = "https://dotnet.microsoft.com/download/dotnet/11.0";
 }

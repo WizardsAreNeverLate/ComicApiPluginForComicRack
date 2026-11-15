@@ -96,7 +96,7 @@ public sealed class ComicVineCatalog(ComicVineHttp http, SearchSettings settings
 		XDocument doc = await http.GetAsync(request, ct).ConfigureAwait(false);
 		if (ComicVineXml.IssueVolume(doc) is not { } series)
 		{
-			throw new ComicVineException(ComicVineError.Network, http.Redact(request.ToUrl("")), null, null);
+			throw new ComicVineException(ComicVineError.Network, http.RedactedUrl(request), null, null);
 		}
 		SeriesDetails details = await GetSeriesDetailsAsync(series, ct).ConfigureAwait(false);
 		return ComicVineXml.ParseIssue(doc, issue, series, details, alternateCovers: includeRating);
