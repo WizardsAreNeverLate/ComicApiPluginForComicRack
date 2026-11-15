@@ -10,6 +10,7 @@ namespace ComicApiPlugin.Tests.Plugin;
 /// <summary>The service as the build packaged it: service.zip from the artifacts folder, unpacked the way the plugin unpacks it.</summary>
 internal static class BuiltService
 {
+	private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 	private static readonly Lazy<string> Unpacked = new(() => ServicePackage.Unpack(Zip, NewFolder("unpacked")));
 
 	/// <summary>artifacts\&lt;Configuration&gt;\Comic API Plugin\service.zip. The tests run from tests\...\bin\&lt;Configuration&gt;\net48.</summary>
@@ -34,8 +35,12 @@ internal static class BuiltService
 
 	public static string NewFolder(string name) => Path.Combine(Path.GetTempPath(), "comicapi-plugin-tests", name + "-" + Guid.NewGuid().ToString("N"));
 
-	/// <summary>A launch of the real service with a log folder of its own, which also tells its process apart from other tests'.</summary>
-	public static ServiceLaunch Launch() => new(() => Exe, NewFolder("logs"));
+	/// <summary>
+	/// A launch of the real service with a log folder of its own, which also tells its process apart from other tests'.
+	/// A stop waits half a minute where the plugin waits seconds, so a stop always ends through the shutdown request,
+	/// however busy the machine is, and the service's log is complete when a test reads it.
+	/// </summary>
+	public static ServiceLaunch Launch() => new(() => Exe, NewFolder("logs")) { ShutdownRequestTimeout = Patience, ShutdownExitTimeout = Patience };
 
 	/// <summary>A script that stands in for a service that fails. CreateProcess runs a .cmd file like an exe.</summary>
 	public static ServiceLaunch Script(params string[] lines)

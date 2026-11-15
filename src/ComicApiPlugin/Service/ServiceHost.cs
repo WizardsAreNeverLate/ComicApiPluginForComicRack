@@ -21,6 +21,12 @@ internal sealed record ServiceLaunch(Func<string> Executable, string LogFolder)
 {
 	public TimeSpan ReadyTimeout { get; init; } = TimeSpan.FromSeconds(20);
 
+	/// <summary>How long a stop waits for the service to answer the shutdown request.</summary>
+	public TimeSpan ShutdownRequestTimeout { get; init; } = TimeSpan.FromSeconds(2);
+
+	/// <summary>How long a stop then waits for the service to exit before it kills the process.</summary>
+	public TimeSpan ShutdownExitTimeout { get; init; } = TimeSpan.FromSeconds(3);
+
 	/// <summary>Environment variables for the service process, on top of this process's own. Only a test sets one.</summary>
 	public IReadOnlyDictionary<string, string> Environment { get; init; } = new Dictionary<string, string>();
 
@@ -38,7 +44,6 @@ internal sealed record ServiceLaunch(Func<string> Executable, string LogFolder)
 /// </summary>
 internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, Action<string> log) : IDisposable
 {
-	private static readonly TimeSpan ShutdownRequestTimeout = TimeSpan.FromSeconds(2);
 	private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(3);
 	private static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(5);
 	private static readonly Regex ReadyLine = new(
@@ -131,8 +136,8 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 		{
 			return;
 		}
-		RequestShutdown(running.Endpoint);
-		if (!process.WaitForExit((int)ExitTimeout.TotalMilliseconds))
+		RequestShutdown(running.Endpoint, launch.ShutdownRequestTimeout);
+		if (!process.WaitForExit((int)launch.ShutdownExitTimeout.TotalMilliseconds))
 		{
 			log("Local API service did not exit in time and was killed");
 			Kill(process);
@@ -296,16 +301,16 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 		return $"The local API service exited with code {exitCode} before it was ready." + errors.Describe();
 	}
 
-	private static void RequestShutdown(ServiceEndpoint endpoint)
+	private static void RequestShutdown(ServiceEndpoint endpoint, TimeSpan timeout)
 	{
 		try
 		{
 			// On a pool thread, so the wait cannot deadlock on the UI thread's synchronization context.
 			Task.Run(async () =>
 			{
-				using HttpClient client = endpoint.CreateClient(ShutdownRequestTimeout);
+				using HttpClient client = endpoint.CreateClient(timeout);
 				using HttpResponseMessage response = await client.PostAsync(ServiceProtocol.ShutdownPath, null).ConfigureAwait(false);
-			}).Wait(ShutdownRequestTimeout);
+			}).Wait(timeout);
 		}
 		catch (AggregateException)
 		{

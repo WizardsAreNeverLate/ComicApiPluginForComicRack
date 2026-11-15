@@ -34,6 +34,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 	private LogWindow? logWindow;
 	private ServiceHost? service;
 	private ServiceConnection? connection;
+	private volatile bool showServiceConsole;
 	private bool running;
 
 	/// <summary>ComicRack's constructor. ComicRack passes the environment to <see cref="OnLoad"/>.</summary>
@@ -115,12 +116,12 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 				ctx.Log.Debug("Scraper terminated normally (scraped 0, skipped 0).");
 				return;
 			}
-			config = ctx.Settings.Load();
+			config = LoadSettings(ctx);
 			if (config.AvailableActions().Count == 0)
 			{
 				ctx.Log.Debug("No provider has an API key and is enabled.  Showing config dialog.");
 				ConfigForm.Show(env.MainWindow, ctx);
-				config = ctx.Settings.Load();
+				config = LoadSettings(ctx);
 				if (config.AvailableActions().Count == 0)
 				{
 					ctx.Log.Debug("Still no provider available.  Aborting.");
@@ -131,7 +132,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 			if (config.Advanced.WelcomeDialog)
 			{
 				ScrapeAction? picked = WelcomeForm.Show(env.MainWindow, ctx, books.Length);
-				config = ctx.Settings.Load();
+				config = LoadSettings(ctx);
 				if (picked is not { } chosen)
 				{
 					ctx.Log.Debug("Cancelled!");
@@ -206,9 +207,10 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 		PluginContext ctx = Context;
 		Guarded(ctx, () =>
 		{
-			if (ConfigForm.Show(env.MainWindow, ctx) is not null)
+			if (ConfigForm.Show(env.MainWindow, ctx) is { } saved)
 			{
 				// Applies a changed console setting now, not at the next scrape.
+				showServiceConsole = saved.ShowServiceConsole;
 				CheckService(ctx);
 			}
 		});
@@ -261,8 +263,30 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 	private ServiceConnection? Connection(PluginContext ctx) => Service(ctx) is { } host ? connection ??= new ServiceConnection(host) : null;
 
 	/// <summary>The one owner of the service process, or null when the plugin runs without the service.</summary>
-	private ServiceHost? Service(PluginContext ctx) =>
-		ports.Service is { } launch ? service ??= new ServiceHost(launch, () => ctx.Settings.Load().ShowServiceConsole, ctx.Log.Debug) : null;
+	private ServiceHost? Service(PluginContext ctx)
+	{
+		if (ports.Service is not { } launch)
+		{
+			return null;
+		}
+		if (service is null)
+		{
+			showServiceConsole = ctx.Settings.Load().ShowServiceConsole;
+			service = new ServiceHost(launch, () => showServiceConsole, ctx.Log.Debug);
+		}
+		return service;
+	}
+
+	/// <summary>
+	/// The saved settings. Every load also refreshes the console setting the service host asks for before each call, so
+	/// that question costs no read of settings.dat. The plugin loads the settings after each dialog that can save them.
+	/// </summary>
+	private Configuration LoadSettings(PluginContext ctx)
+	{
+		Configuration config = ctx.Settings.Load();
+		showServiceConsole = config.ShowServiceConsole;
+		return config;
+	}
 
 	/// <summary>
 	/// Starts the local API service when it is not running, asks for its health, and logs the answer or the failure. All of

@@ -342,6 +342,36 @@ public sealed class PluginTests
 	}
 
 	[Test]
+	public async Task Saving_the_settings_dialog_with_the_console_setting_changed_restarts_the_local_service_at_once()
+	{
+		ServiceLaunch launch = BuiltService.Launch();
+		using var world = new PluginWorld(launch);
+		world.SaveSettings(new Configuration { ApiKey = EngineWorld.ApiKey, ShowServiceConsole = true, Advanced = AdvancedSettings.Parse(null) });
+		world.Script.On<ConfigForm>(form =>
+		{
+			Ui.Find<CheckBox>(form, "showServiceConsole").Checked = false;
+			Ui.Find<Button>(form, "ok").PerformClick();
+		});
+
+		world.Run(plugin => ((IStartup)plugin).Execute());
+		string started = await world.LogLineAsync("Local API service ready on ");
+		world.Run(plugin => plugin.Configure());
+		string restarted = await world.LogLineAsync("Restarting the local API service ");
+		var watch = Stopwatch.StartNew();
+		while (world.Log.Count(line => line.StartsWith("Local API service ready on ", StringComparison.Ordinal)) < 2 && watch.Elapsed < TimeSpan.FromSeconds(60))
+		{
+			await Task.Delay(50);
+		}
+		string[] ready = [.. world.Log.Where(line => line.StartsWith("Local API service ready on ", StringComparison.Ordinal))];
+		((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(restarted).IsEqualTo("Restarting the local API service to hide its console window");
+		await Assert.That(ready.Length).IsEqualTo(2);
+		await Assert.That(ready[1]).IsNotEqualTo(started);
+		await Assert.That(BuiltService.CommandLines(launch.LogFolder)).IsEmpty();
+	}
+
+	[Test]
 	public async Task ComicRacks_startup_starts_the_local_service_without_waiting_and_its_shutdown_stops_it()
 	{
 		ServiceLaunch launch = BuiltService.Launch();
