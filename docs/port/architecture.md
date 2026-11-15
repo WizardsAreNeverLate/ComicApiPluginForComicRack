@@ -1,4 +1,4 @@
-# Architecture
+A scrape then needs the service, and the UI shows a failed start. | Done |# Architecture
 
 This document describes the design that the C# port of Comic Vine Scraper is built on. The type sketch in `sketch/` is the contract, and `sketch/README.md` gives the reading order.
 
@@ -112,13 +112,13 @@ Begin → Search(manual, failedTerms) → ChooseSeries(terms, found) → FindIss
 ### Comic Vine client
 
 - `IComicVine` returns domain types only. It covers search, the issues in a series, finding an issue by number, issue details, resolving a series, and images. `ComicVineCatalog` implements it for one run. It owns the caches, the search cleanup, paging, and the ignore filters.
-- `ComicVineHttp` lives as long as the plugin. It owns the `HttpClient`, and it takes an injectable `HttpMessageHandler`, so recorded-response tests need no network. It also owns:
+- `ComicVineHttp` lives as long as its owner: the local API service in production (one for each API key), or the plugin on the in-process route (see [Comic Vine through the service](#comic-vine-through-the-service)). It owns the `HttpClient`, and it takes an injectable `HttpMessageHandler`, so recorded-response tests need no network. It also owns:
   - a throttle of 1100 ms between requests across threads (deviation 6)
   - one retry after 2500 ms for network errors, 5xx responses, empty bodies, and invalid XML
   - no retry for codes 100 or 107 (deviation 5)
   - reading the body on a 4xx status, so HTTP 401 shows the invalid-key message (deviation 4)
   - an invalid-character filter that keeps valid surrogate pairs (deviation 8)
-- `ComicVineException` carries the error kind and the URL with the API key removed. `IsRecoverable` decides whether a failed fast rescrape delays the book or ends the run. An invalid key or a rate limit ends the run.
+- `ComicVineException` carries the error kind and the URL with the API key removed. `IsRecoverable` decides whether a failed fast rescrape delays the book or ends the run. An invalid key, a rate limit, or a local API service that is not available ends the run.
 - XML is parsed into domain types with `XDocument`. There is no port of `xml2py`.
 
 ### Configuration, i18n, and logging
@@ -326,7 +326,7 @@ The algorithms live in `ComicApiPlugin.Text` (`Text/`) and `ComicApiPlugin.Match
 - **The summary follows every scrape when `summaryDialog` is on,** as Python's `finally` did, but in the log window, not a modal FinishForm (deviations.md). `LogWindow` is not modal: it opens before the run starts and streams each `DebugLog` line through `DebugLog.LineWritten`, and the run writes the scraped and skipped counts into it at the end. It overrides `WM_ENABLE`, because the run's `ShowDialog` calls disable every other window of the thread, and it must stay usable to scroll or close. A window still open is reused by the next run. One the user closed stays closed for the rest of that run. A scrape that stopped at the key prompt or the welcome form opens it at the end, showing 0 scraped. `PluginTests.Cancelling_the_key_prompt_stops_before_any_request_and_still_sums_up_as_Python_did` pins it. After a run-ending error the form shows the partial summary. It also follows a run that fails before the settings load: the plugin starts from a default `Configuration` (summary on), as Python built its `Configuration` before it loaded it. `PluginTests.A_run_that_fails_before_the_settings_load_still_shows_the_error_and_the_summary` pins it.
 - **One `PluginContext` per plugin instance,** created on first use. Every command and every form therefore shares one `SettingsStore` and one `DebugLog`, and Ctrl+Shift+L in any form saves that log. The plugin also keeps one `ComicVineHttp`, so one `HttpClient` and one throttle serve every run. It makes a new one only when the API key changes, because the key is fixed for the life of a `ComicVineHttp`. The user agent is Python's `ComicApiPlugin/{version} (https://github.com/cbanack/comic-vine-scraper/)`. `PluginTests.Two_scrapes_in_sequence_both_run_and_share_one_http_client` and `Changing_the_api_key_between_runs_replaces_and_disposes_the_http_client` pin the client's life. The context holds `CurrentTheme`, a function that reads `IPluginEnvironment.Theme` each time a form applies its theme, because ComicRack can change it while it runs. `Strings` keeps the environment and localizes on every lookup, and a language change needs a restart, so it stays as it is. The ComicForm trims the end of its localized label before it adds the space (`deviations.md`).
 - **A blank key is a whitespace-only key too.** Python tested `not api_key_s`, so a key of spaces went on to `db.initialize`, which threw. The plugin opens `ConfigForm` instead, which trims the key it saves.
-- **`PluginPorts` is the seam to the outside:** the `HttpMessageHandler` factory, the settings folder, and the clock. ComicRack's constructor uses `PluginPorts.FromProcess()`, which is the live handler, `%APPDATA%\Comic Vine Scraper`, and the system clock. Tests use the internal constructor. `PluginTests` drives both commands through it on an STA thread that owns a visible main window. It answers each real dialog through its controls, serves the recorded fixtures, and checks the fields written, the dialogs in order, the re-entrancy guard, the main window disabled (Win32 `IsWindowEnabled`) during the run, and the log.
+- **`PluginPorts` is the seam to the outside:** the `HttpMessageHandler` factory, the settings folder, the clock, and how to start the local API service. With a service, Comic Vine is asked through it; without one, in the plugin's process through the handler (see [Comic Vine through the service](#comic-vine-through-the-service)). ComicRack's constructor uses `PluginPorts.FromProcess()`, which is the live handler, `%APPDATA%\Comic Vine Scraper`, the system clock, and the packaged service. Tests use the internal constructor. `PluginTests` drives both commands through it on an STA thread that owns a visible main window. It answers each real dialog through its controls, serves the recorded fixtures, and checks the fields written, the dialogs in order, the re-entrancy guard, the main window disabled (Win32 `IsWindowEnabled`) during the run, and the log.
 - **The recorded-response switch is for the in-app smoke test only.** Building with `-p:CvsRecordedResponses=true` defines `CVS_RECORDED_RESPONSES` and compiles `Smoke/RecordedResponses.cs` and `tests/Shared/ComicVineFixtures.cs` into the plugin. Only that build reads the environment variable `CVS_NET_RECORDED_RESPONSES`. When the variable names a folder, the plugin answers every Comic Vine request from `<folder>\fixtures\*.txt`, keeps its settings in `<folder>\settings`, and writes each request no fixture answered to `<folder>\unrecorded.txt`. An unrecorded API request finds nothing, and an unrecorded image is not found. A normal build has no code that reads the variable, so the switch cannot be turned on by accident. The switch build writes to `src\ComicApiPlugin\bin\smoke\<Configuration>\net48\` and `obj\smoke\`, so it can never overwrite the shipping `bin\<Configuration>\net48\ComicApiPlugin.crplugin` or the Debug output that `Build.ps1` tests. Never ship that build.
 - **Not driven headless.** The Ctrl+Shift+L save dialog (the common file dialog), the link to the API key page, and ComicRack's own undo group and book dialog. The in-app smoke test covers ComicRack's side.
 - **In-app smoke test (phase 5b).** A probe plugin started ComicRack 0.9.186 with `-ac CvsNetSmoke`, ran the switch build over the recorded fixtures with a temporary settings folder, and scraped two fileless books (Batman #497, and Batman #1 with volume 2016) through `ScriptUtility.CreateBookCode`. It answered each dialog through its controls. Both books got the issue's fields, `comicvine_issue`, `comicvine_volume`, and the `[CVDB…]` note. Win32 `IsWindowEnabled` reported ComicRack's main window disabled while each dialog and the ComicForm were open, and enabled again after the run. The probe called `ProcessCmdKey(Ctrl+Shift+L)` in the ConfigForm and in the FinishForm. It answered the save dialog with window messages. The second file held the first save's line and the run's lines, so the forms share one log. The command's undo group and cancellation inside ComicRack were not exercised.
@@ -421,7 +421,7 @@ The package grows because of the native library: `ComicApiPlugin.crplugin` is 27
 
 The Comic Vine and VerseDB calls and the OpenCV cover comparison are moving out of the plugin into `ComicApiPlugin.Service`, a .NET 11 minimal API that runs as a separate process on the same machine. The aims are an API that can be tested without ComicRack, a smaller plugin, and a current runtime. The plugin starts the service, talks to it over HTTP on the loopback address, and stops it.
 
-The move has five phases. Phase 1 is done.
+The move has five phases. Phases 1 and 2 are done.
 
 | Phase | Content | State |
 |---|---|---|
@@ -459,7 +459,7 @@ The plugin reads stdout and stderr for the life of the process, so a full pipe c
 - The `Host` header must be `127.0.0.1:<bound port>`. Any other value gets 400. This stops a web page that reaches the port under another name (DNS rebinding).
 - The request must carry `Authorization: Bearer <token>`. The comparison takes constant time. A missing or wrong token gets 401.
 - `GET /health` returns `{ "version", "pid", "uptimeSeconds" }`. `POST /shutdown` returns 202 and then stops the service.
-- From phase 2, the provider keys travel per request in the `X-ComicVine-Key` and `X-VerseDb-Token` headers. The service keeps no key.
+- The Comic Vine API key travels with each request in the `X-ComicVine-Key` header. The service keeps it only in memory, as the key of that key's transport. From phase 3, the VerseDB token travels in `X-VerseDb-Token`.
 
 `ServiceEndpoint.CreateClient` makes the plugin's `HttpClient` with the base address and the token, and with the system proxy off.
 
@@ -471,14 +471,61 @@ The service stops in every way ComicRack can end:
 - **ComicRack crashes or is killed.** The process is in a Windows job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The plugin holds the only handle, so Windows kills the service when ComicRack's process ends.
 - **Anything else.** `ParentWatch` in the service waits on the parent process and stops the service when it exits. If the parent is already gone at startup, the service exits with code 3.
 
-`ComicApiCommands` implements `IStartup` and starts the service in the background, so ComicRack's startup neither waits nor fails. In phase 1, each scrape also starts the service if needed, calls `/health`, and writes `Local API service ready on 127.0.0.1:<port> (pid <pid>)` or the failure to the debug log. The scrape itself does not use the service yet.
+`ComicApiCommands` implements `IStartup` and starts the service in the background, so ComicRack's startup neither waits nor fails. Each scrape also starts the service if needed, calls `/health`, and writes `Local API service ready on 127.0.0.1:<port> (pid <pid>)` or the failure to the debug log. That check runs in the background. A Comic Vine call that needs the service waits for the start itself.
+
+### Comic Vine through the service
+
+The engine, the dialogs and `AutoMatcher` still talk only to `IComicVine`. In production the implementation is `ServiceComicVine` (plugin), which calls the service. `ComicVineCatalog` and `ComicVineHttp` are unchanged and now run in the service.
+
+**Contract.** `ComicVineDtos` and `ComicVineWire` (Core/Service) hold the JSON bodies and their mapping to the domain records, and both sides compile them. The domain records carry no serializer attributes. The serializer is `DataContractJsonSerializer`, which .NET Framework and .NET both include. `System.Text.Json` was not used in the plugin: ComicRack ships version 10.0.0.10 with no binding redirect, so a plugin built against it would fail to load as soon as ComicRack ships another version.
+
+**Endpoints.** Every endpoint is a POST with a JSON body. Every request carries the headers `X-ComicVine-Key` (the API key) and `X-Run-Id` (a GUID that the plugin makes for each scrape run), and the member `settings` (the `SearchSettings` from `Configuration.ToSearchSettings`).
+
+| Path | Body members beside `settings` | Answer |
+|---|---|---|
+| `/comicvine/search` | `terms` | JSON Lines: `{"progress":{"done","total"}}` for each page, then `{"series":[...]}` |
+| `/comicvine/issues` | `series` | JSON Lines: progress lines, then `{"issues":[...]}` |
+| `/comicvine/find-issue` | `series`, `issueNumber` | `{"issue": {...} or null}` |
+| `/comicvine/issue` | `issue`, `includeRating` | The issue details |
+| `/comicvine/resolve-series` | `series` or `issue`, exactly one | `{"series": {...} or null}` |
+| `/comicvine/image` | `url` | The image as PNG, or 204 when it cannot be fetched |
+
+The image endpoint returns what `ComicVineCatalog.GetImageAsync` returns, so the back cover is already removed. PNG keeps every pixel of the decoded image.
+
+**State.** `ComicVineSessions` (service) keeps all Comic Vine state in memory:
+
+- One `ComicVineHttp` for each API key, for the life of the service. Every run that uses a key therefore shares its 1100 ms throttle.
+- One `ComicVineCatalog` for each API key, run id and set of search settings. A run keeps the caches it had in the plugin, and two runs never share a cache. The service drops a catalog when its run has sent no request for 30 minutes. A run that continues after that only loses its caches.
+
+**Progress.** Search and issues answer in JSON Lines (`application/x-ndjson`). The service writes and flushes one progress line each time the catalog reports a page, and the result is the last line. `ServiceComicVine` reports each line to the caller's `IProgress<QueryProgress>` as it arrives. The alternative, one request for each page with the loop in the plugin, would have split the paging, the caches and the filters between the two processes.
+
+**Cancellation.** `HttpContext.RequestAborted` is the token of the catalog call. When the scrape is cancelled, the plugin cancels its HTTP request, the connection closes, and the service cancels its request to Comic Vine. The caller gets `OperationCanceledException`.
+
+**Errors.** The service turns a `ComicVineException` into a status code and the body `{"comicVine":{"kind","url","apiStatus","detail"}}`. The URL never holds the API key.
+
+| `ComicVineError` | Status |
+|---|---|
+| `InvalidApiKey` | 401 |
+| `RateLimited` | 429 |
+| `Network`, `Api` | 502 |
+
+- A failure after the first progress line cannot change the status, so it is the last line of the stream: `{"error":{...}}`.
+- `ServiceComicVine` throws a `ComicVineException` with the same kind, URL and API status, so the engine, the fast-rescrape recovery and the error dialogs behave as before. The transport exception behind a network error comes back as its message only.
+- A request that lacks a header or a member gets 400 and `{"message":"..."}`.
+- A service that cannot be started or reached is a `ComicVineException` of the kind `ServiceUnavailable`. Its inner `ServiceUnavailableException` holds the reason. The kind is not recoverable, so the run ends, and `ErrorDialogs` shows the reason. For a missing runtime the reason names the .NET 11 download. `GetImageAsync` returns null instead, because no caller expects an image to fail.
+
+**Outbound log.** `OutboundLog` is the handler under every `ComicVineHttp` in the service. It writes one line for each call to Comic Vine: `Comic Vine GET comicvine.gamespot.com/api/search/ responded 200 in 118 ms (run <run id>)`. It never writes the query string, which holds the API key, or a header. A status of 400 or more and a transport failure are warnings. `ComicVineHttp.Retrying` reports a first attempt that will be tried again, and the service logs it as a warning. The throttle wait is not logged, because every request waits its turn.
+
+**Interim test seam (phase 4 work).** `PluginPorts.Service` selects the route. With a service, which the live ports have, `ComicApiCommands` uses `ServiceComicVine`. Without one, it builds `ComicVineCatalog` over `PluginPorts.Handler` in the plugin's own process, as before phase 2. The recorded-response plugin tests (`PluginTests`), `tools/smoke` and `tools/differential` use that in-process route. Phase 4 serves their recorded responses through the service and removes the in-process route, with `ComicApiCommands.Http`.
+
+**Test seam in the service.** The environment variable `COMICAPI_COMICVINE_BASE_URL` makes the service send its Comic Vine API requests to another base URL. Only tests set it, through `ServiceLaunch.Environment`. `FakeComicVineServer` (tests/Shared) answers there from the recorded responses.
 
 ### Logging and the console window
 
 - Serilog writes `%LOCALAPPDATA%\ComicApiPlugin\logs\service-<yyyyMMdd>.log`, one file per day, and keeps 14 files.
-- Each request is one line with the method, the path without the query string, the status and the elapsed time. ASP.NET Core's own request log, which includes the query string, is off. No header is logged. `SecretHeaderPolicy` writes the three secret headers as `<redacted>` if a later change logs a header collection.
+- Each request is one line with the method, the path without the query string, the status and the elapsed time. A status of 400 or more is a warning, and only a 500 or an exception is an error. ASP.NET Core's own request log, which includes the query string, is off. No header is logged. `SecretHeaderPolicy` writes the three secret headers as `<redacted>` if a later change logs a header collection.
 - The console window is hidden by default. The checkbox "Show the local API service console window" on the Providers tab (`showServiceConsole` in `settings.dat`) shows it. Saving a changed setting restarts a running service with the window shown or hidden. stdout is a pipe to the plugin, so the service opens the window by its device name, `CONOUT$`, and writes the same log lines there.
 
 ### Build and tests
 
-Visual Studio's MSBuild (18.11) builds the .NET 11 projects with the .NET 11 SDK, so `Build.ps1` still builds the one solution. `tests/ComicApiPlugin.Service.Tests` (net11.0-windows) starts the built exe as a process. `ServiceHostTests` and `ServicePackageTests` in `ComicApiPlugin.Tests` run `ServiceHost` against the `service.zip` in the artifacts folder, and against `.cmd` scripts that fail the way a service can.
+Visual Studio's MSBuild (18.11) builds the .NET 11 projects with the .NET 11 SDK, so `Build.ps1` still builds the one solution. `tests/ComicApiPlugin.Service.Tests` (net11.0-windows) starts the built exe as a process. `ComicVineEndpointTests` there call each `/comicvine/` endpoint with the service pointed at `FakeComicVineServer`. `ServiceHostTests` and `ServicePackageTests` in `ComicApiPlugin.Tests` run `ServiceHost` against the `service.zip` in the artifacts folder, and against `.cmd` scripts that fail the way a service can. `ServiceComicVineTests` point the packaged service and an in-process `ComicVineCatalog` at one fake Comic Vine and compare what each returns and throws.

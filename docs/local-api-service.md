@@ -28,13 +28,14 @@ The move is planned in five phases:
 | Phase | Content | Status |
 |---|---|---|
 | 1 | Service skeleton: start, health check, secure access, stop, logging | Done |
-| 2 | Comic Vine calls move to the service | Planned |
+| 2 | Comic Vine calls move to the service | Done |
 | 3 | VerseDB calls and the OpenCV cover comparison move to the service | Planned |
 | 4 | Tests that use recorded responses run through the service | Planned |
 | 5 | Packaging and documentation | Planned |
 
-In phase 1, a scrape only checks that the service answers and writes the result to the debug log. A scrape works as
-before when the service cannot start. From phase 2, a scrape needs the service.
+A Comic Vine scrape needs the service. The plugin sends each Comic Vine call to it (see "Comic Vine endpoints"). If the
+service cannot start, the scrape stops at its first Comic Vine call and the plugin shows the reason. The VerseDB cover
+search and the cover comparison still run in the plugin until phase 3.
 
 ## Runtime requirement
 
@@ -50,7 +51,8 @@ recognizes that text and records this message:
 
 > The local API service needs the .NET 11 runtime. Download it from https://dotnet.microsoft.com/download/dotnet/11.0 and restart ComicRack.
 
-In phase 1 the message goes to the debug log. From phase 2 the plugin shows it when a scrape needs the service.
+The message goes to the debug log when ComicRack starts. When a scrape needs the service, the plugin shows the message in
+a warning dialog with the title "Local API Service", and the scrape stops. No book is changed.
 
 ## Process lifetime
 
@@ -139,12 +141,14 @@ There are two kinds of secret:
 | Secret | Who owns it | How it travels |
 |---|---|---|
 | The service token | The plugin creates it for each launch | Environment variable to the service, then the `Authorization` header on each request |
-| The Comic Vine API key and the VerseDB token | The user, in `settings.dat` | An HTTP header on each request from the plugin to the service (from phase 2) |
+| The Comic Vine API key and the VerseDB token | The user, in `settings.dat` | An HTTP header on each request from the plugin to the service |
 
-The service keeps no API keys. The plugin sends the key with each request:
+The service stores no API keys on disk. The plugin sends the key with each request:
 
 - `X-ComicVine-Key: <Comic Vine API key>`
-- `X-VerseDb-Token: <VerseDB personal access token>`
+- `X-VerseDb-Token: <VerseDB personal access token>` (from phase 3)
+
+The service holds a Comic Vine key in memory only, as the name of that key's HTTP client and throttle.
 
 Reasons for this design:
 
@@ -158,8 +162,104 @@ The service never logs headers or query strings. If a later change logs a header
 log file does not contain it. The service sends the Comic Vine key to Comic Vine in the query string, as before, because
 the Comic Vine API requires it there.
 
-From phase 2 the service will keep one HTTP client and one rate-limit throttle for each API key, and caches that belong to a
-run ID that the plugin sends. This is necessary because the throttle and caches currently live in the plugin.
+The service keeps one HTTP client and one rate-limit throttle for each API key, and caches that belong to a run ID that
+the plugin sends. See "Comic Vine state and caches".
+
+## Comic Vine endpoints
+
+Each endpoint is a `POST` with a JSON body. Each request must have these items:
+
+- The header `X-ComicVine-Key`: the Comic Vine API key.
+- The header `X-Run-Id`: a name for the scrape run. The plugin makes a new GUID for each run.
+- The body member `settings`: the advanced settings that change search results. The plugin sends them with each request,
+  because they are part of the identity of a run's caches.
+
+```json
+{"ignoredSearchTerms":[],"ignoredPublishers":[],"ignoreBeforeYear":0,"ignoreAfterYear":9999,"neverIgnoreThreshold":9999,"maxSearchResults":100}
+```
+
+| Path | Other body members | Response |
+|---|---|---|
+| `/comicvine/search` | `terms` (text) | JSON Lines: progress lines, then `{"series":[...]}` |
+| `/comicvine/issues` | `series` (id) | JSON Lines: progress lines, then `{"issues":[...]}` |
+| `/comicvine/find-issue` | `series` (id), `issueNumber` (text) | `{"issue":{...}}`, or `{"issue":null}` if no single issue has that number |
+| `/comicvine/issue` | `issue` (id), `includeRating` (true or false) | The issue details |
+| `/comicvine/resolve-series` | `series` (id) or `issue` (id), but not both | `{"series":{...}}`, or `{"series":null}` if Comic Vine does not know the id |
+| `/comicvine/image` | `url` (the image URL) | The image as PNG, or `204` if the image cannot be downloaded |
+
+The endpoints are the six methods of `IComicVine`. `ComicVineCatalog` and `ComicVineHttp` do the work in the service, as
+they did in the plugin. The image endpoint removes a back cover before it sends the image, as before. PNG keeps all
+pixels of the decoded image.
+
+Example, with the service started as in "Troubleshooting":
+
+```powershell
+$body = '{"settings":{"ignoredSearchTerms":[],"ignoredPublishers":[],"ignoreBeforeYear":0,"ignoreAfterYear":9999,"neverIgnoreThreshold":9999,"maxSearchResults":100},"series":796,"issueNumber":"497"}'
+curl.exe -H "Authorization: Bearer dev-token" -H "X-ComicVine-Key: <your key>" -H "X-Run-Id: test" -H "Content-Type: application/json" -d $body http://127.0.0.1:<port>/comicvine/find-issue
+```
+
+### JSON
+
+`ComicVineDtos` and `ComicVineWire` in Core define the JSON bodies and change them to and from the domain records. The
+plugin and the service compile the same files, so the two sides cannot disagree.
+
+The serializer is `DataContractJsonSerializer`. .NET Framework and .NET both include it, so the plugin package has no JSON
+library. `System.Text.Json` was the first choice, but it is not safe in the plugin: ComicRack includes
+`System.Text.Json` 10.0.0.10 and its configuration file has no binding redirect for it. A plugin that is compiled for one
+version of that assembly stops loading when ComicRack includes a different version.
+
+### Progress
+
+A search or an issue list can need many pages from Comic Vine, and the plugin shows a progress bar. To keep the progress
+bar, the search and issues endpoints answer in JSON Lines (`application/x-ndjson`): one JSON object on each line.
+
+```json
+{"progress":{"done":100,"total":22}}
+{"progress":{"done":200,"total":22}}
+{"series":[{"id":796,"name":"Batman","startYear":1940,"publisher":"DC Comics","issueCount":716,"thumbUrl":"https://..."}]}
+```
+
+The service writes a progress line when the catalog reports a page. The last line is the result. The plugin reports each
+progress line to the progress bar when the line arrives.
+
+The alternative was one request for each page, with the loop in the plugin. That design was rejected, because the
+paging, the caches, and the search filters would then be in two processes.
+
+### Cancellation
+
+When the user cancels a scrape, the plugin cancels its HTTP request. The service sees the closed connection and cancels
+its request to Comic Vine.
+
+### Errors
+
+| Cause | Status | Body |
+|---|---|---|
+| Comic Vine rejects the API key | `401` | `{"comicVine":{"kind":"InvalidApiKey","url":"...","apiStatus":100,"detail":null}}` |
+| Comic Vine reports its rate limit | `429` | `{"comicVine":{"kind":"RateLimited",...,"apiStatus":107}}` |
+| Comic Vine cannot be reached, or gives a bad answer two times | `502` | `{"comicVine":{"kind":"Network",...}}` |
+| Comic Vine gives a different status code | `502` | `{"comicVine":{"kind":"Api",...,"apiStatus":n}}` |
+| A header or a body member is missing | `400` | `{"message":"..."}` |
+
+- The `url` in an error never contains the API key.
+- If a failure occurs after the first progress line, the status is already `200`. The error is then the last line:
+  `{"error":{"kind":...}}`.
+- A `401` from the token check has no body. A `401` with a `comicVine` body is an invalid Comic Vine key.
+- The plugin changes each `comicVine` error back to the `ComicVineException` that the catalog threw. Thus the engine and
+  the error dialogs do the same as before the move.
+- If the plugin cannot start or reach the service, it stops the scrape and shows the reason. An image request gives
+  no image instead.
+
+## Comic Vine state and caches
+
+The service keeps this state in memory. Nothing is written to disk.
+
+| State | Lifetime | Why |
+|---|---|---|
+| One HTTP client and one throttle (1100 ms between requests) for each API key | Until the service stops | Comic Vine limits requests for each key. Two runs with the same key must share the throttle. |
+| One catalog (the caches for searches, the last issue list, and series details) for each API key, run ID, and set of search settings | Until the run has sent no request for 30 minutes | A run keeps the caches that it had in the plugin. Two runs do not share a cache, so a new run always gets new data. |
+
+If a run continues after 30 minutes without a request, it only loses its caches. The service then gets the data from
+Comic Vine again.
 
 ## Settings
 
@@ -212,8 +312,28 @@ Build output:
 | File | `%LOCALAPPDATA%\ComicApiPlugin\logs\service-YYYYMMDD.log` |
 | Rolling | One file each day, 14 files kept |
 | Level | Information. ASP.NET Core's own messages: Warning only, because its request log includes query strings. |
-| Content | Startup and the bound port, each request (method, path, status, time), warnings, errors, parent exit, shutdown |
+| Content | Startup and the bound port, each request (method, path, status, time), each call to a provider, warnings, errors, parent exit, shutdown |
 | Never logged | Headers, query strings, the service token, API keys |
+
+### Calls to providers
+
+Each HTTP client that the service uses for a provider sends its requests through one handler, `OutboundLog`. The handler
+writes one line for each remote call: the provider, the method, the host and path, the status, the time, and the run ID.
+
+```text
+[INF] Comic Vine GET comicvine.gamespot.com/api/search/ responded 200 in 118 ms (run 5f0c...)
+[INF] HTTP POST /comicvine/search responded 200 in 225.6070 ms
+```
+
+- The handler never writes the query string, because Comic Vine gets the API key there. It never writes a header.
+- A status of 400 or more is a warning (`WRN`). A request that fails without a response is a warning that gives the type
+  of the failure.
+- When Comic Vine fails a request and the service tries it again after 2500 ms, the service writes a warning with the
+  kind of failure and the URL without the key. It writes a second warning if the request fails again.
+- The wait for the throttle is not in the log, because each request waits for its turn.
+- For the service's own requests, a status of 400 or more is a warning. Only a `500` or an exception is an error.
+
+A test sends a key through the API and makes sure that the log has the line for the call and does not have the key.
 
 The plugin also writes the service state to its own debug log, which the activity log window shows, for example:
 `Local API service ready on 127.0.0.1:58711 (pid 56848)`, or the reason the service is not available.
@@ -248,8 +368,8 @@ Notes:
 - **SmartScreen:** SmartScreen checks files that have the "Mark of the Web" (downloaded from the internet). The plugin
   unpacks the service with .NET's `ZipFile`, which does not copy that mark to the unpacked files. So a SmartScreen prompt
   for the exe is not expected, but this has not been tested. The downloaded `.crplugin` itself can have the mark.
-- **What the user sees:** if antivirus software blocks or deletes the exe, the service does not start. In phase 1, the
-  debug log records the reason. From phase 2, scrapes fail with the "local API service unavailable" message.
+- **What the user sees:** if antivirus software blocks or deletes the exe, the service does not start. The debug log
+  records the reason, and a Comic Vine scrape stops with the "Local API Service" warning, which gives the same reason.
 
 Mitigations, from most to least effective:
 
@@ -267,7 +387,9 @@ Mitigations, from most to least effective:
 
 | Symptom | Where to look | Likely cause |
 |---|---|---|
+| A scrape stops with the "Local API Service" warning | The warning text; the debug log has the same reason | The service did not start, or it did not answer |
 | The debug log says "needs the .NET 11 runtime" | Debug log or activity log | ASP.NET Core Runtime 11 is not installed |
+| A scrape stops with "Cannot Access Online Database" | Service log file: the `Comic Vine` lines and their status | Comic Vine did not answer, or it rejected the key or the request rate |
 | "did not report that it was ready within 20 seconds" | Debug log; it includes the service's error output | Antivirus scan delay, or a startup failure |
 | No `ComicApiPlugin.Service.exe` in Task Manager after ComicRack starts | Debug log; `%LOCALAPPDATA%\ComicApiPlugin\service\` | Antivirus software removed or blocked the exe |
 | The service starts but requests fail | Service log file | See the logged status codes. 401 = wrong token, 400 = wrong `Host` header. |
@@ -282,27 +404,53 @@ $env:COMICAPI_SERVICE_TOKEN = "dev-token"
 curl.exe -H "Authorization: Bearer dev-token" http://127.0.0.1:<port>/health
 ```
 
-Without `--parent-pid`, the service does not watch a parent process. Without `--log-dir`, it does not write a log file.
+Without `--parent-pid`, the service does not watch a parent process. Without `--log-dir`, it writes its log files to
+`%LOCALAPPDATA%\ComicApiPlugin\logs`.
 
-## Endpoints (phase 1)
+## Endpoints
 
 | Method and path | Response |
 |---|---|
 | `GET /health` | `200` with `{"version":"...","pid":n,"uptimeSeconds":n}` |
 | `POST /shutdown` | `202`, then the service stops |
+| `POST /comicvine/...` | See "Comic Vine endpoints" |
 
-Every request needs the bearer token and the correct `Host` header. Phases 2 and 3 add the provider endpoints.
+Every request needs the bearer token and the correct `Host` header. Phase 3 adds the VerseDB and cover comparison
+endpoints.
+
+## Test seams
+
+- **`COMICAPI_COMICVINE_BASE_URL`.** If this environment variable is set when the service starts, the service sends its
+  Comic Vine API requests to that base URL and not to `https://comicvine.gamespot.com/api/`. The value must be an `http`
+  or `https` URL that ends with a slash. Only tests set it. The plugin never sets it: `ServiceLaunch.Environment`, which
+  carries it, is empty in the live ports.
+- **`FakeComicVineServer`** (`tests/Shared`) is a small HTTP server on a loopback port. It answers Comic Vine requests
+  from the recorded responses in `tests/fixtures/comicvine`. The service tests and the plugin tests point the service at it.
+- **The in-process route (temporary).** `PluginPorts.Service` selects how the plugin asks Comic Vine. The live ports
+  have a service, so the plugin uses `ServiceComicVine`. Ports without a service use `ComicVineCatalog` in the plugin's own
+  process, with the handler from `PluginPorts.Handler`. The recorded-response plugin tests (`PluginTests`), `tools/smoke`,
+  and `tools/differential` use this route. Phase 4 moves their recorded responses into the service and removes the route.
 
 ## Tests
 
 | Suite | What it proves |
 |---|---|
 | `tests/ComicApiPlugin.Service.Tests` (.NET 11) | Starts the real exe: 401 without or with a wrong token, 400 for a wrong `Host`, the READY line and loopback binding, `POST /shutdown`, exit when the parent process ends, no secret header value in the log file |
+| `tests/ComicApiPlugin.Service.Tests` (`ComicVineEndpointTests`, `ComicVineSessionsTests`) | Starts the real exe with a fake Comic Vine: each `/comicvine/` endpoint, progress lines that arrive while the query runs, the error bodies and status codes, an error after the first progress line, one cache for each run ID, one throttle for each key, cancellation that reaches Comic Vine, the log line for each call without the key, `400` for an incomplete request, and the 30-minute idle limit |
 | `tests/ComicApiPlugin.Tests` (`ServiceHostTests`) | Starts the packaged exe from `service.zip`: one process for concurrent callers, kill through the job object, graceful stop, restart after an exit, restart when the console setting changes, clear failures for a missing exe, a missing runtime, and a service that never reports ready |
+| `tests/ComicApiPlugin.Tests` (`ServiceComicVineTests`) | Points the packaged service and an in-process catalog at one fake Comic Vine: the same results, progress reports, requests, and exceptions on both routes; cancellation; a service that cannot start; a service that died and starts again; no key in the service log or the plugin log |
+| `tests/ComicApiPlugin.Tests` (`PluginTests`) | A full scrape through the service writes the book; a scrape without the runtime shows the warning with the download link and changes no book |
 
 ## Known limitations and open items
 
-- **Not tested inside ComicRack yet:** the `IStartup` and `IShutdown` hooks, and the visible console window.
+- **Not tested inside ComicRack yet:** the `IStartup` and `IShutdown` hooks, the visible console window, and a scrape
+  through the service.
+- **Each cover image is decoded in the service and sent to the plugin as PNG.** The pixels are the same, but a PNG is
+  larger than the JPEG from Comic Vine, and the image is decoded two times.
+- **The service keeps a client for each API key until it stops.** A user who changes the key many times in one ComicRack
+  session leaves the old clients in memory.
+- **Two ComicRack processes have two services.** Each service has its own throttle, so the two processes together can
+  send requests for one key faster than one request each 1100 ms.
 - **CI:** the GitHub Actions build installs .NET 11, but the runner's MSBuild must be version 18 or later to build the .NET 11
   projects.
 - **The service starts with every ComicRack start**, also when the user does not scrape. It uses little memory when it is
