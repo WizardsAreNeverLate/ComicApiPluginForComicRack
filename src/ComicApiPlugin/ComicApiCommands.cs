@@ -36,6 +36,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 	private string? verseDbToken;
 	private LogWindow? logWindow;
 	private ServiceHost? service;
+	private ServiceConnection? connection;
 	private bool running;
 
 	/// <summary>ComicRack's constructor. ComicRack passes the environment to <see cref="OnLoad"/>.</summary>
@@ -218,7 +219,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 
 	private RunSummary Run(PluginContext ctx, Configuration config, ComicBook[] books)
 	{
-		var catalog = new ComicVineCatalog(Http(config.ApiKey), config.ToSearchSettings());
+		IComicVine catalog = ComicVine(ctx, config);
 		List<IScrapeBook> targets = [.. books.Select(book => new ComicRackBook(book, env.App))];
 		return ScrapeHost.Run(env.MainWindow, ctx, (form, ct) =>
 		{
@@ -239,17 +240,34 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 	}
 
 	/// <summary>
+	/// Comic Vine for one run. With the local API service, each run has an id of its own, so the service gives it caches of
+	/// its own. Without the service (the recorded-response tests and tools), the catalog runs in this process.
+	/// </summary>
+	private IComicVine ComicVine(PluginContext ctx, Configuration config)
+	{
+		if (Service(ctx) is not { } host)
+		{
+			return new ComicVineCatalog(Http(config.ApiKey), config.ToSearchSettings());
+		}
+		connection ??= new ServiceConnection(host);
+		return new ServiceComicVine(connection, config.ApiKey, Guid.NewGuid().ToString("N"), config.ToSearchSettings(), ctx.Log);
+	}
+
+	/// <summary>The one owner of the service process, or null when the plugin runs without the service.</summary>
+	private ServiceHost? Service(PluginContext ctx) =>
+		ports.Service is { } launch ? service ??= new ServiceHost(launch, () => ctx.Settings.Load().ShowServiceConsole, ctx.Log.Debug) : null;
+
+	/// <summary>
 	/// Starts the local API service when it is not running, asks for its health, and logs the answer or the failure. All of
-	/// it runs in the background, so the caller neither waits nor fails. Until the provider calls move to the service, a
-	/// scrape does not depend on it.
+	/// it runs in the background, so the caller neither waits nor fails. A Comic Vine call that needs the service reports a
+	/// failed start itself.
 	/// </summary>
 	private void CheckService(PluginContext ctx)
 	{
-		if (ports.Service is not { } launch)
+		if (Service(ctx) is not { } host)
 		{
 			return;
 		}
-		ServiceHost host = service ??= new ServiceHost(launch, () => ctx.Settings.Load().ShowServiceConsole, ctx.Log.Debug);
 		Task.Run(async () => ctx.Log.Debug(await host.CheckAsync().ConfigureAwait(false)));
 	}
 
@@ -265,7 +283,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 		return verseDb;
 	}
 
-	/// <summary>One HttpClient and one throttle for the plugin's lifetime, replaced only when the user changes the key.</summary>
+	/// <summary>The in-process transport: one HttpClient and one throttle for the plugin's lifetime, replaced only when the user changes the key.</summary>
 	private ComicVineHttp Http(string apiKey)
 	{
 		if (http is null || httpKey != apiKey)

@@ -21,8 +21,11 @@ internal sealed record ServiceLaunch(Func<string> Executable, string LogFolder)
 {
 	public TimeSpan ReadyTimeout { get; init; } = TimeSpan.FromSeconds(20);
 
+	/// <summary>Environment variables for the service process, on top of this process's own. Only a test sets one.</summary>
+	public IReadOnlyDictionary<string, string> Environment { get; init; } = new Dictionary<string, string>();
+
 	public static string DefaultLogFolder =>
-		Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComicApiPlugin", "logs");
+		Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "ComicApiPlugin", "logs");
 
 	/// <summary>The service that ships as service.zip in <paramref name="pluginFolder"/>.</summary>
 	public static ServiceLaunch FromPackage(string pluginFolder) =>
@@ -214,6 +217,10 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 			CreateNoWindow = !consoleShown,
 		};
 		// The environment, not the command line, which any process of the user can read.
+		foreach (KeyValuePair<string, string> variable in launch.Environment)
+		{
+			info.EnvironmentVariables[variable.Key] = variable.Value;
+		}
 		info.EnvironmentVariables[ServiceProtocol.TokenVariable] = token;
 
 		var process = new Process { StartInfo = info };

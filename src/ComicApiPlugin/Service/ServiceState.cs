@@ -49,4 +49,4 @@ internal abstract record ServiceState
 }
 
 /// <summary>The service could not be started or reached. The message is fit to show the user.</summary>
-internal sealed class ServiceUnavailableException(string reason) : Exception(reason);
+internal sealed class ServiceUnavailableException(string reason, Exception? inner = null) : Exception(reason, inner);

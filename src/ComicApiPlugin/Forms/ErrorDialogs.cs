@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Windows.Forms;
+using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Diagnostics;
 using ComicApiPlugin.VerseDb;
 
@@ -15,6 +16,12 @@ internal static class ErrorDialogs
 		if (error is VerseDbException verseDb)
 		{
 			PromptDialog.Show(owner, ctx, ctx.Strings.Format(TextKeys.VerseDbErrorText, verseDb.Message), ctx.Strings[TextKeys.VerseDbErrorTitle], MessageBoxIcon.Warning, PromptButtons.Ok);
+			return;
+		}
+		if (error is ComicVineException { Error: ComicVineError.ServiceUnavailable, InnerException: { } cause })
+		{
+			// The cause names what the user can do, such as where to download the .NET runtime.
+			PromptDialog.Show(owner, ctx, ctx.Strings.Format(TextKeys.ServiceErrorText, cause.Message), ctx.Strings[TextKeys.ServiceErrorTitle], MessageBoxIcon.Warning, PromptButtons.Ok);
 			return;
 		}
 		ErrorPrompt prompt = ErrorPrompt.For(error);

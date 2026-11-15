@@ -133,6 +133,8 @@ public static class TextKeys
 	public const string CoverSearchRateLimited = nameof(CoverSearchRateLimited);
 	public const string VerseDbErrorTitle = nameof(VerseDbErrorTitle);
 	public const string VerseDbErrorText = nameof(VerseDbErrorText);
+	public const string ServiceErrorTitle = nameof(ServiceErrorTitle);
+	public const string ServiceErrorText = nameof(ServiceErrorText);
 	public const string ConfigFormProvidersTab = nameof(ConfigFormProvidersTab);
 	public const string ConfigFormProvidersText = nameof(ConfigFormProvidersText);
 	public const string ConfigFormProviderUp = nameof(ConfigFormProviderUp);
