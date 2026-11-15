@@ -89,9 +89,7 @@ internal static class AdvancedParser
 			maxResults = Number(MaxSearchResults, line) is { } m ? Math.Min(5000, Math.Max(10, m)) : maxResults;
 		}
 		return new AdvancedSettings(raw, publishers, terms, before, after, threshold, rating, covers, welcome, alt,
-			folders, seriesArt, noteDate, aliases, imprints, delay, maxResults)
-		{
-		};
+			folders, seriesArt, noteDate, aliases, imprints, delay, maxResults);
 	}
 
 	private static string Lower(string text) => PyStr.Lower(text);
