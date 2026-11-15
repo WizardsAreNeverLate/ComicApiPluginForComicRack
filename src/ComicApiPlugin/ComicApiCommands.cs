@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Config;
@@ -15,9 +17,9 @@ namespace ComicApiPlugin.Plugin;
 
 /// <summary>
 /// ComicRack creates one instance per process and calls every hook on the UI thread. The Books and Editor hooks both scrape,
-/// and the Configure action opens the settings dialog.
+/// and the Configure action opens the settings dialog. The Startup and Shutdown hooks start and stop the local API service.
 /// </summary>
-public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
+public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, IStartup, IShutdown
 {
 	private static readonly string Version = typeof(ComicApiCommands).Assembly.GetName().Version.ToString(3);
 	private static readonly string UserAgent = $"ComicApiPlugin/{Version} (https://github.com/cbanack/comic-vine-scraper/)";
@@ -33,6 +35,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 	private VerseDbHttp? verseDb;
 	private string? verseDbToken;
 	private LogWindow? logWindow;
+	private ServiceHost? service;
 	private bool running;
 
 	/// <summary>ComicRack's constructor. ComicRack passes the environment to <see cref="OnLoad"/>.</summary>
@@ -64,6 +67,25 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 
 	void IConfig.Execute() => Configure();
 
+	void IStartup.Execute()
+	{
+		try
+		{
+			CheckService(Context);
+		}
+		catch (Exception error)
+		{
+			// Nothing may reach ComicRack from its startup. A context that cannot open fails the first scrape, which shows the error.
+			Trace.TraceError("Comic API Plugin could not start its local API service: " + error);
+		}
+	}
+
+	bool IShutdown.Execute(bool user_is_closing)
+	{
+		service?.Stop();
+		return true;
+	}
+
 	/// <summary>One store and one log for the plugin's lifetime, so two commands never write the settings over each other.</summary>
 	internal PluginContext Context => context ??= PluginContext.Open(env, ports.SettingsFolder, ports.Clock);
 
@@ -88,6 +110,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 		try
 		{
 			LogStart(ctx);
+			CheckService(ctx);
 			if (books.Length == 0)
 			{
 				// Python still logged the header, said it finished and showed the summary for an empty selection.
@@ -206,6 +229,21 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 		List<IScrapeBook> targets = [.. books.Select(book => new ComicRackBook(book, env.App))];
 		return ScrapeHost.Run(env.MainWindow, ctx, (form, ct) =>
 			new CoverSearchRun(api, new WinFormsCoverSearchUi(form, ctx, api), ports.Clock, ctx.Log, config, config.VerseDbAutoAccept ? coverComparer : null).RunAsync(targets, ct));
+	}
+
+	/// <summary>
+	/// Starts the local API service when it is not running, asks for its health, and logs the answer or the failure. All of
+	/// it runs in the background, so the caller neither waits nor fails. Until the provider calls move to the service, a
+	/// scrape does not depend on it.
+	/// </summary>
+	private void CheckService(PluginContext ctx)
+	{
+		if (ports.Service is not { } launch)
+		{
+			return;
+		}
+		ServiceHost host = service ??= new ServiceHost(launch, () => ctx.Settings.Load().Advanced.ShowServiceConsole, ctx.Log.Debug);
+		Task.Run(async () => ctx.Log.Debug(await host.CheckAsync().ConfigureAwait(false)));
 	}
 
 	/// <summary>One HttpClient for the plugin's lifetime, replaced only when the user changes the token.</summary>

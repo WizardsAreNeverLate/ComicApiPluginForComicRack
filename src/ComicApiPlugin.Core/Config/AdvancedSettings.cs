@@ -26,5 +26,8 @@ public sealed record AdvancedSettings(
 	int ScrapeDelaySeconds,               // default 1, parsed values clamped 2..3600
 	int MaxSearchResults)                 // default 100, clamped 10..5000
 {
+	/// <summary>SHOW_SERVICE_CONSOLE: the local API service runs with its console window on show. The Python plugin does not know the key and ignores the line.</summary>
+	public bool ShowServiceConsole { get; init; }
+
 	public static AdvancedSettings Parse(string? text) => AdvancedParser.Parse(text);
 }

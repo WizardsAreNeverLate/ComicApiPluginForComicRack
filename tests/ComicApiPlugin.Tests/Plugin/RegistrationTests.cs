@@ -25,4 +25,13 @@ public sealed class RegistrationTests
 		await Assert.That(plugin is IEditor).IsTrue();
 		await Assert.That(plugin is IConfig).IsTrue();
 	}
+
+	[Test]
+	public async Task The_plugin_hooks_ComicRacks_startup_and_shutdown_for_the_local_service()
+	{
+		var plugin = new ComicApiCommands();
+
+		await Assert.That(plugin is IStartup).IsTrue();
+		await Assert.That(plugin is IShutdown).IsTrue();
+	}
 }

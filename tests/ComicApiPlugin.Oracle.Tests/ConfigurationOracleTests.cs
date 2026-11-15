@@ -148,6 +148,27 @@ public sealed class ConfigurationOracleTests
 		}
 	}
 
+	[Test]
+	[Arguments("True", true)]
+	[Arguments("'true'", true)]
+	[Arguments("False", false)]
+	[Arguments("yes", false)]
+	public async Task Python_ignores_a_SHOW_SERVICE_CONSOLE_line_and_reads_the_lines_around_it_as_the_port_does(string value, bool expected)
+	{
+		using var folder = new TempFolder();
+		object python = PythonConfig.New(folder);
+		string text = "SCRAPE_DELAY=7\nSHOW_SERVICE_CONSOLE=" + value + "\nWELCOME_DIALOG=False\nIGNORE_PUBLISHER=Marvel";
+
+		PythonConfig.Set(python, "advanced_settings_s", text);
+		AdvancedSettings parsed = AdvancedSettings.Parse(text);
+
+		await Assert.That(Canonical(parsed)).IsEqualTo(Canonical(PythonConfig.Advanced(python)));
+		await Assert.That(parsed.ScrapeDelaySeconds).IsEqualTo(7);
+		await Assert.That(parsed.WelcomeDialog).IsFalse();
+		await Assert.That(parsed.ShowServiceConsole).IsEqualTo(expected);
+		await Assert.That(AdvancedSettings.Parse("SCRAPE_DELAY=7").ShowServiceConsole).IsFalse();
+	}
+
 	private static readonly (string Value, string Error)[] NonFinite =
 	[
 		("inf", "System.OverflowException: cannot convert float infinity to integer"),

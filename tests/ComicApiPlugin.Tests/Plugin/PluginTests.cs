@@ -11,6 +11,7 @@ using ComicApiPlugin.Config;
 using ComicApiPlugin.Fixtures;
 using ComicApiPlugin.Model;
 using ComicApiPlugin.Plugin;
+using ComicApiPlugin.Service;
 using ComicApiPlugin.Tests.Engine;
 using ComicApiPlugin.Tests.Plugin.Forms;
 using cYo.Projects.ComicRack.Engine;
@@ -184,6 +185,70 @@ public sealed class PluginTests
 		await Assert.That(world.Requested).IsEmpty();
 		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
 		await Assert.That(world.Log.Any(line => line.StartsWith("CV Scraper Version:", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task A_scrape_starts_the_local_service_in_the_background_and_logs_that_it_answers()
+	{
+		ServiceLaunch launch = BuiltService.Launch();
+		using var world = new PluginWorld(launch);
+
+		world.Run(plugin => plugin.Scrape([]));
+		string ready = await world.LogLineAsync("Local API service ");
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(ready).Matches(@"^Local API service ready on 127\.0\.0\.1:\d+ \(pid \d+\)$");
+		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
+		await Assert.That(mayClose).IsTrue();
+		await Assert.That(BuiltService.CommandLines(launch.LogFolder)).IsEmpty();
+		await Assert.That(BuiltService.ReadLogs(launch.LogFolder)).Contains($"HTTP POST {ServiceProtocol.ShutdownPath} responded 202");
+	}
+
+	[Test]
+	public async Task A_scrape_runs_as_before_when_the_local_service_cannot_start()
+	{
+		using var world = new PluginWorld(BuiltService.Script("@echo no runtime here 1>&2", "@exit /b 1"));
+
+		world.Run(plugin => plugin.Scrape([]));
+		string failure = await world.LogLineAsync("Local API service ");
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: false);
+
+		await Assert.That(failure).IsEqualTo("Local API service unavailable: The local API service exited with code 1 before it was ready. It wrote: no runtime here ");
+		await Assert.That(world.Log).Contains("Scraper terminated normally (scraped 0, skipped 0).");
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+		await Assert.That(mayClose).IsTrue();
+	}
+
+	[Test]
+	public async Task ComicRacks_startup_starts_the_local_service_without_waiting_and_its_shutdown_stops_it()
+	{
+		ServiceLaunch launch = BuiltService.Launch();
+		using var world = new PluginWorld(launch);
+
+		var watch = Stopwatch.StartNew();
+		world.Run(plugin => ((IStartup)plugin).Execute());
+		TimeSpan startup = watch.Elapsed;
+		string ready = await world.LogLineAsync("Local API service ");
+		int running = BuiltService.CommandLines(launch.LogFolder).Count;
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(ready).StartsWith("Local API service ready on 127.0.0.1:");
+		await Assert.That(running).IsEqualTo(1);
+		await Assert.That(mayClose).IsTrue();
+		await Assert.That(BuiltService.CommandLines(launch.LogFolder)).IsEmpty();
+		await Assert.That(startup).IsLessThan(TimeSpan.FromSeconds(15));
+	}
+
+	[Test]
+	public async Task A_shutdown_before_any_start_and_a_plugin_without_the_service_do_nothing()
+	{
+		using var world = new PluginWorld();
+
+		world.Run(plugin => ((IStartup)plugin).Execute());
+		bool mayClose = ((IShutdown)world.Plugin).Execute(user_is_closing: true);
+
+		await Assert.That(mayClose).IsTrue();
+		await Assert.That(world.Log.Where(line => line.Contains("Local API service"))).IsEmpty();
 	}
 
 	[Test]
@@ -380,10 +445,14 @@ public sealed class PluginTests
 		private readonly List<string> unrecorded = [];
 		private readonly HostEnvironment env = new();
 
-		public PluginWorld(params RecordedResponse[] overrides)
+		public PluginWorld(params RecordedResponse[] overrides) : this(service: null, overrides)
+		{
+		}
+
+		public PluginWorld(ServiceLaunch? service, params RecordedResponse[] overrides)
 		{
 			responses = [.. FixtureFiles.ReadFolder(FixtureFiles.OutputFolder), .. overrides];
-			var ports = new PluginPorts(NewHandler, Folder, new ManualClock());
+			var ports = new PluginPorts(NewHandler, Folder, new ManualClock()) { Service = service };
 			Plugin = new ComicApiCommands(env, ports);
 		}
 
@@ -425,6 +494,24 @@ public sealed class PluginTests
 		public IReadOnlyList<string> Unrecorded => unrecorded;
 
 		public void SaveSettings(Configuration config) => new SettingsStore(Folder, new ManualClock()).Save(config);
+
+		/// <summary>The first log line that starts with <paramref name="prefix"/>. The service check writes its line from the background.</summary>
+		public async Task<string> LogLineAsync(string prefix)
+		{
+			var watch = Stopwatch.StartNew();
+			while (true)
+			{
+				if (Log.FirstOrDefault(line => line.StartsWith(prefix, StringComparison.Ordinal)) is { } found)
+				{
+					return found;
+				}
+				if (watch.Elapsed > TimeSpan.FromSeconds(60))
+				{
+					throw new TimeoutException($"No log line starts with '{prefix}'. The log: {string.Join(" | ", Log)}");
+				}
+				await Task.Delay(50);
+			}
+		}
 
 		/// <summary>Runs the commands on a UI thread with a visible main window, as ComicRack calls them.</summary>
 		public void Run(Action<ComicApiCommands> commands) => Sta.Run(() =>
