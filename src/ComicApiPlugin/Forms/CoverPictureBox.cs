@@ -35,6 +35,9 @@ internal sealed class CoverPictureBox : PictureBox
 		Image = unknown;
 	}
 
+	/// <summary>A downloaded cover is on show for the url asked for. The bitmap belongs to the box's cache: do not dispose it.</summary>
+	public event Action<Uri, Bitmap>? CoverShown;
+
 	/// <summary>Shows the cover at url, or the logo for null.</summary>
 	public void ShowCover(Uri? url)
 	{
@@ -82,6 +85,7 @@ internal sealed class CoverPictureBox : PictureBox
 		{
 			loader.Cancel();
 			Image = cached;
+			CoverShown?.Invoke(url, cached);
 		}
 		else
 		{
@@ -100,6 +104,10 @@ internal sealed class CoverPictureBox : PictureBox
 				if (url == wanted)
 				{
 					Image = image ?? unknown;
+					if (image is not null)
+					{
+						CoverShown?.Invoke(url, image);
+					}
 				}
 			});
 		}

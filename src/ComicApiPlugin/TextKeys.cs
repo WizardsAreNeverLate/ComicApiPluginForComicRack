@@ -144,6 +144,8 @@ public static class TextKeys
 	public const string ConfigFormVerseDbClickHere = nameof(ConfigFormVerseDbClickHere);
 	public const string ConfigFormVerseDbAutoAcceptCB = nameof(ConfigFormVerseDbAutoAcceptCB);
 	public const string ConfigFormShowServiceConsoleCB = nameof(ConfigFormShowServiceConsoleCB);
+	public const string SeriesFormFilterLabel = nameof(SeriesFormFilterLabel);
+	public const string SeriesFormCoverCol = nameof(SeriesFormCoverCol);
 	public const string ConfigFormComicVineAutoAcceptCB = nameof(ConfigFormComicVineAutoAcceptCB);
 	public const string ConfigFormCompareCountLabel = nameof(ConfigFormCompareCountLabel);
 	public const string LogWindowClose = nameof(LogWindowClose);

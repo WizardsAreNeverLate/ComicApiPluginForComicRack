@@ -1,13 +1,19 @@
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
 using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Config;
 using ComicApiPlugin.Engine;
+using ComicApiPlugin.Matching;
 using ComicApiPlugin.Model;
 
 namespace ComicApiPlugin.Plugin;
+
+/// <summary>How the series dialog scores a cover against the book: the book's first page as JPEG (null without one), and the comparer.</summary>
+internal sealed record CoverScoring(Func<byte[]?> BookCover, ICoverComparer Comparer);
 
 /// <summary>The series a search found, best match first, with the cover of the selected one.</summary>
 internal sealed class SeriesForm : ScraperForm
@@ -17,10 +23,16 @@ internal sealed class SeriesForm : ScraperForm
 	private readonly IssueCoverPanel cover;
 	private readonly Button ok;
 	private readonly Button showIssues;
+	private readonly TextBox filter;
+	private readonly CoverScoring? scoring;
+	private readonly Dictionary<Uri, CoverSimilarity?> scores = [];
+	private byte[]? bookCover;
+	private bool bookCoverRead;
 
-	private SeriesForm(PluginContext ctx, IComicVine comicVine, Configuration config, SeriesQuestion question) : base(ctx, "seriesform")
+	private SeriesForm(PluginContext ctx, IComicVine comicVine, Configuration config, SeriesQuestion question, CoverScoring? scoring) : base(ctx, "seriesform")
 	{
 		this.question = question;
+		this.scoring = scoring;
 		bool covers = config.Advanced.ShowCovers;
 		Text = Strings[TextKeys.SeriesFormTitle];
 		ClientSize = new Size(730, 395);
@@ -42,35 +54,41 @@ internal sealed class SeriesForm : ScraperForm
 				: Strings.Format(TextKeys.SeriesFormConfirmText, question.SearchTerms),
 		};
 
-		grid = new ButtonGrid("series", ok, new Point(10, 60), covers ? new Size(500, 290) : new Size(710, 290)) { TabIndex = 6 };
+		var filterLabel = new Label { Name = "filterLabel", UseMnemonic = false, AutoSize = true, Location = new Point(10, 64), Text = Strings[TextKeys.SeriesFormFilterLabel] };
+		filter = new TextBox { Name = "filter", Location = new Point(60, 61), Size = covers ? new Size(450, 20) : new Size(660, 20), TabIndex = 7 };
+		filter.TextChanged += (_, _) => ApplyFilter();
+
+		grid = new ButtonGrid("series", ok, new Point(10, 88), covers ? new Size(500, 262) : new Size(710, 262)) { TabIndex = 6 };
 		DataGridViewColumn name = grid.AddColumn("name", Strings[TextKeys.SeriesFormSeriesCol], DataGridViewContentAlignment.MiddleLeft, DataGridViewAutoSizeColumnMode.Fill);
 		name.FillWeight = 200;
 		grid.AddColumn("year", Strings[TextKeys.SeriesFormYearCol], DataGridViewContentAlignment.MiddleCenter, DataGridViewAutoSizeColumnMode.AllCells);
 		grid.AddColumn("issues", Strings[TextKeys.SeriesFormIssuesCol], DataGridViewContentAlignment.MiddleCenter, DataGridViewAutoSizeColumnMode.AllCells);
 		grid.AddColumn("publisher", Strings[TextKeys.SeriesFormPublisherCol], DataGridViewContentAlignment.MiddleLeft, DataGridViewAutoSizeColumnMode.Fill);
+		grid.AddColumn("cover", Strings[TextKeys.SeriesFormCoverCol], DataGridViewContentAlignment.MiddleCenter, DataGridViewAutoSizeColumnMode.AllCells, visible: covers && scoring is not null);
 		grid.AddColumn("id", "", DataGridViewContentAlignment.MiddleCenter, DataGridViewAutoSizeColumnMode.AllCells, visible: false);
 		grid.AddColumn("match", "", DataGridViewContentAlignment.MiddleCenter, DataGridViewAutoSizeColumnMode.AllCells, visible: false);
 		grid.AddColumn("model", "", DataGridViewContentAlignment.MiddleCenter, DataGridViewAutoSizeColumnMode.AllCells, visible: false);
 		for (int i = 0; i < question.Candidates.Count; i++)
 		{
 			(SeriesRef series, double score) = (question.Candidates[i].Series, question.Candidates[i].Score);
-			grid.Rows.Add(series.Name, series.StartYear, series.IssueCount, series.Publisher, series.Id.Value, score, i);
+			grid.Rows.Add(series.Name, series.StartYear, series.IssueCount, series.Publisher, "", series.Id.Value, score, i);
 		}
 		grid.SelectionChanged += (_, _) => SelectionChanged();
 
 		string? hint = config.Advanced.ForceSeriesArt ? null : question.Book.Effective.Number;
 		cover = new IssueCoverPanel(ctx, comicVine, covers, hint) { Location = new Point(523, 30), Visible = covers, TabIndex = 5 };
+		cover.CoverShown += ScoreCover;
 
-		Controls.AddRange([message, grid, ok, skip, again, showIssues, cover]);
+		Controls.AddRange([message, filterLabel, filter, grid, ok, skip, again, showIssues, cover]);
 	}
 
-	public static SeriesChoice Ask(IWin32Window? owner, PluginContext ctx, IComicVine comicVine, Configuration config, SeriesQuestion question, CoverPreferences covers, CancellationToken ct)
+	public static SeriesChoice Ask(IWin32Window? owner, PluginContext ctx, IComicVine comicVine, Configuration config, SeriesQuestion question, CoverPreferences covers, CancellationToken ct, CoverScoring? scoring = null)
 	{
 		if (question.Candidates.Count == 0)
 		{
 			throw new ArgumentException("The series dialog needs at least one series.", nameof(question));
 		}
-		using var form = new SeriesForm(ctx, comicVine, config, question);
+		using var form = new SeriesForm(ctx, comicVine, config, question, scoring);
 		DialogResult result = form.ShowModal(owner, ct);
 		SeriesRef? selected = form.grid.SelectedModel is int i ? question.Candidates[i].Series : null;
 		switch (result)
@@ -106,6 +124,67 @@ internal sealed class SeriesForm : ScraperForm
 		cover.ShowSeries(selected is int i ? question.Candidates[i].Series : null);
 		ok.Enabled = selected is not null;
 		showIssues.Enabled = selected is not null;
+	}
+
+	/// <summary>Shows only the rows whose series name contains the filter text, ignoring case. The selection stays when its row stays.</summary>
+	private void ApplyFilter()
+	{
+		string text = filter.Text.Trim();
+		DataGridViewRow? kept = grid.SelectedRows.Count == 1 ? grid.SelectedRows[0] : null;
+		// A row that is current cannot be hidden.
+		grid.CurrentCell = null;
+		DataGridViewRow? first = null;
+		foreach (DataGridViewRow row in grid.Rows)
+		{
+			row.Visible = text.Length == 0 || ((string)row.Cells["name"].Value).IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
+			first ??= row.Visible ? row : null;
+		}
+		DataGridViewRow? select = kept is { Visible: true } ? kept : first;
+		if (select is not null)
+		{
+			grid.CurrentCell = select.Cells["name"];
+		}
+		SelectionChanged();
+	}
+
+	/// <summary>Scores the cover now on show against the book's first page, and writes the score into the row of the selected series.</summary>
+	private async void ScoreCover(Uri url, Bitmap image)
+	{
+		if (scoring is null || grid.SelectedRows.Count != 1)
+		{
+			return;
+		}
+		DataGridViewRow row = grid.SelectedRows[0];
+		if (!scores.TryGetValue(url, out CoverSimilarity? score))
+		{
+			if (!bookCoverRead)
+			{
+				bookCoverRead = true;
+				bookCover = scoring.BookCover();
+			}
+			if (bookCover is not { } book)
+			{
+				return;
+			}
+			byte[] candidate = CoverJpeg.Encode(image);
+			try
+			{
+				score = await Task.Run(() => scoring.Comparer.Compare(book, candidate));
+			}
+			catch (Exception error)
+			{
+				Ctx.Log.Debug("cover score unavailable: " + error.Message);
+				return;
+			}
+			scores[url] = score;
+		}
+		if (IsDisposed || row.DataGridView is null)
+		{
+			return;
+		}
+		DataGridViewCell cell = row.Cells["cover"];
+		cell.Value = score is { } s ? $"{Math.Round(Math.Max(0, s.Correlation) * 100):0}%{(s.IsMatch ? " ✓" : "")}" : "?";
+		cell.ToolTipText = score?.ToString() ?? "";
 	}
 
 	private Button MakeButton(string name, string textKey, Point location, int width, DialogResult result, int tabIndex) => new()

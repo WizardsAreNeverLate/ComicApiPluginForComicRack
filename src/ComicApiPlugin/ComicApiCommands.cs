@@ -217,7 +217,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 		List<IScrapeBook> targets = [.. books.Select(book => new ComicRackBook(book, env.App))];
 		return ScrapeHost.Run(env.MainWindow, ctx, (form, ct) =>
 		{
-			var services = new ScrapeServices(catalog, new WinFormsScrapeUi(form, ctx, catalog, config), ports.Clock, ctx.Log, ctx.Settings.LoadChosenSeries(), new CoverPreferences())
+			var services = new ScrapeServices(catalog, new WinFormsScrapeUi(form, ctx, catalog, config, CoverComparer(ctx)), ports.Clock, ctx.Log, ctx.Settings.LoadChosenSeries(), new CoverPreferences())
 			{
 				CoverComparer = config.ComicVineCoverAutoAccept ? CoverComparer(ctx) : null,
 			};
