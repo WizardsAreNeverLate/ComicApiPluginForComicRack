@@ -56,6 +56,18 @@ internal sealed class ConfigForm : ScraperForm
 		SelectionMode = SelectionMode.One,
 		Size = new Size(260, 170),
 	};
+	private readonly CheckBox verseDbAutoAccept;
+	private readonly CheckBox comicVineAutoAccept;
+	private readonly Label compareCountLabel;
+	private readonly NumericUpDown compareCount = new()
+	{
+		Name = "comicVineCompareCount",
+		Minimum = Configuration.MinCoverCompareCount,
+		Maximum = Configuration.MaxCoverCompareCount,
+		Value = new Configuration { Advanced = AdvancedSettings.Parse("") }.ComicVineCoverCompareCount,
+		Location = new Point(190, 249),
+		Size = new Size(55, 20),
+	};
 	private readonly CheckBox autochoose;
 	private readonly CheckBox confirmIssue;
 	private readonly CheckBox fastRescrape;
@@ -83,6 +95,9 @@ internal sealed class ConfigForm : ScraperForm
 		restore.Click += (_, _) => RestoreDefaults();
 		Pin(tabs, AllEdges);
 
+		verseDbAutoAccept = MakeCheckBox("verseDbAutoAccept", TextKeys.ConfigFormVerseDbAutoAcceptCB, 34, 210, 315, 34);
+		comicVineAutoAccept = MakeCheckBox("comicVineAutoAccept", TextKeys.ConfigFormComicVineAutoAcceptCB, 34, 210, 315, 34);
+		compareCountLabel = new Label { Name = "comicVineCompareCountLabel", UseMnemonic = false, AutoSize = false, Location = new Point(52, 251), Size = new Size(135, 17), Text = Strings[TextKeys.ConfigFormCompareCountLabel] };
 		autochoose = MakeCheckBox("autochoose", TextKeys.ConfigFormAutochooseSeriesCB, 82, 45, 300, 34);
 		confirmIssue = MakeCheckBox("confirmIssue", TextKeys.ConfigFormConfirmIssueCB, 82, 75, 300, 34);
 		fastRescrape = MakeCheckBox("fastRescrape", TextKeys.ConfigFormRescrapeCB, 52, 116, 300, 34);
@@ -160,6 +175,9 @@ internal sealed class ConfigForm : ScraperForm
 		rescrapeNotes.Checked = config.Update.HasFlag(BookFields.Notes);
 		rescrapeTags.Checked = config.Update.HasFlag(BookFields.Tags);
 		summaryDialog.Checked = config.SummaryDialog;
+		verseDbAutoAccept.Checked = config.VerseDbAutoAccept;
+		comicVineAutoAccept.Checked = config.ComicVineCoverAutoAccept;
+		compareCount.Value = config.ComicVineCoverCompareCount;
 		advanced.Text = config.Advanced.RawText;
 		apiKey.Text = config.ApiKey.Trim();
 		verseDbKey.Text = config.VerseDbApiKey.Trim();
@@ -198,6 +216,9 @@ internal sealed class ConfigForm : ScraperForm
 			PreserveThumbs = preserveThumbs.Checked,
 			FastRescrape = fastRescrape.Checked,
 			SummaryDialog = summaryDialog.Checked,
+			VerseDbAutoAccept = verseDbAutoAccept.Checked,
+			ComicVineCoverAutoAccept = comicVineAutoAccept.Checked,
+			ComicVineCoverCompareCount = (int)compareCount.Value,
 			Advanced = AdvancedSettings.Parse(advanced.Text),
 		};
 	}
@@ -216,6 +237,8 @@ internal sealed class ConfigForm : ScraperForm
 	{
 		ignoreBlanks.Enabled = overwrite.Checked;
 		preserveThumbs.Enabled = downloadThumbs.Checked;
+		compareCount.Enabled = comicVineAutoAccept.Checked;
+		compareCountLabel.Enabled = comicVineAutoAccept.Checked;
 		if (confirmIssue.Checked)
 		{
 			autochoose.Checked = false;
@@ -267,7 +290,7 @@ internal sealed class ConfigForm : ScraperForm
 		apiKey.ContextMenuStrip = EditMenu(apiKey);
 		WireEye(showKey, apiKey);
 		var text = new Label { Name = "comicVineText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 80), Size = new Size(315, 54), Text = Strings[TextKeys.ConfigFormComicVineText] };
-		return Tab("comicVineTab", TextKeys.ConfigFormComicVineTab, Pin(text, AcrossTop), Pin(apiKey, AcrossTop), Pin(showKey, TopRight), Pin(link, AcrossTop));
+		return Tab("comicVineTab", TextKeys.ConfigFormComicVineTab, Pin(text, AcrossTop), Pin(apiKey, AcrossTop), Pin(showKey, TopRight), Pin(link, AcrossTop), comicVineAutoAccept, Pin(compareCountLabel, AcrossTop), compareCount);
 	}
 
 	private static void WireEye(Button button, TextBox box)
@@ -305,7 +328,7 @@ internal sealed class ConfigForm : ScraperForm
 		verseDbKey.ContextMenuStrip = EditMenu(verseDbKey);
 		WireEye(showVerseDbKey, verseDbKey);
 		var text = new Label { Name = "verseDbText", UseMnemonic = false, AutoSize = false, Location = new Point(34, 80), Size = new Size(315, 54), Text = Strings[TextKeys.ConfigFormVerseDbText] };
-		return Tab("verseDbTab", TextKeys.ConfigFormVerseDbName, Pin(text, AcrossTop), Pin(verseDbKey, AcrossTop), Pin(showVerseDbKey, TopRight), Pin(link, AcrossTop));
+		return Tab("verseDbTab", TextKeys.ConfigFormVerseDbName, Pin(text, AcrossTop), Pin(verseDbKey, AcrossTop), Pin(showVerseDbKey, TopRight), Pin(link, AcrossTop), verseDbAutoAccept);
 	}
 
 	private sealed record ProviderItem(ProviderKind Kind, string Name)

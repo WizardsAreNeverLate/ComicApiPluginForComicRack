@@ -336,6 +336,76 @@ public sealed class ConfigFormTests
 	}
 
 	[Test]
+	public async Task The_cover_auto_accept_settings_round_trip_through_OK()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with { ApiKey = Key });
+
+		Configuration? returned = Sta.Run(() =>
+		{
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				Ui.Find<CheckBox>(form, "verseDbAutoAccept").Checked = true;
+				Ui.Find<CheckBox>(form, "comicVineAutoAccept").Checked = true;
+				Ui.Find<NumericUpDown>(form, "comicVineCompareCount").Value = 9;
+				Ui.Find<Button>(form, "ok").PerformClick();
+			});
+			return ConfigForm.Show(null, session.Ctx);
+		});
+
+		await Assert.That(returned!.VerseDbAutoAccept).IsTrue();
+		await Assert.That(returned.ComicVineCoverAutoAccept).IsTrue();
+		await Assert.That(returned.ComicVineCoverCompareCount).IsEqualTo(9);
+		Configuration saved = session.Settings.Load();
+		await Assert.That((saved.VerseDbAutoAccept, saved.ComicVineCoverAutoAccept, saved.ComicVineCoverCompareCount)).IsEqualTo((true, true, 9));
+	}
+
+	[Test]
+	public async Task The_saved_cover_auto_accept_settings_are_shown_and_the_count_follows_its_checkbox()
+	{
+		using var session = UiSession.Create();
+		session.Settings.Save(Defaults with { ApiKey = Key, ComicVineCoverAutoAccept = true, ComicVineCoverCompareCount = 3 });
+
+		(decimal Count, bool OnWhenChecked, bool OnWhenUnchecked, int Minimum, int Maximum) seen = Sta.Run(() =>
+		{
+			(decimal, bool, bool, int, int) result = default;
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				NumericUpDown count = Ui.Find<NumericUpDown>(form, "comicVineCompareCount");
+				CheckBox box = Ui.Find<CheckBox>(form, "comicVineAutoAccept");
+				bool on = count.Enabled && box.Checked;
+				box.Checked = false;
+				result = (count.Value, on, count.Enabled, (int)count.Minimum, (int)count.Maximum);
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return result;
+		});
+
+		await Assert.That(seen).IsEqualTo((3m, true, false, 1, 20));
+	}
+
+	[Test]
+	public async Task The_cover_auto_accept_settings_are_off_by_default()
+	{
+		using var session = UiSession.Create();
+
+		(bool VerseDb, bool ComicVine, bool CountEnabled, decimal Count) seen = Sta.Run(() =>
+		{
+			(bool, bool, bool, decimal) result = default;
+			using IDisposable driver = Ui.WhenOpen<ConfigForm>(form =>
+			{
+				NumericUpDown count = Ui.Find<NumericUpDown>(form, "comicVineCompareCount");
+				result = (Ui.Find<CheckBox>(form, "verseDbAutoAccept").Checked, Ui.Find<CheckBox>(form, "comicVineAutoAccept").Checked, count.Enabled, count.Value);
+				form.Close();
+			});
+			ConfigForm.Show(null, session.Ctx);
+			return result;
+		});
+
+		await Assert.That(seen).IsEqualTo((false, false, false, 5m));
+	}
+	[Test]
 	public async Task Restore_Defaults_resets_everything_but_the_API_key()
 	{
 		using var session = UiSession.Create();
@@ -347,6 +417,9 @@ public sealed class ConfigFormTests
 			Choose = ChooseMode.AutoChooseSeries,
 			DownloadThumbs = false,
 			SummaryDialog = false,
+			VerseDbAutoAccept = true,
+			ComicVineCoverAutoAccept = true,
+			ComicVineCoverCompareCount = 12,
 			Advanced = AdvancedSettings.Parse("SCRAPE_DELAY=9"),
 		});
 
