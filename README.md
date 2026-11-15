@@ -16,6 +16,7 @@ This is a native C# (.NET Framework 4.8) port of Cory Banack's [Comic Vine Scrap
 	- this fork's [`feat/dotnet-plugins`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/feat/dotnet-plugins), which installs `.crplugin` packages that contain .NET assemblies.
 - **Upstream ComicRack CE has not released this support yet.** `feature/dotnet-plugin` is a branch of upstream, not yet merged into its `master`.
 - You need a Comic Vine API key, which is free. You can get one at <https://comicvine.gamespot.com/api/>.
+- Install the **ASP.NET Core Runtime 11 (x64)** from <https://dotnet.microsoft.com/download/dotnet/11.0>. The plugin starts a local helper process, `ComicApiPlugin.Service.exe`, that needs it. The helper listens on 127.0.0.1 only and stops when ComicRack closes. In this version the plugin still scrapes without the runtime, and it writes the reason to its debug log. A later version will make the provider calls through the helper.
 
 ## Features
 
@@ -41,11 +42,11 @@ If Windows blocked the downloaded file, the plugin's DLL is blocked too, and Com
 
 ## Build
 
-You need Visual Studio 2022 or its Build Tools (MSBuild with the .NET Framework 4.8 targeting pack), and a local build of ComicRack CE from `WizardsAreNeverLate/ComicRackCE@integration`. The plugin compiles against that build's assemblies.
+You need Visual Studio 2026 or its Build Tools (MSBuild 18 with the .NET Framework 4.8 targeting pack), the .NET 11 SDK, and a local build of ComicRack CE from `WizardsAreNeverLate/ComicRackCE@integration`. The plugin compiles against that build's assemblies.
 
 ```powershell
 $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
-./Build.ps1            # build, then run both test suites
+./Build.ps1            # build, then run the three test suites
 ./Build.ps1 -Rebuild   # clean build
 ./Build.ps1 -SkipTests
 ```
@@ -59,12 +60,13 @@ The CI workflow (`.github/workflows/build.yml`) runs in this order:
 3. It runs `Build.ps1 -Configuration Release`.
 4. It uploads the `.crplugin` as an artifact.
 
-Use `Build.ps1` rather than `dotnet build`. The projects contain binary `.resx` resources, which `dotnet build` can't compile for .NET Framework.
+Use `Build.ps1` rather than `dotnet build`. The plugin and its test projects contain binary `.resx` resources, which `dotnet build` can't compile for .NET Framework. `Build.ps1` builds the .NET 11 projects with the same MSBuild.
 
 ## Tests
 
 - **`tests/ComicApiPlugin.Tests`:** fast unit tests using [TUnit](https://github.com/thomhurst/TUnit). They run against recorded Comic Vine responses, which are stored with the API key removed.
 - **`tests/ComicApiPlugin.Oracle.Tests`:** these tests run the original Python modules under IronPython in the test process. They check that the port gives the same results on a shared set of inputs.
+- **`tests/ComicApiPlugin.Service.Tests`:** tests on .NET 11 that start the local API service as a process and call it over HTTP.
 - **`tools/smoke`:** an in-app check that starts ComicRack and drives the plugin over recorded responses.
 - **`tools/differential`:** an in-app comparison of the Python and the C# plugin. It runs against the live API, and needs an API key file.
 
@@ -76,6 +78,7 @@ Both in-app tools use a separate ComicRack configuration and a temporary setting
 |---|---|
 | `src/ComicApiPlugin.Core` | Engine, matching, Comic Vine client and settings. No WinForms or ComicRack references. |
 | `src/ComicApiPlugin` | The ComicRack plugin: commands, forms, and the mapping to `ComicBook`. |
+| `src/ComicApiPlugin.Service` | The local API service (.NET 11) that the plugin starts. It ships in the package as `service.zip`. |
 | `docs/port` | Port plan, architecture, and the list of differences from the original. |
 | `.audit/cvs-port.tsv` | Decision log for the port. |
 

@@ -59,7 +59,7 @@ An oracle test passes the same input to a pure Core function and to its Python o
 
 ### Projects
 
-All projects target net48 and AnyCPU, with LangVersion 14 and PolySharp. The plugin needs no NuGet packages at run time.
+The plugin, its two test suites and the tools target net48 and AnyCPU, with LangVersion 14 and PolySharp. The plugin needs no NuGet packages at run time. Core also builds for net11.0-windows, for the local API service and its tests (see [Local API service](#local-api-service)).
 
 - `ComicApiPlugin.Core.dll` contains the model, the merge rules, the engine, the Comic Vine client, the configuration and `.dat` files, the algorithms, and the debug log. It references System.Drawing, System.Net.Http, and System.Xml.Linq, and nothing from ComicRack or WinForms. The compiler therefore stops Core from naming `ComicBook` or `Form`.
 - `ComicApiPlugin.dll` contains the plugin entry points, the `ComicBook` adapter, the forms, i18n, and the error dialogs. It references ComicRack with `Private=false`.
@@ -416,3 +416,69 @@ Correlation separates the true pairs from the rest with a wide margin on undisto
 OpenCvSharp calls `OpenCvSharpExtern.dll` by name. ComicRack loads the plugin from its Scripts folder, outside the default search path, so `OpenCvNative.EnsureLoaded` calls `LoadLibraryEx` on the full path of the file beside `OpenCvSharp.dll` (or in `dll\x64` there) before the first use, with `LOAD_WITH_ALTERED_SEARCH_PATH`. Once it is loaded, the by-name call resolves to it. The library is 64-bit only, and ComicRack's process is. Both DLLs sit at the package root. `System.Memory`, `System.Buffers` and `System.Runtime.CompilerServices.Unsafe` come with ComicRack. `opencv_videoio_ffmpeg*.dll` (28 MB, video decoding) is not packed.
 
 The package grows because of the native library: `ComicApiPlugin.crplugin` is 27.4 MB (it was 0.29 MB), and the installed folder is 70.4 MB with PDBs (it was 0.74 MB). `OpenCvSharpExtern.dll` is 68.6 MB, `OpenCvSharp.dll` 1.0 MB. A project that only references Core does not receive the runtime package's build props, since build assets are not transitive. The plugin and both test projects each reference `OpenCvSharp4.runtime.win` for that reason.
+
+## Local API service
+
+The Comic Vine and VerseDB calls and the OpenCV cover comparison are moving out of the plugin into `ComicApiPlugin.Service`, a .NET 11 minimal API that runs as a separate process on the same machine. The aims are an API that can be tested without ComicRack, a smaller plugin, and a current runtime. The plugin starts the service, talks to it over HTTP on the loopback address, and stops it.
+
+The move has five phases. Phase 1 is done.
+
+| Phase | Content | State |
+|---|---|---|
+| 1 | The service skeleton, and the plugin code that starts it, reaches it and stops it. No provider call moves. | Done |
+| 2 | The Comic Vine calls move behind service endpoints, with a remote `IComicVine` in the plugin, caches per run and a throttle per key. A scrape then needs the service, and the UI shows a failed start. | Not started |
+| 3 | The VerseDB calls and the OpenCV cover comparison move to the service, and OpenCV leaves the plugin package. | Not started |
+| 4 | The recorded-response tests run through the service: the plugin tests, the smoke tool and the differential tool. | Not started |
+| 5 | Final packaging and documents. | Not started |
+
+### Projects and packaging
+
+- `ComicApiPlugin.Core` builds for net48 and for net11.0-windows. On .NET 11, `System.Drawing` comes from the `System.Drawing.Common` package, so the service needs the ASP.NET Core 11 runtime and not the Windows Desktop runtime. `ServiceProtocol` (Core/Service) holds every name the two sides share: the environment variable, the arguments, the ready prefix, the paths and the header names.
+- `ComicApiPlugin.Service` is framework-dependent. The user installs the runtime, and the apphost `ComicApiPlugin.Service.exe` finds it without `dotnet` on `PATH`.
+- The package holds the service as one file, `service.zip`, beside the plugin's DLLs. It is not a subfolder, for two reasons found in ComicRack CE:
+  - `PackageManager.Package.UnzipFile` writes every zip entry to `Path.GetFileName(entry.Name)`, and `CommitInstallPackage` copies only the top-level files. A `.crplugin` is therefore installed flat (`ComicRack.Engine/PackageManager.cs`).
+  - `PluginEngine.Initialize` lists the Scripts folder with `SearchOption.AllDirectories`, and `DotNetPluginInitializer.ReferencesPluginApi` loads every DLL for reflection and notes it as a library by name. The service's own .NET 11 `ComicApiPlugin.Core.dll` under Scripts would be noted beside the plugin's.
+- `ServicePackage.Unpack` unpacks the zip to `%LOCALAPPDATA%\ComicApiPlugin\service\<id>\`, where `<id>` is the first 16 hex digits of the zip's SHA-256. It extracts to a `.partial` folder and moves it into place, so a folder that exists is complete, and a second call does nothing. It removes the folders of other versions.
+- The `PackService` target in `ComicApiPlugin.csproj` publishes the service and zips the output without the PDBs. `service.zip` is 1.4 MB, and `ComicApiPlugin.crplugin` grows from 27.4 MB to 28.9 MB.
+
+### Start and handshake
+
+`ServiceHost` (plugin) owns the process. Its state is one of `NotStarted`, `Starting(task)`, `Running(endpoint, process)`, `Failed(reason)` and `Stopped`. `EnsureStartedAsync` returns the endpoint of a running service. Otherwise it starts one. Concurrent callers share one start, and a service that failed, exited or was stopped is started again on the next call.
+
+1. The plugin makes a token of 32 random bytes (base64url) and starts the exe with `--parent-pid <ComicRack pid> --log-dir <folder>`. The token goes in the environment variable `COMICAPI_SERVICE_TOKEN`, never on the command line, which other processes can read.
+2. The service binds Kestrel to `127.0.0.1` with port 0, so the system picks a free port. No command line or `ASPNETCORE_URLS` reaches the host.
+3. When the server accepts requests, the service writes one line to stdout: `COMICAPI-READY {"port":<n>,"pid":<pid>,"version":"<v>"}`. The plugin reads that line. It never probes for a port.
+4. The plugin waits 20 seconds for the line. A timeout, an exit before the line, or a missing exe gives `Failed` with a reason that includes what the service wrote to stderr. When the apphost reports that .NET is not installed, the reason names the .NET 11 runtime and `https://dotnet.microsoft.com/download/dotnet/11.0`.
+
+The plugin reads stdout and stderr for the life of the process, so a full pipe cannot block the service.
+
+### Requests
+
+`RequestGuard` runs before routing, so no endpoint is anonymous.
+
+- The `Host` header must be `127.0.0.1:<bound port>`. Any other value gets 400. This stops a web page that reaches the port under another name (DNS rebinding).
+- The request must carry `Authorization: Bearer <token>`. The comparison takes constant time. A missing or wrong token gets 401.
+- `GET /health` returns `{ "version", "pid", "uptimeSeconds" }`. `POST /shutdown` returns 202 and then stops the service.
+- From phase 2, the provider keys travel per request in the `X-ComicVine-Key` and `X-VerseDb-Token` headers. The service keeps no key.
+
+`ServiceEndpoint.CreateClient` makes the plugin's `HttpClient` with the base address and the token, and with the system proxy off.
+
+### Lifetime
+
+The service stops in every way ComicRack can end:
+
+- **ComicRack closes.** `ComicApiCommands` implements `IShutdown`. It posts `/shutdown` with a 2 second timeout, waits 3 seconds for the exit, then kills the process. It always lets ComicRack close. If another plugin cancels the close, the next call starts the service again.
+- **ComicRack crashes or is killed.** The process is in a Windows job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The plugin holds the only handle, so Windows kills the service when ComicRack's process ends.
+- **Anything else.** `ParentWatch` in the service waits on the parent process and stops the service when it exits. If the parent is already gone at startup, the service exits with code 3.
+
+`ComicApiCommands` implements `IStartup` and starts the service in the background, so ComicRack's startup neither waits nor fails. In phase 1, each scrape also starts the service if needed, calls `/health`, and writes `Local API service ready on 127.0.0.1:<port> (pid <pid>)` or the failure to the debug log. The scrape itself does not use the service yet.
+
+### Logging and the console window
+
+- Serilog writes `%LOCALAPPDATA%\ComicApiPlugin\logs\service-<yyyyMMdd>.log`, one file per day, and keeps 14 files.
+- Each request is one line with the method, the path without the query string, the status and the elapsed time. ASP.NET Core's own request log, which includes the query string, is off. No header is logged. `SecretHeaderPolicy` writes the three secret headers as `<redacted>` if a later change logs a header collection.
+- The console window is hidden by default. The line `SHOW_SERVICE_CONSOLE=True` in `advanced.dat` shows it from the next start of the service (`deviations.md`). stdout is a pipe to the plugin, so the service opens the window by its device name, `CONOUT$`, and writes the same log lines there.
+
+### Build and tests
+
+Visual Studio's MSBuild (18.11) builds the .NET 11 projects with the .NET 11 SDK, so `Build.ps1` still builds the one solution. `tests/ComicApiPlugin.Service.Tests` (net11.0-windows) starts the built exe as a process. `ServiceHostTests` and `ServicePackageTests` in `ComicApiPlugin.Tests` run `ServiceHost` against the `service.zip` in the artifacts folder, and against `.cmd` scripts that fail the way a service can.
