@@ -87,6 +87,7 @@
 		<Copy SourceFiles="@(CrPluginContent)" DestinationFolder="$(CrPluginStaging)" />
 		<ZipDirectory SourceDirectory="$(CrPluginStaging)" DestinationFile="$(CrPluginPath)" Overwrite="true" />
 		<Copy SourceFiles="$(OutDir)ComicApiPlugin.pdb;$(OutDir)ComicApiPlugin.Core.pdb" DestinationFolder="$(CrPluginStaging)" />
+		<Copy SourceFiles="$(CrPluginPath)" DestinationFolder="$(CrPluginStaging)..\" Condition="'$(CvsRecordedResponses)' != 'true'" />
 		<Message Importance="high" Text="$(MSBuildProjectName) -> $([System.IO.Path]::GetFullPath('$(CrPluginPath)'))" />
 		<Message Importance="high" Text="$(MSBuildProjectName) -> $(CrPluginStaging)" Condition="'$(CvsRecordedResponses)' != 'true'" />
 	</Target>
