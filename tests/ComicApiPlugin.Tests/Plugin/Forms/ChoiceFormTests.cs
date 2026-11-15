@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using ComicApiPlugin.Books;
 using ComicApiPlugin.Config;
 using ComicApiPlugin.Engine;
+using ComicApiPlugin.Matching;
 using ComicApiPlugin.Model;
 using ComicApiPlugin.Plugin;
 
@@ -40,6 +41,110 @@ public sealed class SeriesFormTests
 		});
 
 	private static void Select(DataGridView grid, int row) => grid.CurrentCell = grid.Rows[row].Cells[0];
+
+	private static string[] Visible(DataGridView grid) => [.. grid.Rows.Cast<DataGridViewRow>().Where(row => row.Visible).Select(row => (string)row.Cells["name"].Value)];
+
+	[Test]
+	public async Task The_filter_shows_only_series_whose_name_contains_the_text_and_selects_one_of_them()
+	{
+		(string[] Annual, string Selected, string[] None, bool OkWithNone, string[] Cleared, bool OkCleared) seen = default;
+		Ask(form =>
+		{
+			DataGridView grid = Ui.Find<DataGridView>(form, "series");
+			TextBox filter = Ui.Find<TextBox>(form, "filter");
+			Button ok = Ui.Find<Button>(form, "ok");
+			filter.Text = "ANNUAL";
+			string[] annual = Visible(grid);
+			string selected = (string)grid.SelectedRows[0].Cells["name"].Value;
+			filter.Text = "superman";
+			string[] none = Visible(grid);
+			bool okWithNone = ok.Enabled;
+			filter.Text = "";
+			seen = (annual, selected, none, okWithNone, Visible(grid), ok.Enabled);
+			form.Close();
+		});
+
+		await Assert.That(seen.Annual).IsEquivalentTo(new[] { "Batman Annual" });
+		await Assert.That(seen.Selected).IsEqualTo("Batman Annual");
+		await Assert.That(seen.None).IsEmpty();
+		await Assert.That(seen.OkWithNone).IsFalse();
+		await Assert.That(seen.Cleared).IsEquivalentTo(new[] { "Batman", "Detective Comics", "Batman Annual" });
+		await Assert.That(seen.OkCleared).IsTrue();
+	}
+
+	[Test]
+	public async Task The_filter_keeps_the_selected_series_when_it_still_matches()
+	{
+		string selected = "";
+		Ask(form =>
+		{
+			DataGridView grid = Ui.Find<DataGridView>(form, "series");
+			Select(grid, 2);
+			Ui.Find<TextBox>(form, "filter").Text = "batman";
+			selected = (string)grid.SelectedRows[0].Cells["name"].Value;
+			form.Close();
+		});
+
+		await Assert.That(selected).IsEqualTo("Batman Annual");
+	}
+
+	[Test]
+	public async Task The_cover_column_shows_the_score_of_the_cover_on_show_for_the_selected_series()
+	{
+		var comparer = new FixedComparer(new CoverSimilarity(0.958, 0.4));
+		(bool Shown, string Score, string Tip, string Other) seen = default;
+		Sta.Run(() =>
+		{
+			using var session = UiSession.Create();
+			using IDisposable driver = Ui.WhenOpen<SeriesForm>(form =>
+			{
+				DataGridView grid = Ui.Find<DataGridView>(form, "series");
+				DataGridViewCell cell = grid.Rows[0].Cells["cover"];
+				var watch = System.Diagnostics.Stopwatch.StartNew();
+				while (string.IsNullOrEmpty(cell.Value as string) && watch.Elapsed < TimeSpan.FromSeconds(10))
+				{
+					Application.DoEvents();
+					Thread.Sleep(20);
+				}
+				seen = (grid.Columns["cover"].Visible, cell.Value as string ?? "", cell.ToolTipText, grid.Rows[1].Cells["cover"].Value as string ?? "");
+				form.Close();
+			});
+			return SeriesForm.Ask(null, session.Ctx, new FakeComicVine(), TestBooks.Config(), Question, new CoverPreferences(), CancellationToken.None,
+				new CoverScoring(() => [1, 2, 3], comparer));
+		});
+
+		await Assert.That(seen.Shown).IsTrue();
+		await Assert.That(seen.Score).IsEqualTo("96% ✓");
+		await Assert.That(seen.Tip).IsEqualTo("correlation 0.96, features 0.40");
+		await Assert.That(seen.Other).IsEqualTo("");
+		await Assert.That(comparer.Calls).IsGreaterThanOrEqualTo(1);
+	}
+
+	[Test]
+	public async Task Without_scoring_the_cover_column_is_hidden()
+	{
+		bool shown = true;
+		Ask(form =>
+		{
+			shown = Ui.Find<DataGridView>(form, "series").Columns["cover"].Visible;
+			form.Close();
+		});
+
+		await Assert.That(shown).IsFalse();
+	}
+
+	private sealed class FixedComparer(CoverSimilarity score) : ICoverComparer
+	{
+		private int calls;
+
+		public int Calls => calls;
+
+		public CoverSimilarity? Compare(byte[] bookCover, byte[] candidateCover)
+		{
+			Interlocked.Increment(ref calls);
+			return score;
+		}
+	}
 
 	[Test]
 	public async Task The_grid_lists_the_candidates_best_first_with_their_details()

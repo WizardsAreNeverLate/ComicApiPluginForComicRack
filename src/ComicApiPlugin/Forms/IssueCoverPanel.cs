@@ -104,6 +104,13 @@ internal sealed class IssueCoverPanel : Panel
 		UpdateView();
 	}
 
+	/// <summary>A downloaded cover is on show. The bitmap belongs to the panel: do not dispose it.</summary>
+	public event Action<Uri, Bitmap>? CoverShown
+	{
+		add => cover.CoverShown += value;
+		remove => cover.CoverShown -= value;
+	}
+
 	/// <summary>The issue and alternate cover on show, or null when the first cover or series art is on show.</summary>
 	public (IssueId Issue, Uri Cover)? PreferredCover =>
 		subject is CoverSubject.OfIssue { Issue: var issue } && Choices(subject) is { CanPrevious: true, Current: { } url } ? (issue.Id, url) : null;
