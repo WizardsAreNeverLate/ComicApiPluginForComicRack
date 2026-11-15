@@ -430,7 +430,7 @@ Package sizes, Debug build: the OpenCV files moved from the plugin's own files i
 
 The Comic Vine and VerseDB calls and the OpenCV cover comparison run in `ComicApiPlugin.Service`, a .NET 11 minimal API that runs as a separate process on the same machine. The aims are an API that can be tested without ComicRack, a smaller plugin, and a current runtime. The plugin starts the service, talks to it over HTTP on the loopback address, and stops it.
 
-The move has five phases. Phases 1 to 4 are done.
+The move had five phases. All are done.
 
 | Phase | Content | State |
 |---|---|---|
@@ -438,7 +438,7 @@ The move has five phases. Phases 1 to 4 are done.
 | 2 | The Comic Vine calls move behind service endpoints, with a remote `IComicVine` in the plugin, caches per run and a throttle per key. A scrape then needs the service, and the UI shows a failed start. | Done |
 | 3 | The VerseDB calls and the OpenCV cover comparison move to the service, and OpenCV leaves the plugin package. | Done |
 | 4 | The recorded-response tests run through the service: the plugin tests, the smoke tool and the differential tool. The plugin's own route to the providers is removed. | Done |
-| 5 | Final packaging and documents. | Not started |
+| 5 | Final packaging and documents. | Done |
 
 ### Projects and packaging
 

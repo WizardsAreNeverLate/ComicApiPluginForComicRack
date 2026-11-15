@@ -31,7 +31,7 @@ The move is planned in five phases:
 | 2 | Comic Vine calls move to the service | Done |
 | 3 | VerseDB calls and the OpenCV cover comparison move to the service | Done |
 | 4 | Tests that use recorded responses run through the service | Done |
-| 5 | Packaging and documentation | Planned |
+| 5 | Packaging and documentation | Done |
 
 A Comic Vine scrape and a VerseDB cover search need the service. The plugin sends each provider call to it (see
 "Comic Vine endpoints" and "VerseDB and cover comparison endpoints"). If the service cannot start, the run stops at its
@@ -657,8 +657,8 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
   times in one ComicRack session leaves the old clients in memory.
 - **Two ComicRack processes have two services.** Each service has its own throttle, so the two processes together can
   send requests for one key faster than one request each 1100 ms.
-- **CI:** the GitHub Actions build installs .NET 11, but the runner's MSBuild must be version 18 or later to build the .NET 11
-  projects.
+- **CI:** the GitHub Actions build installs .NET 11 and checks the runner's MSBuild version first. It must be 18 or later to build the .NET 11
+  projects. The workflow has not run on this branch.
 - **The service starts with every ComicRack start**, also when the user does not scrape. It uses little memory when it is
   idle, but a lazy start (only at the first scrape) is an option.
 - **No PDBs in the package,** so stack traces from the service have no line numbers.
