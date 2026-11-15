@@ -35,7 +35,8 @@ internal sealed class RunningService : IDisposable
 	/// <summary>Every stdout line the service wrote before and including the ready line.</summary>
 	public List<string> StandardOutput { get; } = [];
 
-	public static Process Launch(string? token, int? parentPid, string logFolder)
+	/// <param name="comicVineBaseUrl">Where the service sends its Comic Vine requests, or null for Comic Vine itself.</param>
+	public static Process Launch(string? token, int? parentPid, string logFolder, string? comicVineBaseUrl = null)
 	{
 		var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "ComicApiPlugin.Service.exe"))
 		{
@@ -56,13 +57,18 @@ internal sealed class RunningService : IDisposable
 		{
 			start.Environment[ServiceProtocol.TokenVariable] = token;
 		}
+		start.Environment.Remove(ServiceProtocol.ComicVineBaseUrlVariable);
+		if (comicVineBaseUrl is not null)
+		{
+			start.Environment[ServiceProtocol.ComicVineBaseUrlVariable] = comicVineBaseUrl;
+		}
 		return Process.Start(start)!;
 	}
 
-	public static async Task<RunningService> StartAsync(int? parentPid = null)
+	public static async Task<RunningService> StartAsync(int? parentPid = null, string? comicVineBaseUrl = null)
 	{
 		string logFolder = NewLogFolder();
-		var service = new RunningService(Launch(Token, parentPid, logFolder), logFolder);
+		var service = new RunningService(Launch(Token, parentPid, logFolder, comicVineBaseUrl), logFolder);
 		try
 		{
 			Task<string?> ready = service.ReadUntilReadyAsync();

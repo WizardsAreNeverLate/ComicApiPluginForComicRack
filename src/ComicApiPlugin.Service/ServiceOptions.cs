@@ -6,7 +6,8 @@ namespace ComicApiPlugin.Service;
 
 /// <summary>What one launch was given. The token comes from the environment only.</summary>
 /// <param name="ParentPid">The process whose exit stops the service, or null when it runs on its own.</param>
-internal sealed record ServiceOptions(int? ParentPid, string LogFolder, string Token)
+/// <param name="ComicVineBaseUrl">Where the Comic Vine API answers, or null for comicvine.gamespot.com. Only a test names one.</param>
+internal sealed record ServiceOptions(int? ParentPid, string LogFolder, string Token, string? ComicVineBaseUrl)
 {
 	public static string DefaultLogFolder =>
 		Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComicApiPlugin", "logs");
@@ -44,6 +45,11 @@ internal sealed record ServiceOptions(int? ParentPid, string LogFolder, string T
 		{
 			throw new ArgumentException($"The environment variable {ServiceProtocol.TokenVariable} is not set. Every request must carry its value as a bearer token.");
 		}
-		return new ServiceOptions(parentPid, logFolder, token);
+		string? comicVine = environment(ServiceProtocol.ComicVineBaseUrlVariable) is { Length: > 0 } baseUrl ? baseUrl : null;
+		if (comicVine is not null && !(Uri.TryCreate(comicVine, UriKind.Absolute, out Uri? parsed) && parsed.Scheme is "http" or "https" && comicVine.EndsWith('/')))
+		{
+			throw new ArgumentException($"The environment variable {ServiceProtocol.ComicVineBaseUrlVariable} needs an http or https URL that ends with a slash.");
+		}
+		return new ServiceOptions(parentPid, logFolder, token, comicVine);
 	}
 }

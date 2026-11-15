@@ -4,8 +4,13 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
+using ComicApiPlugin.ComicVine;
+using ComicApiPlugin.Engine;
+using ComicApiPlugin.Service.ComicVine;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -22,6 +27,9 @@ internal static class Program
 	private const int ExitParentGone = 3;
 
 	private static readonly string Version = typeof(Program).Assembly.GetName().Version!.ToString(3);
+
+	// The plugin sent this user agent to Comic Vine before the calls moved here.
+	private static readonly string UserAgent = $"ComicApiPlugin/{Version} (https://github.com/cbanack/comic-vine-scraper/)";
 
 	public static async Task<int> Main(string[] args)
 	{
@@ -92,7 +100,11 @@ internal static class Program
 
 		WebApplication app = builder.Build();
 		// Method, path without the query string, status and elapsed time. Headers are never logged: they carry the token and the provider keys.
-		app.UseSerilogRequestLogging();
+		// A 502 says that Comic Vine failed, which the endpoint logs as a warning. Only a failure of the service itself is an error.
+		app.UseSerilogRequestLogging(logging => logging.GetLevel = (context, _, error) =>
+			error is not null || context.Response.StatusCode == StatusCodes.Status500InternalServerError ? LogEventLevel.Error
+			: context.Response.StatusCode >= 400 ? LogEventLevel.Warning
+			: LogEventLevel.Information);
 		var guard = new RequestGuard(options.Token);
 		app.Use(guard.Invoke);
 		app.UseRouting();
@@ -108,7 +120,21 @@ internal static class Program
 			});
 			return Results.Accepted();
 		});
+
+		var comicVine = new ComicVineSessions(apiKey => ConnectComicVine(apiKey, options.ComicVineBaseUrl), TimeProvider.System);
+		app.Lifetime.ApplicationStopped.Register(comicVine.Dispose);
+		new ComicVineEndpoints(comicVine).Map(app);
 		return app;
+	}
+
+	/// <summary>One transport for an API key: its HttpClient and its request throttle. </summary>
+	private static ComicVineHttp ConnectComicVine(string apiKey, string? baseUrl)
+	{
+		var handler = new HttpClientHandler();
+		Action<ComicVineException> retrying = error =>
+			Log.Warning("Comic Vine request failed ({Kind:l}, status {ApiStatus}) and is tried again in {Delay} ms: {Url:l} (run {RunId:l})",
+				error.Error.ToString(), error.ApiStatus, ComicVineHttp.RetryDelay.TotalMilliseconds, error.Url, RunScope.Current);
+		return new ComicVineHttp(handler, apiKey, UserAgent, SystemClock.Instance, baseUrl) { Retrying = retrying };
 	}
 
 	private static Serilog.ILogger Logger(string logFolder, TextWriter? window)
@@ -129,4 +155,13 @@ internal static class Program
 	}
 
 	private sealed record Health(string Version, int Pid, long UptimeSeconds);
+
+	private sealed class SystemClock : IClock
+	{
+		public static readonly SystemClock Instance = new();
+
+		public DateTime Now => DateTime.Now;
+
+		public Task Delay(TimeSpan delay, CancellationToken ct) => Task.Delay(delay, ct);
+	}
 }
