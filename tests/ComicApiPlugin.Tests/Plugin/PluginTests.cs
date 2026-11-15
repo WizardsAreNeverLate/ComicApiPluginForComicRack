@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -279,6 +281,67 @@ public sealed class PluginTests
 	}
 
 	[Test]
+	public async Task A_cover_search_asks_VerseDB_and_compares_the_covers_through_the_local_service_and_writes_the_book_without_asking()
+	{
+		using Bitmap cover = SyntheticCover.Make(2);
+		using Bitmap cropped = SyntheticCover.Cropped(cover, 0.05);
+		using var verseDb = new FakeVerseDbServer(cover: SyntheticCover.Encode(cropped, ImageFormat.Jpeg));
+		ServiceLaunch launch = BuiltService.Launch() with
+		{
+			Environment = new Dictionary<string, string> { [ServiceProtocol.VerseDbBaseUrlVariable] = verseDb.BaseUrl },
+		};
+		using var world = new PluginWorld(launch) { Pages = (_, _) => new Bitmap(cover) };
+		world.SaveSettings(new Configuration { VerseDbApiKey = VerseDbFixtures.Token, VerseDbAutoAccept = true, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook book = new() { FilePath = @"C:\comics\Batman 012.cbz", Series = "Old" };
+		world.Script.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick());
+
+		world.Run(plugin => plugin.Scrape([book]));
+		((IShutdown)world.Plugin).Execute(user_is_closing: true);
+		string serviceLog = BuiltService.ReadLogs(launch.LogFolder);
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm" }, CollectionOrdering.Matching);
+		await Assert.That(book.Series).IsEqualTo("Batman");
+		await Assert.That(book.Title).IsEqualTo("The Joker");
+		await Assert.That(verseDb.Requests.Select(request => request.Method + " " + request.Target)).IsEquivalentTo(
+			["POST " + FakeVerseDbServer.LookupPath, "GET " + FakeVerseDbServer.CoverPath, "GET " + FakeVerseDbServer.IssuePath], CollectionOrdering.Matching);
+		await Assert.That(world.Log.Any(line => line.StartsWith("cover check: Batman #12: correlation ", StringComparison.Ordinal) && line.EndsWith("-> match", StringComparison.Ordinal))).IsTrue();
+		await Assert.That(serviceLog).Contains($"HTTP POST {ServiceProtocol.CoverComparePath} responded 200");
+		await Assert.That(world.LogWindowText).Contains(world.Strings[TextKeys.FinishFormScrapedSingle]);
+		await Assert.That(world.Requested).IsEmpty();
+		await Assert.That(world.Log.Any(line => line.Contains(VerseDbFixtures.Token))).IsFalse();
+		await Assert.That(serviceLog).DoesNotContain(VerseDbFixtures.Token);
+	}
+
+	[Test]
+	public async Task A_cover_search_whose_local_service_cannot_start_says_why_with_the_download_link_and_writes_nothing()
+	{
+		using var world = new PluginWorld(BuiltService.Script("@echo You must install .NET to run this application. 1>&2", "@exit /b 1")) { Pages = (_, _) => new Bitmap(100, 150) };
+		world.SaveSettings(new Configuration { VerseDbApiKey = VerseDbFixtures.Token, VerseDbAutoAccept = true, Advanced = AdvancedSettings.Parse(null) });
+		ComicBook book = new() { FilePath = @"C:\comics\Batman 012.cbz", Series = "Old" };
+		string title = "";
+		string message = "";
+		world.Script
+			.On<WelcomeForm>(form => Ui.Find<Button>(form, "start").PerformClick())
+			.On<PromptDialog>(prompt =>
+			{
+				title = prompt.Text;
+				message = Ui.Find<Control>(prompt, "message").Text;
+				Ui.Find<Button>(prompt, "ok").PerformClick();
+			});
+
+		world.Run(plugin => plugin.Scrape([book]));
+
+		await Assert.That(world.Script.Seen).IsEquivalentTo(new[] { "WelcomeForm", "PromptDialog" }, CollectionOrdering.Matching);
+		await Assert.That(title).IsEqualTo("Local API Service");
+		await Assert.That(message).IsEqualTo(
+			"The local API service of this plugin is not available.\n\n"
+			+ "The local API service needs the .NET 11 runtime (ASP.NET Core Runtime 11, x64), which is not installed. "
+			+ $"Download it from {ServiceProtocol.RuntimeDownloadUrl} and restart ComicRack.");
+		await Assert.That(book.Series).IsEqualTo("Old");
+		await Assert.That(world.LogWindowText).Contains(world.Strings.Format(TextKeys.FinishFormScrapedPlural, 0));
+	}
+
+	[Test]
 	public async Task ComicRacks_startup_starts_the_local_service_without_waiting_and_its_shutdown_stops_it()
 	{
 		ServiceLaunch launch = BuiltService.Launch();
@@ -522,6 +585,12 @@ public sealed class PluginTests
 		public DialogScript Script { get; } = new();
 
 		public Form Main => env.Main!;
+
+		/// <summary>What ComicRack gives as a page of a book.</summary>
+		public Func<ComicBook, int, Bitmap?> Pages
+		{
+			set => env.Fake.Pages = value;
+		}
 
 		public bool MainEnabledAfter { get; private set; }
 

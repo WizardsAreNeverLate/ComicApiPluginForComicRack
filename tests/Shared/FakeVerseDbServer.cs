@@ -7,7 +7,7 @@ namespace ComicApiPlugin.Fixtures;
 
 /// <summary>
 /// A VerseDB that listens on a loopback port, so the service process and an in-process VerseDbHttp can both be pointed
-/// at it. It answers a cover lookup, issue 5432 and one cover picture, and 404 for anything else.
+/// at it. It answers a cover lookup with one candidate, whose cover it serves itself, and issue 5432, and 404 for anything else.
 /// </summary>
 public sealed class FakeVerseDbServer : IDisposable
 {
@@ -23,7 +23,7 @@ public sealed class FakeVerseDbServer : IDisposable
 	{
 		server = new FakeHttpServer(request => Task.FromResult(first?.Invoke(request) ?? (request.Method, request.Target.Split('?')[0]) switch
 		{
-			("POST", LookupPath) => FakeAnswer.Json(VerseDbFixtures.ClearCoverLookup),
+			("POST", LookupPath) => FakeAnswer.Json(VerseDbFixtures.ClearCoverLookup.Replace("https://img.versedb.com/m/12.jpg", BaseUrl + CoverPath)),
 			("GET", IssuePath) => FakeAnswer.Json(VerseDbFixtures.Issue),
 			("GET", CoverPath) => new FakeAnswer(HttpStatusCode.OK, cover ?? [1, 2, 3], "image/webp"),
 			_ => FakeAnswer.Json("""{ "message": "Not found." }""", HttpStatusCode.NotFound),

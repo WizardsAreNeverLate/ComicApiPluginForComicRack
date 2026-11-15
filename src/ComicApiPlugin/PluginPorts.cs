@@ -6,14 +6,15 @@ using ComicApiPlugin.Engine;
 
 namespace ComicApiPlugin.Plugin;
 
-/// <summary>What the plugin reaches outside ComicRack: Comic Vine's transport, the settings folder, and the clock.</summary>
-/// <param name="Handler">Makes the handler for each VerseDbHttp, and for each in-process ComicVineHttp. Its owner disposes it.</param>
+/// <summary>What the plugin reaches outside ComicRack: the providers' transport, the settings folder, and the clock.</summary>
+/// <param name="Handler">Makes the handler for each in-process ComicVineHttp and VerseDbHttp. Its owner disposes it.</param>
 internal sealed record PluginPorts(Func<HttpMessageHandler> Handler, string SettingsFolder, IClock Clock)
 {
 	/// <summary>
-	/// How to start the local API service, through which the plugin then asks Comic Vine. Null runs without the service:
-	/// Comic Vine is then asked in this process through <see cref="Handler"/>, which the recorded-response tests and tools need
-	/// until their responses are served through the service.
+	/// How to start the local API service, through which the plugin then asks Comic Vine and VerseDB and compares covers.
+	/// Null runs without the service: Comic Vine and VerseDB are then asked in this process through <see cref="Handler"/>,
+	/// and no covers are compared. The recorded-response tests and tools need that until their responses are served
+	/// through the service.
 	/// </summary>
 	public ServiceLaunch? Service { get; init; }
 

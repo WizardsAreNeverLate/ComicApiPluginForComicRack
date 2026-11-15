@@ -25,7 +25,7 @@ public sealed class VerseDbEndpointTests
 		await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 		await Assert.That(response.Content.Headers.ContentType!.MediaType).IsEqualTo("application/json");
 		await Assert.That(body).IsEqualTo(
-			"""{"candidates":[{"coverDate":"1990-06-01","coverUrl":"https:\/\/img.versedb.com\/m\/12.jpg","issueId":5432,"issueNumber":"12","publisher":"DC Comics","seriesName":"Batman","startYear":1940,"title":"The Joker","volume":1}],"clearMatch":true}""");
+			$$"""{"candidates":[{"coverDate":"1990-06-01","coverUrl":"http:\/\/127.0.0.1:{{world.VerseDb.Port}}\/covers\/5432.webp","issueId":5432,"issueNumber":"12","publisher":"DC Comics","seriesName":"Batman","startYear":1940,"title":"The Joker","volume":1}],"clearMatch":true}""");
 	}
 
 	[Test]

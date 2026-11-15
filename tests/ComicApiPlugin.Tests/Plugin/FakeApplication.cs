@@ -16,7 +16,7 @@ internal sealed class FakeApplication : IApplication
 	public string? SeriesWhenThumbnailSet { get; private set; }
 
 	/// <summary>What GetComicPage returns or throws. Unset, it throws, as ComicRack can for a book whose page count was cleared.</summary>
-	public Func<ComicBook, int, Bitmap?> Pages { get; init; } = (_, _) => throw new InvalidOperationException("no pages");
+	public Func<ComicBook, int, Bitmap?> Pages { get; set; } = (_, _) => throw new InvalidOperationException("no pages");
 
 	public Bitmap GetComicPage(ComicBook cb, int page) => Pages(cb, page)!;
 

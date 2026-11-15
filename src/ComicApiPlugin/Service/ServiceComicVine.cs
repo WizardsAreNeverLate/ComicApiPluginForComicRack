@@ -39,11 +39,11 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 
 	public Task<IssueRef?> FindIssueAsync(SeriesId series, string issueNumber, CancellationToken ct) =>
 		CallAsync(ServiceProtocol.ComicVineFindIssuePath, new FindIssueRequestDto { Settings = settings, Series = series.Value, IssueNumber = issueNumber },
-			async response => (await JsonAsync<FindIssueResponseDto>(response).ConfigureAwait(false)).Issue is { } found ? ComicVineWire.ToDomain(found) : null, ct);
+			async response => (await ServiceConnection.ReadJsonAsync<FindIssueResponseDto>(response).ConfigureAwait(false)).Issue is { } found ? ComicVineWire.ToDomain(found) : null, ct);
 
 	public Task<Issue> GetIssueAsync(IssueId issue, bool includeRating, CancellationToken ct) =>
 		CallAsync(ServiceProtocol.ComicVineIssuePath, new IssueRequestDto { Settings = settings, Issue = issue.Value, IncludeRating = includeRating },
-			async response => ComicVineWire.ToDomain(await JsonAsync<IssueDto>(response).ConfigureAwait(false)), ct);
+			async response => ComicVineWire.ToDomain(await ServiceConnection.ReadJsonAsync<IssueDto>(response).ConfigureAwait(false)), ct);
 
 	public Task<SeriesRef?> ResolveSeriesAsync(ComicVineTarget target, CancellationToken ct)
 	{
@@ -54,7 +54,7 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 			Issue = (target as ComicVineTarget.OfIssue)?.Id.Value,
 		};
 		return CallAsync(ServiceProtocol.ComicVineResolveSeriesPath, request,
-			async response => (await JsonAsync<ResolveSeriesResponseDto>(response).ConfigureAwait(false)).Series is { } found ? ComicVineWire.ToDomain(found) : null, ct);
+			async response => (await ServiceConnection.ReadJsonAsync<ResolveSeriesResponseDto>(response).ConfigureAwait(false)).Series is { } found ? ComicVineWire.ToDomain(found) : null, ct);
 	}
 
 	/// <summary>Null also when the service cannot be reached: an image never fails a scrape, and the next call for data reports the service.</summary>
@@ -82,55 +82,20 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 	private async Task<T> CallAsync<TRequest, T>(string path, TRequest body, Func<HttpResponseMessage, Task<T>> read, CancellationToken ct)
 		where TRequest : ComicVineRequestDto
 	{
-		ct.ThrowIfCancellationRequested();
 		try
 		{
-			HttpClient client = await service.ConnectAsync(ct).ConfigureAwait(false);
-			using var request = new HttpRequestMessage(HttpMethod.Post, path)
+			return await service.CallAsync(() =>
 			{
-				Content = new StringContent(WireJson.ToJson(body), Utf8, WireJson.ContentType),
-			};
-			request.Headers.TryAddWithoutValidation(ServiceProtocol.ComicVineKeyHeader, apiKey);
-			request.Headers.TryAddWithoutValidation(ServiceProtocol.RunIdHeader, runId);
-			// Without this, .NET Framework first waits for a "100 Continue" before it sends the body.
-			request.Headers.ExpectContinue = false;
-			using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-			// .NET Framework reads a response body without looking at the token, so a cancel closes the response under the read.
-			using (ct.Register(response.Dispose))
-			{
-				if (!response.IsSuccessStatusCode)
-				{
-					throw await FailureAsync(path, response).ConfigureAwait(false);
-				}
-				return await read(response).ConfigureAwait(false);
-			}
-		}
-		catch (Exception error) when (ct.IsCancellationRequested)
-		{
-			throw new OperationCanceledException("The call to the local API service was cancelled.", error, ct);
+				var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = ServiceConnection.Json(body) };
+				request.Headers.TryAddWithoutValidation(ServiceProtocol.ComicVineKeyHeader, apiKey);
+				request.Headers.TryAddWithoutValidation(ServiceProtocol.RunIdHeader, runId);
+				return request;
+			}, read, error => error.ComicVine is { } comicVine ? ComicVineWire.ToDomain(comicVine) : null, ct).ConfigureAwait(false);
 		}
 		catch (ServiceUnavailableException error)
 		{
-			throw Unavailable(path, error);
+			throw new ComicVineException(ComicVineError.ServiceUnavailable, "local API service " + path, null, error);
 		}
-		catch (Exception error) when (error is HttpRequestException or IOException or ObjectDisposedException or OperationCanceledException)
-		{
-			throw Unavailable(path, new ServiceUnavailableException("The local API service did not answer: " + error.Message, error));
-		}
-		catch (WireFormatException error)
-		{
-			throw Unavailable(path, new ServiceUnavailableException("The local API service gave an answer this plugin cannot read: " + error.Message, error));
-		}
-	}
-
-	/// <summary>The exception for a response that is not a success: Comic Vine's failure as the service reported it, or the service's own.</summary>
-	private static async Task<Exception> FailureAsync(string path, HttpResponseMessage response)
-	{
-		string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-		ErrorResponseDto? error = body.Length > 0 ? WireJson.FromJson<ErrorResponseDto>(body) : null;
-		return error?.ComicVine is { } comicVine
-			? ComicVineWire.ToDomain(comicVine)
-			: new ServiceUnavailableException($"The local API service answered {path} with HTTP {(int)response.StatusCode}" + (error?.Message is { } message ? ": " + message : "."));
 	}
 
 	/// <summary>Reports each progress line as it arrives and returns the last line, which holds the result. An error line is thrown.</summary>
@@ -155,10 +120,4 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 		}
 		throw new WireFormatException("The answer ended before its result.");
 	}
-
-	private static async Task<T> JsonAsync<T>(HttpResponseMessage response) where T : class =>
-		WireJson.FromJson<T>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
-
-	private static ComicVineException Unavailable(string path, ServiceUnavailableException cause) =>
-		new(ComicVineError.ServiceUnavailable, "local API service " + path, null, cause);
 }

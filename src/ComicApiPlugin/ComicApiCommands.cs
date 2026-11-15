@@ -25,9 +25,6 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 	private static readonly string UserAgent = $"ComicApiPlugin/{Version} (https://github.com/cbanack/comic-vine-scraper/)";
 
 	private readonly PluginPorts ports;
-
-	// Stateless; it loads the OpenCV native library on its first comparison, so a plugin that never uses the cover auto-accept never touches it.
-	private readonly OpenCvCoverComparer coverComparer = new();
 	private IPluginEnvironment env;
 	private PluginContext? context;
 	private ComicVineHttp? http;
@@ -225,7 +222,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 		{
 			var services = new ScrapeServices(catalog, new WinFormsScrapeUi(form, ctx, catalog, config), ports.Clock, ctx.Log, ctx.Settings.LoadChosenSeries(), new CoverPreferences())
 			{
-				CoverComparer = config.ComicVineCoverAutoAccept ? coverComparer : null,
+				CoverComparer = config.ComicVineCoverAutoAccept ? CoverComparer(ctx) : null,
 			};
 			return new ScrapeRun(services, config).RunAsync(targets, ct);
 		});
@@ -233,25 +230,35 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 
 	private RunSummary RunCoverSearch(PluginContext ctx, Configuration config, ComicBook[] books)
 	{
-		VerseDbHttp api = VerseDb(config.VerseDbApiKey);
+		IVerseDb api = VerseDb(ctx, config.VerseDbApiKey);
 		List<IScrapeBook> targets = [.. books.Select(book => new ComicRackBook(book, env.App))];
 		return ScrapeHost.Run(env.MainWindow, ctx, (form, ct) =>
-			new CoverSearchRun(api, new WinFormsCoverSearchUi(form, ctx, api), ports.Clock, ctx.Log, config, config.VerseDbAutoAccept ? coverComparer : null).RunAsync(targets, ct));
+			new CoverSearchRun(api, new WinFormsCoverSearchUi(form, ctx, api), ports.Clock, ctx.Log, config, config.VerseDbAutoAccept ? CoverComparer(ctx) : null).RunAsync(targets, ct));
 	}
 
 	/// <summary>
 	/// Comic Vine for one run. With the local API service, each run has an id of its own, so the service gives it caches of
 	/// its own. Without the service (the recorded-response tests and tools), the catalog runs in this process.
 	/// </summary>
-	private IComicVine ComicVine(PluginContext ctx, Configuration config)
-	{
-		if (Service(ctx) is not { } host)
-		{
-			return new ComicVineCatalog(Http(config.ApiKey), config.ToSearchSettings());
-		}
-		connection ??= new ServiceConnection(host);
-		return new ServiceComicVine(connection, config.ApiKey, Guid.NewGuid().ToString("N"), config.ToSearchSettings(), ctx.Log);
-	}
+	private IComicVine ComicVine(PluginContext ctx, Configuration config) =>
+		Connection(ctx) is { } live
+			? new ServiceComicVine(live, config.ApiKey, NewRunId(), config.ToSearchSettings(), ctx.Log)
+			: new ComicVineCatalog(Http(config.ApiKey), config.ToSearchSettings());
+
+	/// <summary>
+	/// VerseDB for one run. With the local API service, each run has an id of its own, which the service writes beside each
+	/// call to VerseDB in its log. Without the service, the transport runs in this process.
+	/// </summary>
+	private IVerseDb VerseDb(PluginContext ctx, string token) =>
+		Connection(ctx) is { } live ? new ServiceVerseDb(live, token, NewRunId()) : InProcessVerseDb(token);
+
+	/// <summary>The cover comparison, which only the local API service can do: it holds the OpenCV library. Null without the service, and the run then asks the user.</summary>
+	private ICoverComparer? CoverComparer(PluginContext ctx) => Connection(ctx) is { } live ? new ServiceCoverComparer(live) : null;
+
+	private static string NewRunId() => Guid.NewGuid().ToString("N");
+
+	/// <summary>The one connection to the service, or null when the plugin runs without the service.</summary>
+	private ServiceConnection? Connection(PluginContext ctx) => Service(ctx) is { } host ? connection ??= new ServiceConnection(host) : null;
 
 	/// <summary>The one owner of the service process, or null when the plugin runs without the service.</summary>
 	private ServiceHost? Service(PluginContext ctx) =>
@@ -259,7 +266,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 
 	/// <summary>
 	/// Starts the local API service when it is not running, asks for its health, and logs the answer or the failure. All of
-	/// it runs in the background, so the caller neither waits nor fails. A Comic Vine call that needs the service reports a
+	/// it runs in the background, so the caller neither waits nor fails. A provider call that needs the service reports a
 	/// failed start itself.
 	/// </summary>
 	private void CheckService(PluginContext ctx)
@@ -271,8 +278,8 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 		Task.Run(async () => ctx.Log.Debug(await host.CheckAsync().ConfigureAwait(false)));
 	}
 
-	/// <summary>One HttpClient for the plugin's lifetime, replaced only when the user changes the token.</summary>
-	private VerseDbHttp VerseDb(string token)
+	/// <summary>The in-process VerseDB transport: one HttpClient for the plugin's lifetime, replaced only when the user changes the token.</summary>
+	private VerseDbHttp InProcessVerseDb(string token)
 	{
 		if (verseDb is null || verseDbToken != token)
 		{
@@ -283,7 +290,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig, I
 		return verseDb;
 	}
 
-	/// <summary>The in-process transport: one HttpClient and one throttle for the plugin's lifetime, replaced only when the user changes the key.</summary>
+	/// <summary>The in-process Comic Vine transport: one HttpClient and one throttle for the plugin's lifetime, replaced only when the user changes the key.</summary>
 	private ComicVineHttp Http(string apiKey)
 	{
 		if (http is null || httpKey != apiKey)
