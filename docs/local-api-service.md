@@ -326,6 +326,7 @@ thread-pool thread and uses approximately 100 ms of processor time.
 | VerseDB gives a different error status, or an image download fails | `502` | `{"verseDb":{"status":422,...}}` |
 | VerseDB cannot be reached | `502` | `{"verseDb":{"status":null,"message":"Could not reach VerseDB: ..."}}` |
 | The service cannot load the OpenCV library | `503` | `{"openCvUnavailable":"The OpenCV library could not be used: ..."}` |
+| OpenCV fails the comparison, for example for an image whose header claims too many pixels | `500` | `{"serviceError":"OpenCVException: ..."}` |
 | A header, a part, or a body member is missing | `400` | `{"message":"..."}` |
 
 - The `message` never contains the VerseDB token.
@@ -337,6 +338,9 @@ thread-pool thread and uses approximately 100 ms of processor time.
 - If a comparison is not possible (`503`, no service, or no answer in 60 seconds), the plugin writes
   `cover auto-accept is unavailable` and the reason to its debug log. Then it opens the usual dialog. A comparison
   cannot be cancelled, so the limit of 60 seconds makes sure that a service that hangs does not block a run.
+- If OpenCV fails one comparison (`500` with `serviceError`), the plugin writes `the comparison failed` and the reason to
+  its debug log. Only that cover counts as no match. The Comic Vine auto-accept goes on with the next series, as it did
+  before the comparison moved to the service.
 
 ## Settings
 
@@ -633,7 +637,7 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 | `tests/ComicApiPlugin.Tests` (`ServiceHostTests`) | Starts the packaged exe from `service.zip`: one process for concurrent callers, kill through the job object, graceful stop, restart after an exit, restart when the console setting changes, clear failures for a missing exe, a missing runtime, and a service that never reports ready |
 | `tests/ComicApiPlugin.Tests` (`ServiceComicVineTests`) | Points the packaged service and an in-process catalog at one fake Comic Vine: the same results, progress reports, requests, and exceptions on both routes; cancellation; a service that cannot start; a service that died and starts again; no key in the service log or the plugin log |
 | `tests/ComicApiPlugin.Service.Tests` (`VerseDbEndpointTests`) | Starts the real exe with a fake VerseDB: a lookup that is clear and one that is not, the issue details, the image bytes, the multipart form that VerseDB gets (quoted `name` and `filename`, no `filename*`), the error bodies for 401, 422, 429 with `Retry-After`, and 503, a VerseDB that cannot be reached, `400` for an incomplete request, and the log line for each call without the token |
-| `tests/ComicApiPlugin.Service.Tests` (`CoverEndpointTests`, `OpenCvCoverComparerTests`) | `/covers/compare` gives the scores that the comparer gives: a cropped copy matches, a different cover does not, bytes that are not an image give `null`. A service without `OpenCvSharpExtern.dll` answers `503` and continues. The comparer tests moved here from `tests/ComicApiPlugin.Tests`, because OpenCV is now only in the service. |
+| `tests/ComicApiPlugin.Service.Tests` (`CoverEndpointTests`, `OpenCvCoverComparerTests`) | `/covers/compare` gives the scores that the comparer gives: a cropped copy matches, a different cover does not, bytes that are not an image give `null`, an image that OpenCV fails gives `500` with `serviceError`. A service without `OpenCvSharpExtern.dll` answers `503` and continues. The comparer tests moved here from `tests/ComicApiPlugin.Tests`, because OpenCV is now only in the service. |
 | `tests/ComicApiPlugin.Tests` (`ServiceVerseDbTests`) | Points the packaged service and an in-process `VerseDbHttp` at one fake VerseDB: the same results, requests, and exceptions on both routes; a cover search that waits after a 429 and tries again; cover auto-accept through the service; the dialog when the service cannot start; no token in the service log or the plugin log |
 | `tests/ComicApiPlugin.Tests` (`PluginTests`) | Each scrape goes through the packaged service to a fake Comic Vine: the dialogs in order, the fields written, no unrecorded request of the scrape itself, one error dialog for a rejected key, one service process for two scrapes, and a changed API key in the next requests. A full cover search through the service writes the book without a dialog when the cover matches; a scrape or a cover search without the runtime shows the warning with the download link and changes no book; a saved console setting restarts the service; a shutdown before a start starts no service |
 

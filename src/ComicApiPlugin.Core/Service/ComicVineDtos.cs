@@ -279,6 +279,10 @@ public sealed class ErrorResponseDto
 	[DataMember(Name = "openCvUnavailable", EmitDefaultValue = false)]
 	public string? OpenCvUnavailable { get; set; }
 
+	/// <summary>Set when the service failed on an error it did not expect, such as an image OpenCV cannot read. The text names the error.</summary>
+	[DataMember(Name = "serviceError", EmitDefaultValue = false)]
+	public string? ServiceError { get; set; }
+
 	/// <summary>Set when the service rejected the request itself.</summary>
 	[DataMember(Name = "message")]
 	public string? Message { get; set; }

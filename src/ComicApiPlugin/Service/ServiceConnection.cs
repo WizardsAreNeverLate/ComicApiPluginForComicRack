@@ -46,6 +46,7 @@ internal sealed class ServiceConnection(ServiceHost host) : IDisposable
 	/// </param>
 	/// <exception cref="OperationCanceledException">ct was cancelled.</exception>
 	/// <exception cref="ServiceUnavailableException">The service could not be started or reached, or its answer cannot be read.</exception>
+	/// <exception cref="ServiceErrorException">The service failed on an error it did not expect.</exception>
 	public async Task<T> CallAsync<T>(
 		Func<HttpRequestMessage> request, Func<HttpResponseMessage, Task<T>> read, Func<ErrorResponseDto, Exception?> failure, CancellationToken ct)
 	{
@@ -113,6 +114,10 @@ internal sealed class ServiceConnection(ServiceHost host) : IDisposable
 	{
 		string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 		ErrorResponseDto? error = body.Length > 0 ? WireJson.FromJson<ErrorResponseDto>(body) : null;
+		if (error?.ServiceError is { } unexpected)
+		{
+			return new ServiceErrorException(path, unexpected);
+		}
 		return (error is null ? null : failure(error))
 			?? new ServiceUnavailableException($"The local API service answered {path} with HTTP {(int)response.StatusCode}" + (error?.Message is { } message ? ": " + message : "."));
 	}

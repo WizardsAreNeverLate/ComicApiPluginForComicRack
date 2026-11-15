@@ -62,6 +62,25 @@ public sealed class CoverEndpointTests
 	}
 
 	[Test]
+	public async Task A_comparison_that_OpenCV_fails_is_a_500_that_names_the_service_error_and_the_service_goes_on_serving()
+	{
+		using RunningService service = await RunningService.StartAsync();
+		using HttpClient client = service.Client();
+		using Bitmap cover = SyntheticCover.Make(6);
+		byte[] image = SyntheticCover.Encode(cover, ImageFormat.Png);
+
+		using HttpResponseMessage response = await client.PostAsync(ServiceProtocol.CoverComparePath,
+			RunningService.Multipart((ServiceProtocol.BookCoverPart, image), (ServiceProtocol.CandidateCoverPart, SyntheticCover.OversizedPng())));
+		using JsonDocument error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		using HttpResponseMessage health = await client.GetAsync(ServiceProtocol.HealthPath);
+
+		await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.InternalServerError);
+		await Assert.That(error.RootElement.GetProperty("serviceError").GetString()).IsNotNull().And.IsNotEmpty();
+		await Assert.That(error.RootElement.TryGetProperty("openCvUnavailable", out _)).IsFalse();
+		await Assert.That(health.StatusCode).IsEqualTo(HttpStatusCode.OK);
+	}
+
+	[Test]
 	public async Task A_request_without_both_covers_is_a_400_that_says_what_is_missing()
 	{
 		using RunningService service = await RunningService.StartAsync();

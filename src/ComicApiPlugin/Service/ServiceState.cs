@@ -50,3 +50,9 @@ internal abstract record ServiceState
 
 /// <summary>The service could not be started or reached. The message is fit to show the user.</summary>
 internal sealed class ServiceUnavailableException(string reason, Exception? inner = null) : Exception(reason, inner);
+
+/// <summary>
+/// The service answered, but failed on an error it did not expect. It is neither a provider's failure nor a connection
+/// failure, so the caller treats it as an unexpected error. The message holds the service's own.
+/// </summary>
+internal sealed class ServiceErrorException(string path, string error) : Exception($"The local API service failed on {path}: {error}");

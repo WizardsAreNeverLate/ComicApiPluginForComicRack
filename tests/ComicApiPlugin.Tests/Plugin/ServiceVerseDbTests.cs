@@ -213,6 +213,18 @@ public sealed class ServiceVerseDbTests
 	}
 
 	[Test]
+	public async Task A_comparison_that_OpenCV_fails_throws_the_services_error_and_not_OpenCvUnavailableException_so_only_that_cover_is_skipped()
+	{
+		using var world = new World();
+		using Bitmap cover = SyntheticCover.Make(2);
+
+		Exception? error = Assert.Throws<Exception>(() => world.Comparer.Compare(SyntheticCover.Encode(cover, ImageFormat.Png), SyntheticCover.OversizedPng()));
+
+		await Assert.That(error is OpenCvUnavailableException).IsFalse();
+		await Assert.That(error!.Message).Contains("OpenCVException");
+	}
+
+	[Test]
 	public async Task A_cover_search_with_auto_accept_writes_the_single_candidate_whose_cover_the_service_matches_without_asking()
 	{
 		using Bitmap cover = SyntheticCover.Make(2);

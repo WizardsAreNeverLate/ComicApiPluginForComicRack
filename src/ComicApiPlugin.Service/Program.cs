@@ -110,6 +110,7 @@ internal static class Program
 			: LogEventLevel.Information);
 		var guard = new RequestGuard(options.Token);
 		app.Use(guard.Invoke);
+		app.Use(ServiceErrors.Invoke);
 		app.UseRouting();
 
 		var started = Stopwatch.StartNew();

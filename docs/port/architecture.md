@@ -554,13 +554,15 @@ The image endpoint returns what `ComicVineCatalog.GetImageAsync` returns, so the
 | VerseDB answers 429 | 429 | `{"verseDb":{"status":429,...,"retryAfterSeconds":42}}` |
 | VerseDB answers another error status, cannot be reached, or a cover download fails | 502 | `{"verseDb":{"status": <VerseDB's status or null>,...}}` |
 | The service cannot load the OpenCV library | 503 | `{"openCvUnavailable":"<reason>"}` |
+| OpenCV fails the comparison, such as for an image whose header claims too many pixels | 500 | `{"serviceError":"<exception type>: <message>"}` |
 | A header, a part or a member is missing | 400 | `{"message":"..."}` |
 
 - `ServiceVerseDb` throws a `VerseDbException` with the same status, message and `RetryAfter`, so `CoverSearchRun` still waits as long as a 429 asks, shows the wait, and asks again once. The message never holds the token.
 - A service that cannot be started or reached is a `VerseDbException` without a status, whose inner `ServiceUnavailableException` holds the reason. `ErrorDialogs` shows it with the "Local API Service" warning, as for Comic Vine. `CoverMatchForm` shows the logo for a cover it cannot download.
 - `ServiceCoverComparer` throws `OpenCvUnavailableException` for a `503`, for a service that cannot be started or reached, and for a comparison that takes more than 60 seconds. The callers then log `cover auto-accept is unavailable` and ask the user. `ICoverComparer.Compare` has no cancellation token, so the 60 seconds are what keeps a service that hangs from holding a run.
+- A comparison that OpenCV fails is a `500` with a `serviceError` body, and `ServiceCoverComparer` throws `ServiceErrorException`. That is not `OpenCvUnavailableException`, so `CoverSeriesPicker` logs `the comparison failed`, scores that one series as no match and goes on with the next, as it did before the comparison moved to the service. `CoverSearchRun` logs `the check failed` and opens the dialog.
 
-**Shared client code.** `ServiceConnection.CallAsync` sends a request and reads the answer for all three clients. It gives `OperationCanceledException` for a cancelled call, the provider's exception for an error body that the caller knows, and `ServiceUnavailableException` for everything else. Each client turns that last one into its own exception.
+**Shared client code.** `ServiceConnection.CallAsync` sends a request and reads the answer for all three clients. It gives `OperationCanceledException` for a cancelled call, the provider's exception for an error body that the caller knows, `ServiceErrorException` for a `serviceError` body, and `ServiceUnavailableException` for everything else. Each client turns that last one into its own exception.
 
 **Outbound log.** The `HttpClient` of each `VerseDbHttp` in the service sends through `OutboundLog`, so each call to VerseDB is one line: `VerseDB POST versedb.com/api/v1/lookup/cover responded 200 in 2309 ms (run <run id>)`. A cover download is such a line too, with the host `media.versedb.com`. The token is a header, and no header is logged.
 

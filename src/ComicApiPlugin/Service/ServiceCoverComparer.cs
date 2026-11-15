@@ -9,7 +9,8 @@ namespace ComicApiPlugin.Plugin;
 /// <summary>
 /// The cover comparison, done by the local API service, which holds the OpenCV library. A service that cannot be started
 /// or reached, or that cannot load OpenCV, is an OpenCvUnavailableException, so the engine asks the user as it does
-/// without OpenCV.
+/// without OpenCV. A comparison that OpenCV fails, such as for an image it cannot read, is a ServiceErrorException, so
+/// the engine skips only that cover.
 /// </summary>
 internal sealed class ServiceCoverComparer(ServiceConnection service) : ICoverComparer
 {
