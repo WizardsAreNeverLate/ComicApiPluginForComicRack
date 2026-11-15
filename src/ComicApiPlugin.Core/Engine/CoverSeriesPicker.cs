@@ -61,9 +61,15 @@ internal sealed class CoverSeriesPicker(IComicVine comicVine, ICoverComparer com
 	private async Task<CoverSimilarity?> ScoreAsync(SeriesRef series, string number, byte[] bookCover, CancellationToken ct)
 	{
 		string label = $"cover check: {series.Name} #{number}: ";
-		if (await comicVine.FindIssueAsync(series.Id, number, ct) is not { ThumbUrl: { } url })
+		IssueRef? issue = await comicVine.FindIssueAsync(series.Id, number, ct);
+		if (issue is null)
 		{
-			log.Debug(label + "no such issue, or it has no cover");
+			log.Debug(label + $"no single issue #{number} in this series ({series.StartYear?.ToString() ?? "year unknown"}, {series.IssueCount} issues)");
+			return null;
+		}
+		if (issue.ThumbUrl is not { } url)
+		{
+			log.Debug(label + "the issue has no cover image");
 			return null;
 		}
 		byte[]? candidate = await DownloadAsync(url, ct);
