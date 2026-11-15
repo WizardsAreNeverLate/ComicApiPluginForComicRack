@@ -241,15 +241,19 @@ its request to Comic Vine.
 | Comic Vine cannot be reached, or gives a bad answer two times | `502` | `{"comicVine":{"kind":"Network",...}}` |
 | Comic Vine gives a different status code | `502` | `{"comicVine":{"kind":"Api",...,"apiStatus":n}}` |
 | A header or a body member is missing | `400` | `{"message":"..."}` |
+| The service fails on an error it did not expect | `500` | `{"serviceError":"NullReferenceException: ..."}` |
 
 - The `url` in an error never contains the API key.
 - If a failure occurs after the first progress line, the status is already `200`. The error is then the last line:
   `{"error":{"kind":...}}`.
+  An error that the service did not expect is then the last line `{"serviceError":"..."}`.
 - A `401` from the token check has no body. A `401` with a `comicVine` body is an invalid Comic Vine key.
 - The plugin changes each `comicVine` error back to the `ComicVineException` that the catalog threw. Thus the engine and
   the error dialogs do the same as before the move.
 - If the plugin cannot start or reach the service, it stops the scrape and shows the reason. An image request gives
   no image instead.
+- A `serviceError` is a fault in the service, not in Comic Vine and not in the connection. The plugin ends the run as
+  on any unexpected error: it shows the message that offers to save the debug log.
 
 ## Comic Vine state and caches
 
@@ -328,11 +332,13 @@ thread-pool thread and uses approximately 100 ms of processor time.
 | The service cannot load the OpenCV library | `503` | `{"openCvUnavailable":"The OpenCV library could not be used: ..."}` |
 | OpenCV fails the comparison, for example for an image whose header claims too many pixels | `500` | `{"serviceError":"OpenCVException: ..."}` |
 | A header, a part, or a body member is missing | `400` | `{"message":"..."}` |
+| The service fails on an error it did not expect | `500` | `{"serviceError":"..."}` |
 
 - The `message` never contains the VerseDB token.
 - The plugin changes each `verseDb` error back to the `VerseDbException` that `VerseDbHttp` threw, with the same status,
   message, and wait. Thus the cover search does the same as before the move. After a `429`, it shows "VerseDB asks to
   wait", waits for the time that VerseDB gave, and tries one more time.
+- A `serviceError` from a `/versedb/` endpoint ends the cover search as on any unexpected error, as for Comic Vine.
 - If the plugin cannot start or reach the service, the cover search stops with the "Local API Service" warning, which
   gives the reason. The cover dialog shows the logo for a cover that it cannot get.
 - If a comparison is not possible (`503`, no service, or no answer in 60 seconds), the plugin writes

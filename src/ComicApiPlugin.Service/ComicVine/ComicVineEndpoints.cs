@@ -116,7 +116,7 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 		{
 			last = result(await query(new ChannelProgress(reports.Writer), ct));
 		}
-		catch (ComicVineException error)
+		catch (Exception error) when (!ct.IsCancellationRequested)
 		{
 			reports.Writer.Complete();
 			await writing;
@@ -124,8 +124,16 @@ internal sealed class ComicVineEndpoints(ComicVineSessions sessions)
 			{
 				throw;
 			}
-			Log.Warning("Comic Vine request failed ({Kind:l}, status {ApiStatus}): {Url:l} (run {RunId:l})", error.Error.ToString(), error.ApiStatus, error.Url, RunScope.Current);
-			last = new StreamLineDto { Error = ComicVineWire.ToDto(error) };
+			if (error is ComicVineException comicVine)
+			{
+				Log.Warning("Comic Vine request failed ({Kind:l}, status {ApiStatus}): {Url:l} (run {RunId:l})", comicVine.Error.ToString(), comicVine.ApiStatus, comicVine.Url, RunScope.Current);
+				last = new StreamLineDto { Error = ComicVineWire.ToDto(comicVine) };
+			}
+			else
+			{
+				Log.Error(error, "{Path:l} failed inside the service (run {RunId:l})", context.Request.Path.Value, RunScope.Current);
+				last = new StreamLineDto { ServiceError = ServiceErrors.Describe(error) };
+			}
 		}
 		finally
 		{

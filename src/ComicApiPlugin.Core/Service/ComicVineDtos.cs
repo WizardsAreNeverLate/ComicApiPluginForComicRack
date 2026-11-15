@@ -306,4 +306,8 @@ public sealed class StreamLineDto
 
 	[DataMember(Name = "error", EmitDefaultValue = false)]
 	public ComicVineErrorDto? Error { get; set; }
+
+	/// <summary>Set when the service failed on an error it did not expect after the first line. The text names the error.</summary>
+	[DataMember(Name = "serviceError", EmitDefaultValue = false)]
+	public string? ServiceError { get; set; }
 }

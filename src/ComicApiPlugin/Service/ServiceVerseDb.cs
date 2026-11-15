@@ -11,7 +11,8 @@ namespace ComicApiPlugin.Plugin;
 /// <summary>
 /// VerseDB for one cover search, asked through the local API service. This class sends each call with the API token and
 /// the run id, and turns the answer back into what VerseDbHttp returns or throws. A service that cannot be started or
-/// reached is a VerseDbException without a status, whose inner exception is the ServiceUnavailableException.
+/// reached is a VerseDbException without a status, whose inner exception is the ServiceUnavailableException. A service
+/// that fails on an error it did not expect is a ServiceErrorException.
 /// </summary>
 internal sealed class ServiceVerseDb(ServiceConnection service, string token, string runId) : IVerseDb
 {

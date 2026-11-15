@@ -21,7 +21,8 @@ namespace ComicApiPlugin.Plugin;
 /// Comic Vine for one scrape run, asked through the local API service. The service owns the caches, the paging and the
 /// throttle. This class sends each call with the API key, the run id and the search settings, and turns the answer back
 /// into what ComicVineCatalog returns or throws. A service that cannot be started or reached is a ComicVineException
-/// of kind ServiceUnavailable, whose inner exception says why.
+/// of kind ServiceUnavailable, whose inner exception says why. A service that fails on an error it did not expect is a
+/// ServiceErrorException, which the run treats as any unexpected error.
 /// </summary>
 internal sealed class ServiceComicVine(ServiceConnection service, string apiKey, string runId, SearchSettings settings, DebugLog log) : IComicVine
 {
@@ -31,11 +32,11 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 
 	public Task<IReadOnlyList<SeriesRef>> SearchSeriesAsync(string terms, IProgress<QueryProgress>? progress, CancellationToken ct) =>
 		CallAsync<SearchRequestDto, IReadOnlyList<SeriesRef>>(ServiceProtocol.ComicVineSearchPath, new SearchRequestDto { Settings = settings, Terms = terms },
-			async response => [.. WireJson.Need((await LastLineAsync(response, progress).ConfigureAwait(false)).Series, "series").Select(ComicVineWire.ToDomain)], ct);
+			async response => [.. WireJson.Need((await LastLineAsync(ServiceProtocol.ComicVineSearchPath, response, progress).ConfigureAwait(false)).Series, "series").Select(ComicVineWire.ToDomain)], ct);
 
 	public Task<IReadOnlyList<IssueRef>> GetIssuesAsync(SeriesId series, IProgress<QueryProgress>? progress, CancellationToken ct) =>
 		CallAsync<IssuesRequestDto, IReadOnlyList<IssueRef>>(ServiceProtocol.ComicVineIssuesPath, new IssuesRequestDto { Settings = settings, Series = series.Value },
-			async response => [.. WireJson.Need((await LastLineAsync(response, progress).ConfigureAwait(false)).Issues, "issues").Select(ComicVineWire.ToDomain)], ct);
+			async response => [.. WireJson.Need((await LastLineAsync(ServiceProtocol.ComicVineIssuesPath, response, progress).ConfigureAwait(false)).Issues, "issues").Select(ComicVineWire.ToDomain)], ct);
 
 	public Task<IssueRef?> FindIssueAsync(SeriesId series, string issueNumber, CancellationToken ct) =>
 		CallAsync(ServiceProtocol.ComicVineFindIssuePath, new FindIssueRequestDto { Settings = settings, Series = series.Value, IssueNumber = issueNumber },
@@ -99,7 +100,7 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 	}
 
 	/// <summary>Reports each progress line as it arrives and returns the last line, which holds the result. An error line is thrown.</summary>
-	private static async Task<StreamLineDto> LastLineAsync(HttpResponseMessage response, IProgress<QueryProgress>? progress)
+	private static async Task<StreamLineDto> LastLineAsync(string path, HttpResponseMessage response, IProgress<QueryProgress>? progress)
 	{
 		using var reader = new StreamReader(await response.Content.ReadAsStreamAsync().ConfigureAwait(false), Utf8);
 		while (await reader.ReadLineAsync().ConfigureAwait(false) is { } text)
@@ -112,6 +113,10 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 			else if (line.Error is { } error)
 			{
 				throw ComicVineWire.ToDomain(error);
+			}
+			else if (line.ServiceError is { } unexpected)
+			{
+				throw new ServiceErrorException(path, unexpected);
 			}
 			else
 			{

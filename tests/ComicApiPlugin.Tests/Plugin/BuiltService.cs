@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Management;
 using ComicApiPlugin.Plugin;
+using ComicApiPlugin.Service;
 
 namespace ComicApiPlugin.Tests.Plugin;
 
@@ -51,6 +52,13 @@ internal static class BuiltService
 		File.WriteAllLines(script, lines);
 		return new ServiceLaunch(() => script, Path.Combine(folder, "logs"));
 	}
+
+	/// <summary>
+	/// A script that reports itself ready on <paramref name="port"/> and stays running, so the plugin sends its requests to
+	/// whatever test server listens there.
+	/// </summary>
+	public static ServiceLaunch ReadyOn(int port) =>
+		Script($"@echo {ServiceProtocol.ReadyPrefix}{{\"port\":{port},\"pid\":1,\"version\":\"0.0.0\"}}", "@ping -n 120 127.0.0.1 >nul");
 
 	/// <summary>The command lines of the running service processes that log to <paramref name="logFolder"/>.</summary>
 	public static IReadOnlyList<string> CommandLines(string logFolder)
