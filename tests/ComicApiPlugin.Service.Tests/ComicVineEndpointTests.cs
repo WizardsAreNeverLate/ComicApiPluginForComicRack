@@ -183,6 +183,7 @@ public sealed class ComicVineEndpointTests
 		await Assert.That(error.GetProperty("kind").GetString()).IsEqualTo("Network");
 		await Assert.That(error.GetProperty("apiStatus").ValueKind).IsEqualTo(JsonValueKind.Null);
 		await Assert.That(world.ComicVine.Requests.Count).IsEqualTo(2);
+		await Assert.That(log).Contains($"[WRN] Comic Vine GET 127.0.0.1:{world.ComicVine.Port}/api/issues/ responded 503 in ");
 		await Assert.That(log).Contains("[WRN] Comic Vine request failed (Network, status null) and is tried again in 2500 ms: ");
 		await Assert.That(log).DoesNotContain(ComicVineWorld.Key);
 	}
@@ -267,6 +268,24 @@ public sealed class ComicVineEndpointTests
 		using HttpResponseMessage health = await world.Client.GetAsync(ServiceProtocol.HealthPath);
 
 		await Assert.That(health.StatusCode).IsEqualTo(HttpStatusCode.OK);
+	}
+
+	[Test]
+	public async Task Each_call_to_Comic_Vine_is_one_log_line_with_the_run_and_without_the_query_string_or_the_key()
+	{
+		using ComicVineWorld world = await ComicVineWorld.StartAsync();
+
+		using HttpResponseMessage response = await world.PostAsync(ServiceProtocol.ComicVineSearchPath, ComicVineWorld.Body("\"terms\":\"preacher\""), run: "run-41c9");
+		string log = await world.StopAndReadLogAsync();
+		string[] outbound = [.. log.Split('\n').Where(line => line.Contains("] Comic Vine GET "))];
+
+		await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+		await Assert.That(world.ComicVine.Requests.Single().Target).Contains("api_key=" + ComicVineWorld.Key + "&");
+		await Assert.That(outbound.Length).IsEqualTo(1);
+		await Assert.That(outbound[0]).Matches($@"\[INF\] Comic Vine GET 127\.0\.0\.1:{world.ComicVine.Port}/api/search/ responded 200 in \d+ ms \(run run-41c9\)\s*$");
+		await Assert.That(log).DoesNotContain(ComicVineWorld.Key);
+		await Assert.That(log).DoesNotContain("api_key");
+		await Assert.That(log).DoesNotContain("query=");
 	}
 
 	[Test]

@@ -127,10 +127,10 @@ internal static class Program
 		return app;
 	}
 
-	/// <summary>One transport for an API key: its HttpClient and its request throttle. </summary>
+	/// <summary>One transport for an API key: its HttpClient and its request throttle. Every request it sends is logged without its query string.</summary>
 	private static ComicVineHttp ConnectComicVine(string apiKey, string? baseUrl)
 	{
-		var handler = new HttpClientHandler();
+		var handler = new OutboundLog("Comic Vine", new HttpClientHandler());
 		Action<ComicVineException> retrying = error =>
 			Log.Warning("Comic Vine request failed ({Kind:l}, status {ApiStatus}) and is tried again in {Delay} ms: {Url:l} (run {RunId:l})",
 				error.Error.ToString(), error.ApiStatus, ComicVineHttp.RetryDelay.TotalMilliseconds, error.Url, RunScope.Current);
