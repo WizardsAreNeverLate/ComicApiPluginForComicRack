@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Threading.Tasks;
+using ComicApiPlugin.Fixtures;
 using ComicApiPlugin.Matching;
 
 namespace ComicApiPlugin.Tests.Matching;

@@ -1,6 +1,5 @@
 using System;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using ComicApiPlugin.Fixtures;
@@ -42,7 +41,7 @@ internal sealed class VerseDbWorld : IDisposable
 	}
 
 	public Task<HttpResponseMessage> LookUpCoverAsync(byte[] image, string? token = VerseDbFixtures.Token, string? run = Run) =>
-		SendAsync(ServiceProtocol.VerseDbLookupCoverPath, Multipart((ServiceProtocol.ImagePart, image)), token, run);
+		SendAsync(ServiceProtocol.VerseDbLookupCoverPath, RunningService.Multipart((ServiceProtocol.ImagePart, image)), token, run);
 
 	public Task<HttpResponseMessage> PostJsonAsync(string path, string body, string? token = VerseDbFixtures.Token, string? run = Run) =>
 		SendAsync(path, new StringContent(body, Encoding.UTF8, "application/json"), token, run);
@@ -61,17 +60,6 @@ internal sealed class VerseDbWorld : IDisposable
 		return await Client.SendAsync(request);
 	}
 
-	public static MultipartFormDataContent Multipart(params (string Name, byte[] Bytes)[] parts)
-	{
-		var form = new MultipartFormDataContent();
-		foreach ((string name, byte[] bytes) in parts)
-		{
-			var part = new ByteArrayContent(bytes);
-			part.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-			form.Add(part, name, name + ".bin");
-		}
-		return form;
-	}
 
 	public void Dispose()
 	{

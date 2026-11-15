@@ -15,6 +15,14 @@
 		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
 	</ItemGroup>
+	<!--
+		The native OpenCV library, 64-bit, beside the exe, where OpenCvSharp.dll finds it by name. Only this file is taken from the package:
+		it also holds opencv_videoio_ffmpeg (28 MB, video decoding), which is not needed to read covers.
+	-->
+	<ItemGroup>
+		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" ExcludeAssets="all" GeneratePathProperty="true" />
+		<None Include="$(PkgOpenCvSharp4_runtime_win)\runtimes\win-x64\native\OpenCvSharpExtern.dll" Link="OpenCvSharpExtern.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ComicApiPlugin.Core\ComicApiPlugin.Core.csproj" />
 	</ItemGroup>

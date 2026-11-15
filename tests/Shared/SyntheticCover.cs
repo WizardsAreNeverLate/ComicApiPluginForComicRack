@@ -5,7 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 
-namespace ComicApiPlugin.Tests.Matching;
+namespace ComicApiPlugin.Fixtures;
 
 /// <summary>A made-up comic cover: a coloured body of shapes and captions under a title banner that every series issue shares.</summary>
 internal static class SyntheticCover

@@ -10,7 +10,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Engine;
+using ComicApiPlugin.Matching;
 using ComicApiPlugin.Service.ComicVine;
+using ComicApiPlugin.Service.Covers;
 using ComicApiPlugin.Service.VerseDb;
 using ComicApiPlugin.VerseDb;
 using Microsoft.AspNetCore.Builder;
@@ -130,6 +132,9 @@ internal static class Program
 		var verseDb = new VerseDbClients(token => new VerseDbHttp(new OutboundLog("VerseDB", new HttpClientHandler()), token, UserAgent, options.VerseDbBaseUrl));
 		app.Lifetime.ApplicationStopped.Register(verseDb.Dispose);
 		new VerseDbEndpoints(verseDb).Map(app);
+
+		// Stateless and thread-safe. It loads the OpenCV native library on its first comparison.
+		new CoverEndpoints(new OpenCvCoverComparer()).Map(app);
 		return app;
 	}
 

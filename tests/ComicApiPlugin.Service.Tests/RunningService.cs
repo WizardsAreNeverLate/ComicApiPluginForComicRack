@@ -37,9 +37,10 @@ internal sealed class RunningService : IDisposable
 
 	/// <param name="comicVineBaseUrl">Where the service sends its Comic Vine requests, or null for Comic Vine itself.</param>
 	/// <param name="verseDbBaseUrl">Where the service sends its VerseDB API requests, or null for VerseDB itself.</param>
-	public static Process Launch(string? token, int? parentPid, string logFolder, string? comicVineBaseUrl = null, string? verseDbBaseUrl = null)
+	/// <param name="folder">The folder that holds the service, or null for the one the build put beside the tests.</param>
+	public static Process Launch(string? token, int? parentPid, string logFolder, string? comicVineBaseUrl = null, string? verseDbBaseUrl = null, string? folder = null)
 	{
-		var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "ComicApiPlugin.Service.exe"))
+		var start = new ProcessStartInfo(Path.Combine(folder ?? AppContext.BaseDirectory, "ComicApiPlugin.Service.exe"))
 		{
 			UseShellExecute = false,
 			RedirectStandardOutput = true,
@@ -71,10 +72,10 @@ internal sealed class RunningService : IDisposable
 		return Process.Start(start)!;
 	}
 
-	public static async Task<RunningService> StartAsync(int? parentPid = null, string? comicVineBaseUrl = null, string? verseDbBaseUrl = null)
+	public static async Task<RunningService> StartAsync(int? parentPid = null, string? comicVineBaseUrl = null, string? verseDbBaseUrl = null, string? folder = null)
 	{
 		string logFolder = NewLogFolder();
-		var service = new RunningService(Launch(Token, parentPid, logFolder, comicVineBaseUrl, verseDbBaseUrl), logFolder);
+		var service = new RunningService(Launch(Token, parentPid, logFolder, comicVineBaseUrl, verseDbBaseUrl, folder), logFolder);
 		try
 		{
 			Task<string?> ready = service.ReadUntilReadyAsync();
@@ -93,6 +94,19 @@ internal sealed class RunningService : IDisposable
 			service.Dispose();
 			throw;
 		}
+	}
+
+	/// <summary>A multipart/form-data body with one part for each name.</summary>
+	public static MultipartFormDataContent Multipart(params (string Name, byte[] Bytes)[] parts)
+	{
+		var form = new MultipartFormDataContent();
+		foreach ((string name, byte[] bytes) in parts)
+		{
+			var part = new ByteArrayContent(bytes);
+			part.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+			form.Add(part, name, name + ".bin");
+		}
+		return form;
 	}
 
 	public static string NewLogFolder() => Path.Combine(Path.GetTempPath(), "comicapi-service-tests", Guid.NewGuid().ToString("N"));

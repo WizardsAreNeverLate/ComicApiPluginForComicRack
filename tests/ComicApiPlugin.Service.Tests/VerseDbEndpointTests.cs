@@ -160,7 +160,7 @@ public sealed class VerseDbEndpointTests
 		using HttpResponseMessage noToken = await world.LookUpCoverAsync(Jpeg, token: null);
 		using HttpResponseMessage noRun = await world.LookUpCoverAsync(Jpeg, run: null);
 		using HttpResponseMessage notMultipart = await world.PostJsonAsync(ServiceProtocol.VerseDbLookupCoverPath, "{}");
-		using HttpResponseMessage noImage = await world.SendAsync(ServiceProtocol.VerseDbLookupCoverPath, VerseDbWorld.Multipart(("picture", Jpeg)));
+		using HttpResponseMessage noImage = await world.SendAsync(ServiceProtocol.VerseDbLookupCoverPath, RunningService.Multipart(("picture", Jpeg)));
 		using HttpResponseMessage noUrl = await world.PostJsonAsync(ServiceProtocol.VerseDbImagePath, "{}");
 		using HttpResponseMessage relativeUrl = await world.PostJsonAsync(ServiceProtocol.VerseDbImagePath, """{"url":"covers/1.webp"}""");
 

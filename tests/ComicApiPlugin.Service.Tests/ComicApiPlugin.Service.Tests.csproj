@@ -8,7 +8,7 @@
 		<PackageReference Include="TUnit" Version="1.81.10" />
 	</ItemGroup>
 	<ItemGroup>
-		<Compile Include="..\Shared\ComicVineFixtures.cs;..\Shared\FakeHttpServer.cs;..\Shared\FakeComicVineServer.cs;..\Shared\FakeVerseDbServer.cs;..\Shared\VerseDbFixtures.cs" Link="Shared\%(Filename)%(Extension)" />
+		<Compile Include="..\Shared\ComicVineFixtures.cs;..\Shared\FakeHttpServer.cs;..\Shared\FakeComicVineServer.cs;..\Shared\FakeVerseDbServer.cs;..\Shared\VerseDbFixtures.cs;..\Shared\SyntheticCover.cs" Link="Shared\%(Filename)%(Extension)" />
 		<None Include="..\fixtures\comicvine\*.txt" Link="fixtures\comicvine\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<!-- The reference also copies the service's exe beside the tests, which start it as a real process. -->
