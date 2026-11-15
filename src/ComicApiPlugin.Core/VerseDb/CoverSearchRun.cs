@@ -159,6 +159,7 @@ public sealed class CoverSearchRun(IVerseDb verseDb, ICoverSearchUi ui, IClock c
 			return false;
 		}
 	}
+
 	private async Task WriteAsync(IScrapeBook book, BookFacts facts, CoverCandidate candidate, CancellationToken ct)
 	{
 		log.Debug("querying VerseDB for issue details...");
