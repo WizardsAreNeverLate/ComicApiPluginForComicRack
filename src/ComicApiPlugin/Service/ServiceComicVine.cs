@@ -21,7 +21,8 @@ namespace ComicApiPlugin.Plugin;
 /// Comic Vine for one scrape run, asked through the local API service. The service owns the caches, the paging and the
 /// throttle. This class sends each call with the API key, the run id and the search settings, and turns the answer back
 /// into what ComicVineCatalog returns or throws. A service that cannot be started or reached is a ComicVineException
-/// of kind ServiceUnavailable, whose inner exception says why. A service that fails on an error it did not expect is a
+/// of kind ServiceUnavailable, whose inner exception says why. A service that sends nothing for the quiet limit is one of
+/// kind Network, as when the service waits too long for Comic Vine. A service that fails on an error it did not expect is a
 /// ServiceErrorException, which the run treats as any unexpected error.
 /// </summary>
 internal sealed class ServiceComicVine(ServiceConnection service, string apiKey, string runId, SearchSettings settings, DebugLog log) : IComicVine
@@ -32,11 +33,11 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 
 	public Task<IReadOnlyList<SeriesRef>> SearchSeriesAsync(string terms, IProgress<QueryProgress>? progress, CancellationToken ct) =>
 		CallAsync<SearchRequestDto, IReadOnlyList<SeriesRef>>(ServiceProtocol.ComicVineSearchPath, new SearchRequestDto { Settings = settings, Terms = terms },
-			async response => [.. WireJson.Need((await LastLineAsync(ServiceProtocol.ComicVineSearchPath, response, progress).ConfigureAwait(false)).Series, "series").Select(ComicVineWire.ToDomain)], ct);
+			async (response, alive) => [.. WireJson.Need((await LastLineAsync(ServiceProtocol.ComicVineSearchPath, response, progress, alive).ConfigureAwait(false)).Series, "series").Select(ComicVineWire.ToDomain)], ct);
 
 	public Task<IReadOnlyList<IssueRef>> GetIssuesAsync(SeriesId series, IProgress<QueryProgress>? progress, CancellationToken ct) =>
 		CallAsync<IssuesRequestDto, IReadOnlyList<IssueRef>>(ServiceProtocol.ComicVineIssuesPath, new IssuesRequestDto { Settings = settings, Series = series.Value },
-			async response => [.. WireJson.Need((await LastLineAsync(ServiceProtocol.ComicVineIssuesPath, response, progress).ConfigureAwait(false)).Issues, "issues").Select(ComicVineWire.ToDomain)], ct);
+			async (response, alive) => [.. WireJson.Need((await LastLineAsync(ServiceProtocol.ComicVineIssuesPath, response, progress, alive).ConfigureAwait(false)).Issues, "issues").Select(ComicVineWire.ToDomain)], ct);
 
 	public Task<IssueRef?> FindIssueAsync(SeriesId series, string issueNumber, CancellationToken ct) =>
 		CallAsync(ServiceProtocol.ComicVineFindIssuePath, new FindIssueRequestDto { Settings = settings, Series = series.Value, IssueNumber = issueNumber },
@@ -58,7 +59,7 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 			async response => (await ServiceConnection.ReadJsonAsync<ResolveSeriesResponseDto>(response).ConfigureAwait(false)).Series is { } found ? ComicVineWire.ToDomain(found) : null, ct);
 	}
 
-	/// <summary>Null also when the service cannot be reached: an image never fails a scrape, and the next call for data reports the service.</summary>
+	/// <summary>Null also when the service cannot be reached or is stuck: an image never fails a scrape, and the next call for data reports the service.</summary>
 	public async Task<Bitmap?> GetImageAsync(Uri url, CancellationToken ct)
 	{
 		try
@@ -73,14 +74,19 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 				return new Bitmap(new MemoryStream(await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false)));
 			}, ct).ConfigureAwait(false);
 		}
-		catch (ComicVineException error) when (error.Error == ComicVineError.ServiceUnavailable)
+		catch (ComicVineException error) when (error.InnerException is ServiceUnavailableException or ServiceSilentException)
 		{
 			log.Debug("could not load an image: " + error.InnerException?.Message);
 			return null;
 		}
 	}
 
-	private async Task<T> CallAsync<TRequest, T>(string path, TRequest body, Func<HttpResponseMessage, Task<T>> read, CancellationToken ct)
+	private Task<T> CallAsync<TRequest, T>(string path, TRequest body, Func<HttpResponseMessage, Task<T>> read, CancellationToken ct)
+		where TRequest : ComicVineRequestDto =>
+		CallAsync<TRequest, T>(path, body, (response, _) => read(response), ct);
+
+	/// <param name="read">Reads the answer, and calls its second argument for each line that arrives.</param>
+	private async Task<T> CallAsync<TRequest, T>(string path, TRequest body, Func<HttpResponseMessage, Action, Task<T>> read, CancellationToken ct)
 		where TRequest : ComicVineRequestDto
 	{
 		try
@@ -97,14 +103,19 @@ internal sealed class ServiceComicVine(ServiceConnection service, string apiKey,
 		{
 			throw new ComicVineException(ComicVineError.ServiceUnavailable, "local API service " + path, null, error);
 		}
+		catch (ServiceSilentException error)
+		{
+			throw new ComicVineException(ComicVineError.Network, "local API service " + path, null, error);
+		}
 	}
 
 	/// <summary>Reports each progress line as it arrives and returns the last line, which holds the result. An error line is thrown.</summary>
-	private static async Task<StreamLineDto> LastLineAsync(string path, HttpResponseMessage response, IProgress<QueryProgress>? progress)
+	private static async Task<StreamLineDto> LastLineAsync(string path, HttpResponseMessage response, IProgress<QueryProgress>? progress, Action alive)
 	{
 		using var reader = new StreamReader(await response.Content.ReadAsStreamAsync().ConfigureAwait(false), Utf8);
 		while (await reader.ReadLineAsync().ConfigureAwait(false) is { } text)
 		{
+			alive();
 			StreamLineDto line = WireJson.FromJson<StreamLineDto>(text);
 			if (line.Progress is { } report)
 			{

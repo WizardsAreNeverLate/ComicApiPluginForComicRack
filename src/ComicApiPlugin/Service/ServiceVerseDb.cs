@@ -12,7 +12,9 @@ namespace ComicApiPlugin.Plugin;
 /// VerseDB for one cover search, asked through the local API service. This class sends each call with the API token and
 /// the run id, and turns the answer back into what VerseDbHttp returns or throws. A service that cannot be started or
 /// reached is a VerseDbException without a status, whose inner exception is the ServiceUnavailableException. A service
-/// that fails on an error it did not expect is a ServiceErrorException.
+/// that sends nothing for the quiet limit is a VerseDbException without a status too, but shows as a VerseDB failure, as
+/// when the service waits too long for VerseDB. A service that fails on an error it did not expect is a
+/// ServiceErrorException.
 /// </summary>
 internal sealed class ServiceVerseDb(ServiceConnection service, string token, string runId) : IVerseDb
 {
@@ -40,7 +42,7 @@ internal sealed class ServiceVerseDb(ServiceConnection service, string token, st
 				return request;
 			}, read, error => error.VerseDb is { } verseDb ? VerseDbWire.ToDomain(verseDb) : null, ct).ConfigureAwait(false);
 		}
-		catch (ServiceUnavailableException error)
+		catch (Exception error) when (error is ServiceUnavailableException or ServiceSilentException)
 		{
 			throw new VerseDbException(null, error.Message, inner: error);
 		}

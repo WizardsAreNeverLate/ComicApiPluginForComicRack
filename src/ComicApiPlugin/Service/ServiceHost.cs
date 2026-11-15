@@ -66,35 +66,54 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 
 	/// <summary>
 	/// The endpoint of the running service, which is started first when it is not running. Concurrent callers share one
-	/// start. A service that failed to start, exited, or was stopped is started again.
+	/// start. A service that failed to start, exited, or was stopped is started again. A service whose console window does
+	/// not match the setting is replaced: the start stops it first, on a pool thread, so the caller never waits for it.
 	/// </summary>
 	/// <exception cref="ServiceUnavailableException">The start failed. <see cref="State"/> holds the same reason.</exception>
 	public Task<ServiceEndpoint> EnsureStartedAsync(CancellationToken ct)
 	{
-		if (State is ServiceState.Running live && !HasExited(live.Process) && live.ConsoleShown != showConsole())
-		{
-			log("Restarting the local API service to " + (live.ConsoleShown ? "hide" : "show") + " its console window");
-			Stop();
-		}
+		bool show = showConsole();
 		Task<ServiceEndpoint> start;
+		ServiceState.Running? replaced = null;
 		lock (gate)
 		{
 			switch (state)
 			{
-				case ServiceState.Running running when !HasExited(running.Process):
+				case ServiceState.Running running when !HasExited(running.Process) && running.ConsoleShown == show:
 					return Task.FromResult(running.Endpoint);
 				case ServiceState.Starting starting:
 					start = starting.Start;
 					break;
 				default:
-					(state as ServiceState.Running)?.Process.Dispose();
+					if (state is ServiceState.Running live)
+					{
+						if (HasExited(live.Process))
+						{
+							live.Process.Dispose();
+						}
+						else
+						{
+							replaced = live;
+						}
+					}
 					var pending = new TaskCompletionSource<ServiceEndpoint>(TaskCreationOptions.RunContinuationsAsynchronously);
 					var begun = new ServiceState.Starting(pending.Task);
 					state = begun;
-					Task.Run(() => Start(begun, pending));
+					Task.Run(() =>
+					{
+						if (replaced is not null)
+						{
+							ShutDown(replaced);
+						}
+						Start(begun, pending);
+					});
 					start = pending.Task;
 					break;
 			}
+		}
+		if (replaced is not null)
+		{
+			log("Restarting the local API service to " + (show ? "show" : "hide") + " its console window");
 		}
 		return WithCancellation(start, ct);
 	}
@@ -126,11 +145,16 @@ internal sealed class ServiceHost(ServiceLaunch launch, Func<bool> showConsole, 
 			previous = state;
 			state = new ServiceState.Stopped();
 		}
-		if (previous is not ServiceState.Running running)
+		// A start in flight sees the changed state and kills its own process.
+		if (previous is ServiceState.Running running)
 		{
-			// A start in flight sees the changed state and kills its own process.
-			return;
+			ShutDown(running);
 		}
+	}
+
+	/// <summary>Asks a service that is no longer the current one to shut down, and kills it when it does not exit in time.</summary>
+	private void ShutDown(ServiceState.Running running)
+	{
 		using Process process = running.Process;
 		if (HasExited(process))
 		{

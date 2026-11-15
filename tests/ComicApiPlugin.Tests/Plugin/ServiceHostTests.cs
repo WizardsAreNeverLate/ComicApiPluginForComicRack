@@ -124,6 +124,26 @@ public sealed class ServiceHostTests
 	}
 
 	[Test]
+	public async Task A_console_setting_restart_stops_the_old_service_off_the_callers_thread_and_concurrent_callers_share_the_new_one()
+	{
+		bool show = false;
+		using var host = new ServiceHost(BuiltService.Launch(), () => show, _ => { });
+		ServiceEndpoint hidden = await host.EnsureStartedAsync(CancellationToken.None);
+		using Process old = Process.GetProcessById(hidden.Pid);
+
+		show = true;
+		Task<ServiceEndpoint> first = host.EnsureStartedAsync(CancellationToken.None);
+		bool oldRunningWhenTheCallReturned = !old.HasExited;
+		Task<ServiceEndpoint> second = host.EnsureStartedAsync(CancellationToken.None);
+		ServiceEndpoint[] shown = await Task.WhenAll(first, second);
+
+		await Assert.That(oldRunningWhenTheCallReturned).IsTrue();
+		await Assert.That(shown[0].Pid).IsNotEqualTo(hidden.Pid);
+		await Assert.That(shown[1]).IsSameReferenceAs(shown[0]);
+		await Assert.That(old.HasExited).IsTrue();
+	}
+
+	[Test]
 	public async Task A_service_that_exited_is_started_again_on_the_next_call()
 	{
 		using ServiceHost host = Host(BuiltService.Launch());

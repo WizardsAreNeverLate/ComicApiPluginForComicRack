@@ -217,6 +217,28 @@ public sealed class ServiceComicVineTests
 	}
 
 	[Test]
+	public async Task A_search_whose_next_line_does_not_come_within_the_quiet_limit_is_a_network_error_after_the_progress_it_had()
+	{
+		var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		using var world = new World(async request =>
+		{
+			if (request.Target.Contains("&page=2"))
+			{
+				await release.Task;
+			}
+			return null;
+		}, quietLimit: TimeSpan.FromSeconds(3));
+		var remote = new Recorder();
+
+		Exception? thrown = await CatchAsync(world.ThroughService.SearchSeriesAsync("batman", remote, CancellationToken.None));
+		release.SetResult(true);
+
+		await Assert.That(thrown is ComicVineException { Error: ComicVineError.Network }).IsTrue();
+		await Assert.That(thrown!.InnerException!.Message).IsEqualTo("The local API service sent nothing for 3 seconds.");
+		await Assert.That(remote.Reports.Count).IsEqualTo(1);
+	}
+
+	[Test]
 	public async Task A_call_that_is_cancelled_before_it_starts_sends_nothing()
 	{
 		using var world = new World();
@@ -365,11 +387,11 @@ public sealed class ServiceComicVineTests
 		private readonly ServiceConnection connection;
 		private int taken;
 
-		public World(Func<FakeRequest, Task<FakeAnswer?>>? answer = null) : this(BuiltService.Launch(), answer)
+		public World(Func<FakeRequest, Task<FakeAnswer?>>? answer = null, TimeSpan? quietLimit = null) : this(BuiltService.Launch(), answer, quietLimit)
 		{
 		}
 
-		public World(ServiceLaunch launch, Func<FakeRequest, Task<FakeAnswer?>>? answer = null)
+		public World(ServiceLaunch launch, Func<FakeRequest, Task<FakeAnswer?>>? answer = null, TimeSpan? quietLimit = null)
 		{
 			ComicVine = FakeComicVineServer.FromFixtures(FixtureFiles.ReadFolder(FixtureFiles.OutputFolder), answer);
 			Launch = launch with { Environment = new Dictionary<string, string> { [ServiceProtocol.ComicVineBaseUrlVariable] = ComicVine.BaseUrl } };
@@ -377,7 +399,7 @@ public sealed class ServiceComicVineTests
 			http = new ComicVineHttp(new HttpClientHandler { UseProxy = false }, Key, "ua", clock, () => clock.Elapsed, ComicVine.BaseUrl);
 			InProcess = new ComicVineCatalog(http, Settings);
 			Host = new ServiceHost(Launch, () => false, Log.Debug);
-			connection = new ServiceConnection(Host);
+			connection = new ServiceConnection(Host, quietLimit);
 			ThroughService = new ServiceComicVine(connection, Key, "run-" + Guid.NewGuid().ToString("N"), Settings, Log);
 		}
 

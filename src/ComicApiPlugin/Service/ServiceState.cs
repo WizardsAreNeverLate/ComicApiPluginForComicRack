@@ -56,3 +56,9 @@ internal sealed class ServiceUnavailableException(string reason, Exception? inne
 /// failure, so the caller treats it as an unexpected error. The message holds the service's own.
 /// </summary>
 internal sealed class ServiceErrorException(string path, string error) : Exception($"The local API service failed on {path}: {error}");
+
+/// <summary>
+/// The service took the request and then sent nothing for the quiet limit: it is alive but stuck. The provider clients
+/// report it as their provider's network failure, as when the service itself waits too long for the provider.
+/// </summary>
+internal sealed class ServiceSilentException(string message, Exception inner) : Exception(message, inner);

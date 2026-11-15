@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -17,12 +18,15 @@ using ComicApiPlugin.VerseDb;
 namespace ComicApiPlugin.Tests.Plugin;
 
 /// <summary>
-/// A service that fails on an error it did not expect. The plugin talks to a test server that answers as such a service
-/// would, so each test can choose the failure.
+/// A service that answers, but not as it should: it fails on an error it did not expect, or it says nothing. The plugin
+/// talks to a test server that answers as such a service would, so each test can choose the failure.
 /// </summary>
 public sealed class ServiceErrorTests
 {
 	private const string Unexpected = "NullReferenceException: Object reference not set to an instance of an object.";
+
+	private static readonly TimeSpan QuietLimit = TimeSpan.FromSeconds(2);
+	private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
 	[Test]
 	public async Task A_Comic_Vine_call_the_service_fails_is_an_unexpected_error_with_the_services_message_and_not_a_service_or_Comic_Vine_failure()
@@ -61,11 +65,49 @@ public sealed class ServiceErrorTests
 		await Assert.That(error.Message).IsEqualTo($"The local API service failed on {ServiceProtocol.VerseDbIssuePath}: {Unexpected}");
 	}
 
+	[Test]
+	public async Task A_Comic_Vine_call_that_a_stuck_service_does_not_answer_is_a_network_error_after_the_quiet_limit()
+	{
+		using var world = new World(Stuck, QuietLimit);
+		var watch = Stopwatch.StartNew();
+
+		Exception error = await Catch(() => world.ComicVine.FindIssueAsync(new SeriesId(796), "497", CancellationToken.None));
+
+		await Assert.That(error is ComicVineException { Error: ComicVineError.Network, IsRecoverable: true }).IsTrue();
+		await Assert.That(error.InnerException!.Message).IsEqualTo("The local API service sent nothing for 2 seconds.");
+		await Assert.That(watch.Elapsed).IsGreaterThanOrEqualTo(QuietLimit);
+	}
+
+	[Test]
+	public async Task A_VerseDB_call_that_a_stuck_service_does_not_answer_is_a_VerseDB_failure_without_a_status_and_not_a_service_failure()
+	{
+		using var world = new World(Stuck, QuietLimit);
+
+		Exception error = await Catch(() => world.VerseDb.GetIssueAsync(new VerseDbIssueId(423295), CancellationToken.None));
+
+		await Assert.That(error).IsTypeOf<VerseDbException>();
+		await Assert.That(((VerseDbException)error).Status).IsNull();
+		await Assert.That(error.Message).IsEqualTo("The local API service sent nothing for 2 seconds.");
+		await Assert.That(error.InnerException is ServiceUnavailableException).IsFalse();
+	}
+
+	/// <summary>Answers only once the plugin has given up and closed the connection.</summary>
+	private static async Task<FakeAnswer> Stuck(FakeRequest request)
+	{
+		await request.ClientGone;
+		return FakeAnswer.Json("{}");
+	}
+
 	private static async Task<Exception> Catch(Func<Task> call)
 	{
 		try
 		{
-			await call();
+			Task task = call();
+			if (await Task.WhenAny(task, Task.Delay(Patience)) != task)
+			{
+				throw new TimeoutException($"Nothing happened within {Patience.TotalSeconds} seconds.");
+			}
+			await task;
 		}
 		catch (Exception error)
 		{
@@ -85,11 +127,15 @@ public sealed class ServiceErrorTests
 		private readonly ServiceHost host;
 		private readonly ServiceConnection connection;
 
-		public World(Func<FakeRequest, FakeAnswer> answer)
+		public World(Func<FakeRequest, FakeAnswer> answer, TimeSpan? quietLimit = null) : this(request => Task.FromResult(answer(request)), quietLimit)
 		{
-			service = new FakeHttpServer(request => Task.FromResult(answer(request)));
+		}
+
+		public World(Func<FakeRequest, Task<FakeAnswer>> answer, TimeSpan? quietLimit = null)
+		{
+			service = new FakeHttpServer(answer);
 			host = new ServiceHost(BuiltService.ReadyOn(service.Port), () => false, _ => { });
-			connection = new ServiceConnection(host);
+			connection = new ServiceConnection(host, quietLimit);
 			ComicVine = new ServiceComicVine(connection, "key", "run", new SearchSettings([], [], 0, 9999, 9999, 100), new DebugLog());
 			VerseDb = new ServiceVerseDb(connection, "token", "run");
 		}

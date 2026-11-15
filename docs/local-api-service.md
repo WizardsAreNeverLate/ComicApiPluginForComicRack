@@ -64,7 +64,8 @@ a warning dialog with the title "Local API Service", and the scrape stops. No bo
 - **When a scrape needs it.** If the service is not running (for example, it failed or someone stopped it), the next
   scrape starts it.
 - **After a settings change.** When the user saves the settings dialog with a different console setting, the plugin
-  restarts the service with the new setting.
+  restarts the service with the new setting. The next call that needs the service does the restart. The old
+  service stops on a background thread, so the call does not wait on the UI thread for it to exit.
 
 All starts go through one state machine in `ServiceHost`: `NotStarted`, `Starting`, `Running`, `Failed`, or `Stopped`.
 Callers that ask for the service at the same time share one start, so only one process is created.
@@ -231,6 +232,21 @@ paging, the caches, and the search filters would then be in two processes.
 
 When the user cancels a scrape, the plugin cancels its HTTP request. The service sees the closed connection and cancels
 its request to Comic Vine.
+
+### Timeouts
+
+The plugin waits at most 150 seconds for a sign of life from the service: first for the headers of the answer, and then,
+in a JSON Lines answer, for each next line. The service waits at most 100 seconds for one answer from Comic Vine or
+VerseDB, so only a service that is stuck reaches the limit.
+
+- For Comic Vine, a stuck service is a network failure (`ComicVineException` of the kind `Network`), the same failure as
+  when Comic Vine does not answer. The plugin shows "Cannot Access Online Database", and a fast rescrape skips the book.
+- For VerseDB, it is a `VerseDbException` without a status. The plugin shows the VerseDB warning.
+- An image request gives no image.
+- A call that sends more than one request to Comic Vine, for example the details of an issue and of its series, can take
+  longer than 150 seconds when Comic Vine is very slow. The plugin then also reports a network failure.
+- The cover comparison keeps its own, shorter limit of 60 seconds (see "Errors" in "VerseDB and cover comparison
+  endpoints").
 
 ### Errors
 
@@ -640,7 +656,7 @@ $env:COMICRACK_DIR = "C:\path\to\ComicRackCE\ComicRack\bin\Release\net48"
 |---|---|
 | `tests/ComicApiPlugin.Service.Tests` (.NET 11) | Starts the real exe: 401 without or with a wrong token, 400 for a wrong `Host`, the READY line and loopback binding, `POST /shutdown`, exit when the parent process ends, no secret header value in the log file |
 | `tests/ComicApiPlugin.Service.Tests` (`ComicVineEndpointTests`, `ComicVineSessionsTests`) | Starts the real exe with a fake Comic Vine: each `/comicvine/` endpoint, progress lines that arrive while the query runs, the error bodies and status codes, an error after the first progress line, one cache for each run ID, one throttle for each key, cancellation that reaches Comic Vine, the log line for each call without the key, `400` for an incomplete request, and the 30-minute idle limit |
-| `tests/ComicApiPlugin.Tests` (`ServiceHostTests`) | Starts the packaged exe from `service.zip`: one process for concurrent callers, kill through the job object, graceful stop, restart after an exit, restart when the console setting changes, clear failures for a missing exe, a missing runtime, and a service that never reports ready |
+| `tests/ComicApiPlugin.Tests` (`ServiceHostTests`) | Starts the packaged exe from `service.zip`: one process for concurrent callers, kill through the job object, graceful stop, restart after an exit, restart when the console setting changes (off the caller's thread, one new process for concurrent callers), clear failures for a missing exe, a missing runtime, and a service that never reports ready |
 | `tests/ComicApiPlugin.Tests` (`ServiceComicVineTests`) | Points the packaged service and an in-process catalog at one fake Comic Vine: the same results, progress reports, requests, and exceptions on both routes; cancellation; a service that cannot start; a service that died and starts again; no key in the service log or the plugin log |
 | `tests/ComicApiPlugin.Service.Tests` (`VerseDbEndpointTests`) | Starts the real exe with a fake VerseDB: a lookup that is clear and one that is not, the issue details, the image bytes, the multipart form that VerseDB gets (quoted `name` and `filename`, no `filename*`), the error bodies for 401, 422, 429 with `Retry-After`, and 503, a VerseDB that cannot be reached, `400` for an incomplete request, and the log line for each call without the token |
 | `tests/ComicApiPlugin.Service.Tests` (`CoverEndpointTests`, `OpenCvCoverComparerTests`) | `/covers/compare` gives the scores that the comparer gives: a cropped copy matches, a different cover does not, bytes that are not an image give `null`, an image that OpenCV fails gives `500` with `serviceError`. A service without `OpenCvSharpExtern.dll` answers `503` and continues. The comparer tests moved here from `tests/ComicApiPlugin.Tests`, because OpenCV is now only in the service. |

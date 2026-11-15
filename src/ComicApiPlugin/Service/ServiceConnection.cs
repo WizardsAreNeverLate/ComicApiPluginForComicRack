@@ -10,10 +10,18 @@ using ComicApiPlugin.Service;
 namespace ComicApiPlugin.Plugin;
 
 /// <summary>The plugin's HTTP connection to the local API service: one HttpClient for each launch of the service, not one for each call.</summary>
-internal sealed class ServiceConnection(ServiceHost host) : IDisposable
+/// <param name="quietLimit">How long a call waits for a sign of life from the service. Only a test sets it.</param>
+internal sealed class ServiceConnection(ServiceHost host, TimeSpan? quietLimit = null) : IDisposable
 {
+	/// <summary>
+	/// The longest wait for the answer's headers, and then for each further line of a streamed answer. It is above the
+	/// 100 s that the service waits for one answer from Comic Vine or VerseDB, so only a service that is stuck reaches it.
+	/// </summary>
+	public static readonly TimeSpan DefaultQuietLimit = TimeSpan.FromSeconds(150);
+
 	private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
+	private readonly TimeSpan quietLimit = quietLimit ?? DefaultQuietLimit;
 	private readonly object gate = new();
 	private (ServiceEndpoint Endpoint, HttpClient Client)? current;
 
@@ -30,7 +38,7 @@ internal sealed class ServiceConnection(ServiceHost host) : IDisposable
 			}
 			// The service was started again, so the old client's port and token are dead.
 			current?.Client.Dispose();
-			// No timeout: a search can page for minutes, and cancelling the scrape cancels the request.
+			// No timeout here: a search can page for minutes. Each call has its own limit on silence, and cancelling the scrape cancels the request.
 			HttpClient client = endpoint.CreateClient(Timeout.InfiniteTimeSpan);
 			current = (endpoint, client);
 			return client;
@@ -47,10 +55,17 @@ internal sealed class ServiceConnection(ServiceHost host) : IDisposable
 	/// <exception cref="OperationCanceledException">ct was cancelled.</exception>
 	/// <exception cref="ServiceUnavailableException">The service could not be started or reached, or its answer cannot be read.</exception>
 	/// <exception cref="ServiceErrorException">The service failed on an error it did not expect.</exception>
+	/// <exception cref="ServiceSilentException">The service sent nothing for the quiet limit.</exception>
+	public Task<T> CallAsync<T>(
+		Func<HttpRequestMessage> request, Func<HttpResponseMessage, Task<T>> read, Func<ErrorResponseDto, Exception?> failure, CancellationToken ct) =>
+		CallAsync(request, (response, _) => read(response), failure, ct);
+
+	/// <summary>The same, for an answer that streams: read calls its second argument each time a part arrives, and the quiet limit starts again.</summary>
 	public async Task<T> CallAsync<T>(
-		Func<HttpRequestMessage> request, Func<HttpResponseMessage, Task<T>> read, Func<ErrorResponseDto, Exception?> failure, CancellationToken ct)
+		Func<HttpRequestMessage> request, Func<HttpResponseMessage, Action, Task<T>> read, Func<ErrorResponseDto, Exception?> failure, CancellationToken ct)
 	{
 		ct.ThrowIfCancellationRequested();
+		using var quiet = CancellationTokenSource.CreateLinkedTokenSource(ct);
 		try
 		{
 			HttpClient client = await ConnectAsync(ct).ConfigureAwait(false);
@@ -59,20 +74,26 @@ internal sealed class ServiceConnection(ServiceHost host) : IDisposable
 			string path = message.RequestUri.OriginalString;
 			// Without this, .NET Framework first waits for a "100 Continue" before it sends the body.
 			message.Headers.ExpectContinue = false;
-			using HttpResponseMessage response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+			quiet.CancelAfter(quietLimit);
+			using HttpResponseMessage response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, quiet.Token).ConfigureAwait(false);
 			// .NET Framework reads a response body without looking at the token, so a cancel closes the response under the read.
-			using (ct.Register(response.Dispose))
+			using (quiet.Token.Register(response.Dispose))
 			{
+				quiet.CancelAfter(quietLimit);
 				if (!response.IsSuccessStatusCode)
 				{
 					throw await FailureAsync(path, response, failure).ConfigureAwait(false);
 				}
-				return await read(response).ConfigureAwait(false);
+				return await read(response, () => quiet.CancelAfter(quietLimit)).ConfigureAwait(false);
 			}
 		}
 		catch (Exception error) when (ct.IsCancellationRequested)
 		{
 			throw new OperationCanceledException("The call to the local API service was cancelled.", error, ct);
+		}
+		catch (Exception error) when (quiet.IsCancellationRequested)
+		{
+			throw new ServiceSilentException($"The local API service sent nothing for {quietLimit.TotalSeconds:0.#} seconds.", error);
 		}
 		catch (Exception error) when (error is HttpRequestException or IOException or ObjectDisposedException or OperationCanceledException)
 		{
