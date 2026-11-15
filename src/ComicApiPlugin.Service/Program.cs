@@ -10,7 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Engine;
-using ComicApiPlugin.Matching;
 using ComicApiPlugin.Service.ComicVine;
 using ComicApiPlugin.Service.Covers;
 using ComicApiPlugin.Service.VerseDb;

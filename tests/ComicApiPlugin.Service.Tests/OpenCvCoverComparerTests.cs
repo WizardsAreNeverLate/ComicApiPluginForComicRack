@@ -3,8 +3,9 @@ using System.Drawing.Imaging;
 using System.Threading.Tasks;
 using ComicApiPlugin.Fixtures;
 using ComicApiPlugin.Matching;
+using ComicApiPlugin.Service.Covers;
 
-namespace ComicApiPlugin.Tests.Matching;
+namespace ComicApiPlugin.Service.Tests;
 
 public sealed class OpenCvCoverComparerTests
 {

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ComicApiPlugin.Fixtures;
 using ComicApiPlugin.Matching;
+using ComicApiPlugin.Service.Covers;
 
 namespace ComicApiPlugin.Service.Tests;
 

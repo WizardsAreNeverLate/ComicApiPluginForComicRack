@@ -16,10 +16,12 @@
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
 	</ItemGroup>
 	<!--
-		The native OpenCV library, 64-bit, beside the exe, where OpenCvSharp.dll finds it by name. Only this file is taken from the package:
-		it also holds opencv_videoio_ffmpeg (28 MB, video decoding), which is not needed to read covers.
+		OpenCV for the cover comparison: the OpenCvSharp binding, and the native library, 64-bit, beside the exe, where the binding finds it
+		by name. Only that file is taken from the runtime package: it also holds opencv_videoio_ffmpeg (28 MB, video decoding), which is not
+		needed to read covers.
 	-->
 	<ItemGroup>
+		<PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
 		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" ExcludeAssets="all" GeneratePathProperty="true" />
 		<None Include="$(PkgOpenCvSharp4_runtime_win)\runtimes\win-x64\native\OpenCvSharpExtern.dll" Link="OpenCvSharpExtern.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>

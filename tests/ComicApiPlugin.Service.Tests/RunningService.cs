@@ -46,6 +46,8 @@ internal sealed class RunningService : IDisposable
 			RedirectStandardOutput = true,
 			RedirectStandardError = true,
 			CreateNoWindow = true,
+			// Windows also looks for a DLL in the working folder, which must not lend this service the OpenCV library of another folder.
+			WorkingDirectory = folder ?? AppContext.BaseDirectory,
 		};
 		start.ArgumentList.Add(ServiceProtocol.LogFolderArgument);
 		start.ArgumentList.Add(logFolder);
