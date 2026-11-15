@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using ComicApiPlugin.ComicVine;
 using ComicApiPlugin.Config;
 using ComicApiPlugin.Engine;
+using ComicApiPlugin.Matching;
 using ComicApiPlugin.VerseDb;
 using cYo.Projects.ComicRack.Engine;
 using cYo.Projects.ComicRack.Plugins;
@@ -22,6 +23,9 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 	private static readonly string UserAgent = $"ComicApiPlugin/{Version} (https://github.com/cbanack/comic-vine-scraper/)";
 
 	private readonly PluginPorts ports;
+
+	// Stateless; it loads the OpenCV native library on its first comparison, so a plugin that never uses the cover auto-accept never touches it.
+	private readonly OpenCvCoverComparer coverComparer = new();
 	private IPluginEnvironment env;
 	private PluginContext? context;
 	private ComicVineHttp? http;
@@ -188,7 +192,10 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 		List<IScrapeBook> targets = [.. books.Select(book => new ComicRackBook(book, env.App))];
 		return ScrapeHost.Run(env.MainWindow, ctx, (form, ct) =>
 		{
-			var services = new ScrapeServices(catalog, new WinFormsScrapeUi(form, ctx, catalog, config), ports.Clock, ctx.Log, ctx.Settings.LoadChosenSeries(), new CoverPreferences());
+			var services = new ScrapeServices(catalog, new WinFormsScrapeUi(form, ctx, catalog, config), ports.Clock, ctx.Log, ctx.Settings.LoadChosenSeries(), new CoverPreferences())
+			{
+				CoverComparer = config.ComicVineCoverAutoAccept ? coverComparer : null,
+			};
 			return new ScrapeRun(services, config).RunAsync(targets, ct);
 		});
 	}
@@ -198,7 +205,7 @@ public sealed class ComicApiCommands : DotNetPlugin, IBooks, IEditor, IConfig
 		VerseDbHttp api = VerseDb(config.VerseDbApiKey);
 		List<IScrapeBook> targets = [.. books.Select(book => new ComicRackBook(book, env.App))];
 		return ScrapeHost.Run(env.MainWindow, ctx, (form, ct) =>
-			new CoverSearchRun(api, new WinFormsCoverSearchUi(form, ctx, api), ports.Clock, ctx.Log, config).RunAsync(targets, ct));
+			new CoverSearchRun(api, new WinFormsCoverSearchUi(form, ctx, api), ports.Clock, ctx.Log, config, config.VerseDbAutoAccept ? coverComparer : null).RunAsync(targets, ct));
 	}
 
 	/// <summary>One HttpClient for the plugin's lifetime, replaced only when the user changes the token.</summary>
