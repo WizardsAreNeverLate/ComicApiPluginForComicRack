@@ -1,4 +1,11 @@
 <Project>
+	<!-- Here and not in the props, so the condition sees the project's own target framework. Only .NET Framework lacks the types PolySharp supplies. -->
+	<ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+		<PackageReference Include="PolySharp" Version="1.16.0">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+	</ItemGroup>
 	<Target Name="CheckComicRackDir" BeforeTargets="ResolveAssemblyReferences" Condition="'$(UsesComicRack)' == 'true'">
 		<Error Condition="'$(ComicRackDir)' == ''" Text="ComicRackDir is not set. Set the COMICRACK_DIR environment variable, or pass -p:ComicRackDir=&lt;folder&gt;, to the output folder of a ComicRack CE build of branch feat/dotnet-plugins." />
 		<Error Condition="'$(ComicRackDir)' != '' and !Exists('$(ComicRackPath)ComicRack.Plugins.dll')" Text="ComicRackDir is '$(ComicRackDir)', but that folder has no ComicRack.Plugins.dll. Point it at the output folder of a ComicRack CE build of branch feat/dotnet-plugins." />
