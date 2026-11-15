@@ -29,13 +29,14 @@ The move is planned in five phases:
 |---|---|---|
 | 1 | Service skeleton: start, health check, secure access, stop, logging | Done |
 | 2 | Comic Vine calls move to the service | Done |
-| 3 | VerseDB calls and the OpenCV cover comparison move to the service | Planned |
+| 3 | VerseDB calls and the OpenCV cover comparison move to the service | Done |
 | 4 | Tests that use recorded responses run through the service | Planned |
 | 5 | Packaging and documentation | Planned |
 
-A Comic Vine scrape needs the service. The plugin sends each Comic Vine call to it (see "Comic Vine endpoints"). If the
-service cannot start, the scrape stops at its first Comic Vine call and the plugin shows the reason. The VerseDB cover
-search and the cover comparison still run in the plugin until phase 3.
+A Comic Vine scrape and a VerseDB cover search need the service. The plugin sends each provider call to it (see
+"Comic Vine endpoints" and "VerseDB and cover comparison endpoints"). If the service cannot start, the run stops at its
+first provider call and the plugin shows the reason. The cover comparison also runs in the service. If the service
+cannot compare two covers, the plugin opens the usual dialog and the user chooses.
 
 ## Runtime requirement
 
@@ -146,9 +147,10 @@ There are two kinds of secret:
 The service stores no API keys on disk. The plugin sends the key with each request:
 
 - `X-ComicVine-Key: <Comic Vine API key>`
-- `X-VerseDb-Token: <VerseDB personal access token>` (from phase 3)
+- `X-VerseDb-Token: <VerseDB personal access token>`
 
-The service holds a Comic Vine key in memory only, as the name of that key's HTTP client and throttle.
+The service holds a key or a token in memory only, as the name of that key's HTTP client (and, for Comic Vine, its
+throttle). A key or a token is never in a URL of the service.
 
 Reasons for this design:
 
@@ -261,6 +263,81 @@ The service keeps this state in memory. Nothing is written to disk.
 If a run continues after 30 minutes without a request, it only loses its caches. The service then gets the data from
 Comic Vine again.
 
+## VerseDB and cover comparison endpoints
+
+Each endpoint is a `POST`.
+
+| Path | Request | Response |
+|---|---|---|
+| `/versedb/lookup-cover` | `multipart/form-data` with one part, `image`: the cover as JPEG or PNG, smaller than 5 MB | `{"clearMatch":true,"candidates":[...]}`. The best candidate is first. |
+| `/versedb/issue` | JSON: `{"issue":423295}` (the VerseDB issue id) | The issue metadata that a scrape writes into a book |
+| `/versedb/image` | JSON: `{"url":"https://media.versedb.com/..."}` | The image bytes as VerseDB sent them (`application/octet-stream`) |
+| `/covers/compare` | `multipart/form-data` with two parts: `book` (the book's cover) and `candidate` | `{"similarity":{"correlation":0.96,"featureMatch":0.51}}`, or `{"similarity":null}` if an image cannot be decoded |
+
+A `/versedb/` request must have these headers:
+
+- `X-VerseDb-Token`: the VerseDB personal access token.
+- `X-Run-Id`: a name for the run. The service writes it in the log line of each call to VerseDB.
+
+`/covers/compare` needs only the bearer token of the service. It makes no call to a provider.
+
+The endpoints are the three methods of `IVerseDb` and the one method of `ICoverComparer`. `VerseDbHttp` and
+`OpenCvCoverComparer` do the work in the service, as they did in the plugin.
+
+Example, with the service started as in "Troubleshooting":
+
+```powershell
+curl.exe -H "Authorization: Bearer dev-token" -H "X-VerseDb-Token: <your token>" -H "X-Run-Id: test" -F "image=@cover.jpg" http://127.0.0.1:<port>/versedb/lookup-cover
+curl.exe -H "Authorization: Bearer dev-token" -F "book=@cover.jpg" -F "candidate=@candidate.webp" http://127.0.0.1:<port>/covers/compare
+```
+
+### Images
+
+An image is always sent as bytes. It is never text in a JSON body.
+
+- **In a request:** the image is a part of a `multipart/form-data` body. `curl -F` and `MultipartFormDataContent` make
+  such a body. The service reads each part into memory. It does not use the ASP.NET Core form reader, because that
+  reader writes a part larger than 64 KB to a temporary file.
+- **In a response:** the image is the full body.
+- **Why not base64 in JSON:** base64 makes an image one third larger, and the serializer then holds the image as one
+  large string in each process.
+
+VerseDB sends its covers in the WebP format. The service does not change them: `/versedb/image` returns the WebP bytes,
+and the comparison decodes WebP itself (OpenCV can read it). The plugin converts a WebP cover to show it in the cover
+dialog, with ComicRack's own converter, as before. This keeps one meaning for the bytes of `IVerseDb.GetImageAsync` on
+the two routes, and no cover is encoded a second time.
+
+### State
+
+| State | Lifetime | Why |
+|---|---|---|
+| One HTTP client for each VerseDB token | Until the service stops | One client keeps its connections to VerseDB open between calls. |
+| One cover comparer | Until the service stops | The comparer keeps no data. It loads the OpenCV library at its first comparison. |
+
+VerseDB had no throttle and no cache in the plugin, and it has none in the service. Each comparison runs on a
+thread-pool thread and uses approximately 100 ms of processor time.
+
+### Errors
+
+| Cause | Status | Body |
+|---|---|---|
+| VerseDB rejects the token | `401` | `{"verseDb":{"status":401,"message":"VerseDB refused the request (401): ...","retryAfterSeconds":null}}` |
+| VerseDB reports its rate limit | `429` | `{"verseDb":{"status":429,"message":"...","retryAfterSeconds":42}}` |
+| VerseDB gives a different error status, or an image download fails | `502` | `{"verseDb":{"status":422,...}}` |
+| VerseDB cannot be reached | `502` | `{"verseDb":{"status":null,"message":"Could not reach VerseDB: ..."}}` |
+| The service cannot load the OpenCV library | `503` | `{"openCvUnavailable":"The OpenCV library could not be used: ..."}` |
+| A header, a part, or a body member is missing | `400` | `{"message":"..."}` |
+
+- The `message` never contains the VerseDB token.
+- The plugin changes each `verseDb` error back to the `VerseDbException` that `VerseDbHttp` threw, with the same status,
+  message, and wait. Thus the cover search does the same as before the move. After a `429`, it shows "VerseDB asks to
+  wait", waits for the time that VerseDB gave, and tries one more time.
+- If the plugin cannot start or reach the service, the cover search stops with the "Local API Service" warning, which
+  gives the reason. The cover dialog shows the logo for a cover that it cannot get.
+- If a comparison is not possible (`503`, no service, or no answer in 60 seconds), the plugin writes
+  `cover auto-accept is unavailable` and the reason to its debug log. Then it opens the usual dialog. A comparison
+  cannot be cancelled, so the limit of 60 seconds makes sure that a service that hangs does not block a run.
+
 ## Settings
 
 | Setting | Where | Default | Effect |
@@ -294,10 +371,35 @@ So the service is a zip, and the plugin unpacks it outside `Scripts`:
   complete. If two starts unpack at the same time, one wins and the other deletes its copy.
 - **Clean-up:** after a successful unpack, the plugin deletes the folders of earlier versions and partial folders that a
   crash left. It skips a folder that is still in use.
-- **Cost:** the first start after an update unpacks approximately 1.4 MB. Later starts use the existing folder.
+- **Cost:** the first start after an update unpacks a zip of 28 MB to approximately 72 MB, which takes approximately
+  one second. Later starts use the existing folder.
 
 The zip contains the framework-dependent publish output: the exe, its DLLs, `runtimeconfig.json`, and `deps.json`. It
 does not contain PDB files.
+
+### OpenCV
+
+The OpenCV library for the cover comparison is in `service.zip` only. The plugin's own files do not include it.
+
+- `OpenCvSharp.dll` (1.0 MB) is the .NET binding. `OpenCvSharpExtern.dll` (68.6 MB, 64-bit) is the native library. The
+  two files are in the same folder as the exe, and .NET finds the native library there by its name.
+- The NuGet package of the native library also contains `opencv_videoio_ffmpeg*.dll` (28 MB, for video). The service
+  does not include that file, because it is not necessary to read covers.
+- The plugin had these two files in its own folder before phase 3, and it loaded the native library with
+  `LoadLibraryEx`. That code is deleted.
+
+Package sizes (Debug build):
+
+| Item | Before phase 3 | After phase 3 |
+|---|---|---|
+| `ComicApiPlugin.crplugin` (the download) | 28.9 MB | 28.4 MB |
+| `service.zip` in the package | 1.4 MB | 28.3 MB |
+| The plugin folder in `Scripts`, with PDBs | 71.9 MB | 29.1 MB |
+| The unpacked service in `%LOCALAPPDATA%` | approximately 4 MB | approximately 72 MB |
+
+The download does not become smaller, because `service.zip` is in the package: the OpenCV files moved from the
+plugin's files into the zip. The plugin folder that ComicRack scans becomes 43 MB smaller, and it now contains no
+native library.
 
 Build output:
 
@@ -323,9 +425,17 @@ writes one line for each remote call: the provider, the method, the host and pat
 ```text
 [INF] Comic Vine GET comicvine.gamespot.com/api/search/ responded 200 in 118 ms (run 5f0c...)
 [INF] HTTP POST /comicvine/search responded 200 in 225.6070 ms
+[INF] VerseDB POST versedb.com/api/v1/lookup/cover responded 200 in 2309 ms (run 81c2...)
+[INF] HTTP POST /versedb/lookup-cover responded 200 in 2389.0506 ms
+[INF] VerseDB GET media.versedb.com/uploads/issues/.../...-cover_md.webp responded 200 in 342 ms (run 81c2...)
+[INF] HTTP POST /versedb/image responded 200 in 349.3835 ms
+[INF] HTTP POST /covers/compare responded 200 in 263.2690 ms
 ```
 
-- The handler never writes the query string, because Comic Vine gets the API key there. It never writes a header.
+- The handler never writes the query string, because Comic Vine gets the API key there. It never writes a header,
+  because VerseDB gets the token there.
+- The download of a VerseDB cover is also a line, with the host of the image.
+- A cover comparison makes no call to a provider, so it has only the line of the request.
 - A status of 400 or more is a warning (`WRN`). A request that fails without a response is a warning that gives the type
   of the failure.
 - When Comic Vine fails a request and the service tries it again after 2500 ms, the service writes a warning with the
@@ -333,7 +443,8 @@ writes one line for each remote call: the provider, the method, the host and pat
 - The wait for the throttle is not in the log, because each request waits for its turn.
 - For the service's own requests, a status of 400 or more is a warning. Only a `500` or an exception is an error.
 
-A test sends a key through the API and makes sure that the log has the line for the call and does not have the key.
+Tests send a Comic Vine key and a VerseDB token through the API. They make sure that the log has the line for each call
+and does not have the key or the token.
 
 The plugin also writes the service state to its own debug log, which the activity log window shows, for example:
 `Local API service ready on 127.0.0.1:58711 (pid 56848)`, or the reason the service is not available.
@@ -390,6 +501,8 @@ Mitigations, from most to least effective:
 | A scrape stops with the "Local API Service" warning | The warning text; the debug log has the same reason | The service did not start, or it did not answer |
 | The debug log says "needs the .NET 11 runtime" | Debug log or activity log | ASP.NET Core Runtime 11 is not installed |
 | A scrape stops with "Cannot Access Online Database" | Service log file: the `Comic Vine` lines and their status | Comic Vine did not answer, or it rejected the key or the request rate |
+| A cover search stops with a VerseDB warning | Service log file: the `VerseDB` lines and their status | VerseDB did not answer, or it rejected the token, the image, or the request rate |
+| Cover auto-accept is on, but the dialog always opens | Debug log: `cover check` and `cover auto-accept is unavailable` lines | The covers do not match, or the service cannot compare them. The reason is in the line. |
 | "did not report that it was ready within 20 seconds" | Debug log; it includes the service's error output | Antivirus scan delay, or a startup failure |
 | No `ComicApiPlugin.Service.exe` in Task Manager after ComicRack starts | Debug log; `%LOCALAPPDATA%\ComicApiPlugin\service\` | Antivirus software removed or blocked the exe |
 | The service starts but requests fail | Service log file | See the logged status codes. 401 = wrong token, 400 = wrong `Host` header. |
@@ -414,9 +527,9 @@ Without `--parent-pid`, the service does not watch a parent process. Without `--
 | `GET /health` | `200` with `{"version":"...","pid":n,"uptimeSeconds":n}` |
 | `POST /shutdown` | `202`, then the service stops |
 | `POST /comicvine/...` | See "Comic Vine endpoints" |
+| `POST /versedb/...`, `POST /covers/compare` | See "VerseDB and cover comparison endpoints" |
 
-Every request needs the bearer token and the correct `Host` header. Phase 3 adds the VerseDB and cover comparison
-endpoints.
+Every request needs the bearer token and the correct `Host` header.
 
 ## Test seams
 
@@ -426,10 +539,25 @@ endpoints.
   carries it, is empty in the live ports.
 - **`FakeComicVineServer`** (`tests/Shared`) is a small HTTP server on a loopback port. It answers Comic Vine requests
   from the recorded responses in `tests/fixtures/comicvine`. The service tests and the plugin tests point the service at it.
-- **The in-process route (temporary).** `PluginPorts.Service` selects how the plugin asks Comic Vine. The live ports
-  have a service, so the plugin uses `ServiceComicVine`. Ports without a service use `ComicVineCatalog` in the plugin's own
-  process, with the handler from `PluginPorts.Handler`. The recorded-response plugin tests (`PluginTests`), `tools/smoke`,
-  and `tools/differential` use this route. Phase 4 moves their recorded responses into the service and removes the route.
+- **`COMICAPI_VERSEDB_BASE_URL`.** If this environment variable is set when the service starts, the service sends its
+  VerseDB API requests to that base URL and not to `https://versedb.com`. The value must be an `http` or `https` URL.
+  The service always gets a cover image from the URL in the lookup answer. Only tests set this variable.
+- **`FakeVerseDbServer`** (`tests/Shared`) is a small HTTP server on a loopback port. It answers a cover lookup with one
+  candidate, the details of that issue, and the cover of that issue. A test can give a different answer for a request.
+  `FakeHttpServer` is the HTTP part that the two fake servers share.
+- **The in-process route (temporary).** `PluginPorts.Service` selects how the plugin asks the providers. The live ports
+  have a service, so the plugin uses `ServiceComicVine`, `ServiceVerseDb`, and `ServiceCoverComparer`. Ports without a
+  service use `ComicVineCatalog` and `VerseDbHttp` in the plugin's own process, with the handler from
+  `PluginPorts.Handler`. They have no cover comparison, so a run with cover auto-accept asks the user. The
+  recorded-response plugin tests (`PluginTests`), `tools/smoke`, and `tools/differential` use this route. Phase 4 moves
+  their recorded responses into the service and removes the route.
+- **Stop timeouts.** `ServiceLaunch.ShutdownRequestTimeout` (2 seconds) and `ShutdownExitTimeout` (3 seconds) are the
+  times that a stop waits for the shutdown request and for the exit. The tests set 30 seconds for each, so that a stop
+  on a busy computer always ends through `POST /shutdown` and the log file is complete.
+- **Thread pool in the plugin tests.** Each plugin test that starts the service uses three thread-pool threads for the
+  life of the service. `ThreadPoolForServices` increases the minimum size of the pool for the test run. Without it,
+  approximately 50 such tests at the same time made the pool so slow that the plugin read a ready line more than
+  20 seconds late, and tests failed at random.
 
 ## Tests
 
@@ -439,16 +567,25 @@ endpoints.
 | `tests/ComicApiPlugin.Service.Tests` (`ComicVineEndpointTests`, `ComicVineSessionsTests`) | Starts the real exe with a fake Comic Vine: each `/comicvine/` endpoint, progress lines that arrive while the query runs, the error bodies and status codes, an error after the first progress line, one cache for each run ID, one throttle for each key, cancellation that reaches Comic Vine, the log line for each call without the key, `400` for an incomplete request, and the 30-minute idle limit |
 | `tests/ComicApiPlugin.Tests` (`ServiceHostTests`) | Starts the packaged exe from `service.zip`: one process for concurrent callers, kill through the job object, graceful stop, restart after an exit, restart when the console setting changes, clear failures for a missing exe, a missing runtime, and a service that never reports ready |
 | `tests/ComicApiPlugin.Tests` (`ServiceComicVineTests`) | Points the packaged service and an in-process catalog at one fake Comic Vine: the same results, progress reports, requests, and exceptions on both routes; cancellation; a service that cannot start; a service that died and starts again; no key in the service log or the plugin log |
-| `tests/ComicApiPlugin.Tests` (`PluginTests`) | A full scrape through the service writes the book; a scrape without the runtime shows the warning with the download link and changes no book |
+| `tests/ComicApiPlugin.Service.Tests` (`VerseDbEndpointTests`) | Starts the real exe with a fake VerseDB: a lookup that is clear and one that is not, the issue details, the image bytes, the multipart form that VerseDB gets (quoted `name` and `filename`, no `filename*`), the error bodies for 401, 422, 429 with `Retry-After`, and 503, a VerseDB that cannot be reached, `400` for an incomplete request, and the log line for each call without the token |
+| `tests/ComicApiPlugin.Service.Tests` (`CoverEndpointTests`, `OpenCvCoverComparerTests`) | `/covers/compare` gives the scores that the comparer gives: a cropped copy matches, a different cover does not, bytes that are not an image give `null`. A service without `OpenCvSharpExtern.dll` answers `503` and continues. The comparer tests moved here from `tests/ComicApiPlugin.Tests`, because OpenCV is now only in the service. |
+| `tests/ComicApiPlugin.Tests` (`ServiceVerseDbTests`) | Points the packaged service and an in-process `VerseDbHttp` at one fake VerseDB: the same results, requests, and exceptions on both routes; a cover search that waits after a 429 and tries again; cover auto-accept through the service; the dialog when the service cannot start; no token in the service log or the plugin log |
+| `tests/ComicApiPlugin.Tests` (`PluginTests`) | A full scrape through the service writes the book; a full cover search through the service writes the book without a dialog when the cover matches; a scrape or a cover search without the runtime shows the warning with the download link and changes no book; a saved console setting restarts the service |
 
 ## Known limitations and open items
 
-- **Not tested inside ComicRack yet:** the `IStartup` and `IShutdown` hooks, the visible console window, and a scrape
-  through the service.
+- **Not tested inside ComicRack yet:** the `IStartup` and `IShutdown` hooks, the visible console window, a scrape
+  through the service, and a cover search with the cover dialog through the service.
+- **The download is not smaller after phase 3.** See "OpenCV". A smaller download needs a different delivery of the
+  native library, for example a download on first use.
+- **A cover comparison cannot be cancelled.** `ICoverComparer.Compare` has no cancellation token. A cancelled run waits
+  for the comparison that is in progress, which is usually less than one second and at most 60 seconds.
+- **Each comparison sends the book's cover again.** The Comic Vine auto-accept compares one book with a maximum of 20
+  covers, and each request contains the book's cover (approximately 300 KB) again.
 - **Each cover image is decoded in the service and sent to the plugin as PNG.** The pixels are the same, but a PNG is
   larger than the JPEG from Comic Vine, and the image is decoded two times.
-- **The service keeps a client for each API key until it stops.** A user who changes the key many times in one ComicRack
-  session leaves the old clients in memory.
+- **The service keeps a client for each API key and each VerseDB token until it stops.** A user who changes a key many
+  times in one ComicRack session leaves the old clients in memory.
 - **Two ComicRack processes have two services.** Each service has its own throttle, so the two processes together can
   send requests for one key faster than one request each 1100 ms.
 - **CI:** the GitHub Actions build installs .NET 11, but the runner's MSBuild must be version 18 or later to build the .NET 11

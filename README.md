@@ -16,7 +16,7 @@ This is a native C# (.NET Framework 4.8) port of Cory Banack's [Comic Vine Scrap
 	- this fork's [`feat/dotnet-plugins`](https://github.com/WizardsAreNeverLate/ComicRackCE/tree/feat/dotnet-plugins), which installs `.crplugin` packages that contain .NET assemblies.
 - **Upstream ComicRack CE has not released this support yet.** `feature/dotnet-plugin` is a branch of upstream, not yet merged into its `master`.
 - You need a Comic Vine API key, which is free. You can get one at <https://comicvine.gamespot.com/api/>.
-- Install the **ASP.NET Core Runtime 11 (x64)** from <https://dotnet.microsoft.com/download/dotnet/11.0>. The plugin starts a local helper process, `ComicApiPlugin.Service.exe`, that needs it. The helper listens on 127.0.0.1 only and stops when ComicRack closes. In this version the plugin still scrapes without the runtime, and it writes the reason to its debug log. A later version will make the provider calls through the helper.
+- Install the **ASP.NET Core Runtime 11 (x64)** from <https://dotnet.microsoft.com/download/dotnet/11.0>. The plugin starts a local helper process, `ComicApiPlugin.Service.exe`, that needs it. The helper listens on 127.0.0.1 only and stops when ComicRack closes. It makes the calls to Comic Vine and VerseDB and compares covers, so the plugin cannot scrape without the runtime. A scrape then stops with a warning that gives the download link, and it changes no book.
 
 ## Features
 
