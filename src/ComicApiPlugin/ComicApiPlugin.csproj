@@ -17,7 +17,7 @@
 	</ItemGroup>
 	<ItemGroup Condition="'$(CvsRecordedResponses)' == 'true'">
 		<Compile Include="Smoke\**\*.cs" />
-		<Compile Include="..\..\tests\Shared\ComicVineFixtures.cs" Link="Smoke\ComicVineFixtures.cs" />
+		<Compile Include="..\..\tests\Shared\ComicVineFixtures.cs;..\..\tests\Shared\FakeHttpServer.cs;..\..\tests\Shared\FakeComicVineServer.cs" Link="Smoke\%(Filename)%(Extension)" />
 	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="System.Drawing" />
